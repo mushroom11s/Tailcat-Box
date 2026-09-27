@@ -8,7 +8,7 @@ import { encodeJoin, MAX_SHARE_BYTES, parseJoin } from "../lib/miao";
 import { decodeQrFromFile } from "../lib/qrImage";
 import { decodePng } from "../lib/qrMark";
 import { releaseBrowserReceiveHolds, resetBrowserMiao, setBrowserReceiveHold } from "../lib/miaoBrowser";
-import { listMiaoReceives, startMiaoReceive } from "../lib/wails";
+import { emitBrowserEvent, listMiaoReceives, startMiaoReceive } from "../lib/wails";
 import css from "../styles/glass.css?inline";
 import MiaoPage from "./MiaoPage";
 
@@ -936,6 +936,82 @@ describe("Mew Share page", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Download" }));
     expect(screen.getByText("This share ends in less than an hour.")).toBeTruthy();
     expect(screen.getByRole("article", { name: "notes.txt" })).toBeTruthy();
+  });
+
+  it("shows a live speed beside download and share progress", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-27T00:00:00Z"));
+    localStorage.setItem("tailcat-locale", "en");
+    renderPage();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const total = 8 * 1024 * 1024;
+    const job = {
+      id: "job-speed",
+      status: "downloading",
+      bytesDone: 0,
+      bytesTotal: total,
+      files: [{ name: "big.bin", size: total }],
+      dest: "/tmp/in",
+    };
+    await act(async () => {
+      emitBrowserEvent({ SessionID: job.id, Kind: "miao-receive", Data: JSON.stringify(job) });
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Download" }));
+    const card = screen.getByRole("article", { name: "big.bin" });
+    expect(within(card).getByText("· —")).toBeTruthy();
+    expect(card.querySelector(".miao-receive-bytes")?.textContent).toContain("0 B / 8.0 MB");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      emitBrowserEvent({
+        SessionID: job.id,
+        Kind: "miao-receive",
+        Data: JSON.stringify({ ...job, bytesDone: 2 * 1024 * 1024 }),
+      });
+    });
+    expect(within(card).getByText("· 2.0 MB/s")).toBeTruthy();
+
+    await act(async () => {
+      emitBrowserEvent({
+        SessionID: job.id,
+        Kind: "miao-receive",
+        Data: JSON.stringify({ ...job, status: "done", bytesDone: total }),
+      });
+    });
+    expect(card.querySelector(".miao-rate")).toBeNull();
+
+    fireEvent.click(screen.getByRole("tab", { name: "Share" }));
+    const share = {
+      id: "share-speed",
+      status: "active",
+      payload: "",
+      files: [{ name: "send.bin", size: 4 * 1024 * 1024 }],
+      total: 4 * 1024 * 1024,
+      forever: true,
+      bytesDone: 0,
+      bytesTotal: 4 * 1024 * 1024,
+      peerPath: "direct",
+    };
+    await act(async () => {
+      emitBrowserEvent({ SessionID: share.id, Kind: "miao", Data: JSON.stringify(share) });
+    });
+    const shareCard = screen.getByRole("article", { name: "send.bin" });
+    expect(within(shareCard).getByText("· —")).toBeTruthy();
+    expect(shareCard.querySelector(".miao-receive-bytes")?.textContent).toContain("0 B / 4.0 MB");
+
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      emitBrowserEvent({
+        SessionID: share.id,
+        Kind: "miao",
+        Data: JSON.stringify({ ...share, bytesDone: 1024 * 1024 }),
+      });
+    });
+    expect(within(shareCard).getByText("· 2.0 MB/s")).toBeTruthy();
+    expect(shareCard.querySelector(".miao-receive-bytes")?.textContent).toContain("1.0 MB / 4.0 MB");
   });
 
   it("shows an offline notice without hiding the share page", () => {

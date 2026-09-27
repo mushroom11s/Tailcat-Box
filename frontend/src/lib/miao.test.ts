@@ -3,16 +3,23 @@ import { browserCancelReceive, browserDiscardReceive, browserJoinMiao, browserRe
 import {
   acceptMiaoCode,
   downloadsLeft,
+  emptyRateState,
   encodeJoin,
   extractShareCode,
   expiresSoon,
+  formatBytes,
+  formatTransferRate,
   MAX_SHARE_BYTES,
   miaoErrorKey,
   nextRetryDelay,
   parseJoin,
   parseReceiveJob,
   parseShare,
+  pushTransferRate,
   receivePercent,
+  settleTransferRate,
+  TRANSFER_RATE_MIN_MS,
+  TRANSFER_RATE_STALE_MS,
   pathAsideText,
   pathPrivacyText,
   relayAttributionText,
@@ -367,6 +374,92 @@ describe("miao share helpers", () => {
     expect(parseReceiveJob({ id: "job", status: "downloading", peerPath: "direct", bytesDone: 1, bytesTotal: 2 })?.peerPath).toBe("direct");
     expect(parseShare({ id: "share", peerPath: "derp" })?.peerPath).toBe("derp");
     expect(parseShare({ id: "share", peerPath: "wire" })?.peerPath).toBeUndefined();
+  });
+});
+
+describe("formatBytes", () => {
+  it("keeps bytes and the existing KB and MB rounding", () => {
+    expect(formatBytes(Number.NaN)).toBe("0 B");
+    expect(formatBytes(Number.POSITIVE_INFINITY)).toBe("0 B");
+    expect(formatBytes(-1)).toBe("0 B");
+    expect(formatBytes(0)).toBe("0 B");
+    expect(formatBytes(512)).toBe("512 B");
+    expect(formatBytes(1023.4)).toBe("1023 B");
+    expect(formatBytes(1024)).toBe("1.0 KB");
+    expect(formatBytes(1536)).toBe("1.5 KB");
+    expect(formatBytes(10 * 1024)).toBe("10 KB");
+    expect(formatBytes(1024 * 1024)).toBe("1.0 MB");
+    expect(formatBytes(10 * 1024 * 1024)).toBe("10 MB");
+  });
+
+  it("keeps scaling through GB and TB on 1024 boundaries", () => {
+    expect(formatBytes(1024 ** 3)).toBe("1.0 GB");
+    expect(formatBytes(1.5 * 1024 ** 3)).toBe("1.5 GB");
+    expect(formatBytes(10 * 1024 ** 3)).toBe("10 GB");
+    expect(formatBytes(1024 ** 4)).toBe("1.0 TB");
+    expect(formatBytes(12.4 * 1024 ** 4)).toBe("12 TB");
+    expect(formatBytes(1024 ** 5)).toBe("1024 TB");
+  });
+});
+
+describe("transfer rate", () => {
+  it("formats a speed with the same units and a dash when unknown", () => {
+    expect(formatTransferRate(null)).toBe("—");
+    expect(formatTransferRate(Number.NaN)).toBe("—");
+    expect(formatTransferRate(-5)).toBe("—");
+    expect(formatTransferRate(512)).toBe("512 B/s");
+    expect(formatTransferRate(1.5 * 1024)).toBe("1.5 KB/s");
+    expect(formatTransferRate(12.4 * 1024 * 1024)).toBe("12 MB/s");
+    expect(formatTransferRate(2 * 1024 ** 3)).toBe("2.0 GB/s");
+  });
+
+  it("averages successive samples and smooths the next one", () => {
+    const first = pushTransferRate(emptyRateState(), 0, 0);
+    expect(first.rate).toBeNull();
+    const second = pushTransferRate(first, 2 * 1024 * 1024, 1000);
+    expect(second.rate).toBe(2 * 1024 * 1024);
+    const instant = 512 * 1024;
+    const third = pushTransferRate(second, 2 * 1024 * 1024 + instant, 2000);
+    expect(third.rate).toBeGreaterThan(instant);
+    expect(third.rate).toBeLessThan(2 * 1024 * 1024);
+  });
+
+  it("ignores a sample inside the quiet window, then counts the whole jump", () => {
+    const first = pushTransferRate(emptyRateState(), 0, 0);
+    const early = pushTransferRate(first, 1000, TRANSFER_RATE_MIN_MS - 1);
+    expect(early.rate).toBeNull();
+    expect(early.anchor).toEqual({ bytes: 0, at: 0 });
+    const later = pushTransferRate(early, 5000, TRANSFER_RATE_MIN_MS + 20);
+    expect(later.rate).toBeCloseTo((5000 * 1000) / (TRANSFER_RATE_MIN_MS + 20));
+  });
+
+  it("keeps a sample that arrived inside the quiet window", () => {
+    const first = pushTransferRate(emptyRateState(), 0, 0);
+    const early = pushTransferRate(first, 800, 40);
+    expect(early.rate).toBeNull();
+    const settled = settleTransferRate(early, 40);
+    expect(settled.rate).toBeNull();
+    const ready = settleTransferRate(early, TRANSFER_RATE_MIN_MS);
+    expect(ready.rate).toBeCloseTo((800 * 1000) / TRANSFER_RATE_MIN_MS);
+  });
+
+  it("resets when progress rewinds and drops a stalled rate", () => {
+    const moving = pushTransferRate(pushTransferRate(emptyRateState(), 0, 0), 4000, 200);
+    expect(moving.rate).not.toBeNull();
+    const rewound = pushTransferRate(moving, 10, 400);
+    expect(rewound.rate).toBeNull();
+    expect(rewound.anchor).toEqual({ bytes: 10, at: 400 });
+    const aged = settleTransferRate(moving, 200 + TRANSFER_RATE_STALE_MS - 1);
+    expect(aged.rate).toBe(moving.rate);
+    expect(settleTransferRate(moving, 200 + TRANSFER_RATE_STALE_MS).rate).toBeNull();
+  });
+
+  it("reads byte progress from a share snapshot", () => {
+    expect(parseShare({ id: "share", bytesDone: 2048, bytesTotal: 4096, peerPath: "direct" })).toMatchObject({
+      bytesDone: 2048,
+      bytesTotal: 4096,
+      peerPath: "direct",
+    });
   });
 });
 
