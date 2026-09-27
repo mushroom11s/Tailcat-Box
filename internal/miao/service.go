@@ -24,6 +24,9 @@ const (
 	portMiao   = 102
 	chunkSize  = 256 * 1024
 	maxTTLDays = 3650
+	// sendProgressEvery is how often a live pull publishes byte counts.
+	// The UI samples those counts for speed, so this stays well under a second.
+	sendProgressEvery = 200 * time.Millisecond
 )
 
 var (
@@ -107,6 +110,9 @@ type Snapshot struct {
 	RelaySource string `json:"relaySource,omitempty"`
 	// RelayName is a region or hostname for that relay. Empty means the public relay with no detail.
 	RelayName string `json:"relayName,omitempty"`
+	// BytesDone and BytesTotal describe the pull in progress. Both are zero when idle.
+	BytesDone  int64 `json:"bytesDone,omitempty"`
+	BytesTotal int64 `json:"bytesTotal,omitempty"`
 }
 
 // FileInfo is a display row. It does not include the storage path.
@@ -984,6 +990,9 @@ type host struct {
 	path        string
 	relaySource string
 	relayName   string
+	sentDone    int64
+	sentTotal   int64
+	sentPublish time.Time
 	sendGen     int
 	ended       bool
 	reason      string
@@ -1105,6 +1114,9 @@ func (h *host) finishSend() {
 	h.path = ""
 	h.relaySource = ""
 	h.relayName = ""
+	h.sentDone = 0
+	h.sentTotal = 0
+	h.sentPublish = time.Time{}
 	queued := h.queued
 	token, reply := h.qToken, h.qReply
 	resume := h.qResume
@@ -1226,25 +1238,30 @@ func (h *host) sendPackage(reply string, files []StagedFile, resume map[string]i
 	if err := h.sendFrame(h.ctx, reply, frame); err != nil {
 		return err
 	}
+	var total int64
+	var sent int64
 	for _, file := range files {
-		start := int64(0)
-		if resume != nil {
-			if off, ok := resume[file.StorageName]; ok {
-				start = off
-			}
-		}
-		if start < 0 || start > file.Size {
-			start = 0
-		}
+		total += file.Size
+		sent += resumeOffset(file, resume)
+	}
+	if sent > 0 {
+		h.noteSendProgress(gen, sent, total, false)
+	}
+	for _, file := range files {
+		start := resumeOffset(file, resume)
 		if err := originReady(file); err != nil {
 			return err
 		}
 		if err := sendFile(h.ctx, func(frame []byte) error {
 			return h.sendFrame(h.ctx, reply, frame)
-		}, file, start); err != nil {
+		}, file, start, func(n int64) {
+			sent += n
+			h.noteSendProgress(gen, sent, total, false)
+		}); err != nil {
 			return err
 		}
 	}
+	h.noteSendProgress(gen, sent, total, true)
 	done, err := chat.Pack(map[string]any{"type": "miao-done"}, nil)
 	if err != nil {
 		return err
@@ -1366,7 +1383,53 @@ func (h *host) snapshotLocked() Snapshot {
 		PeerPath:     h.path,
 		RelaySource:  h.relaySource,
 		RelayName:    h.relayName,
+		BytesDone:    h.sentDone,
+		BytesTotal:   h.sentTotal,
 	}
+}
+
+func resumeOffset(file StagedFile, resume map[string]int64) int64 {
+	start := int64(0)
+	if resume != nil {
+		if off, ok := resume[file.StorageName]; ok {
+			start = off
+		}
+	}
+	if start < 0 || start > file.Size {
+		return 0
+	}
+	return start
+}
+
+func (h *host) noteSendProgress(gen int, done, total int64, force bool) {
+	if total <= 0 {
+		return
+	}
+	if done < 0 {
+		done = 0
+	}
+	if done > total {
+		done = total
+	}
+	h.pathMu.Lock()
+	defer h.pathMu.Unlock()
+	h.mu.Lock()
+	if h.ended || !h.sending || h.sendGen != gen {
+		h.mu.Unlock()
+		return
+	}
+	now := time.Now()
+	due := force || h.sentPublish.IsZero() || now.Sub(h.sentPublish) >= sendProgressEvery
+	h.sentDone = done
+	h.sentTotal = total
+	if !due {
+		h.mu.Unlock()
+		return
+	}
+	h.sentPublish = now
+	snap := h.snapshotLocked()
+	h.mu.Unlock()
+	h.publish(snap)
 }
 
 func (h *host) publish(snap Snapshot) {
@@ -1399,7 +1462,7 @@ func (s *Service) emit(ev adapter.Event) {
 	}
 }
 
-func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, start int64) error {
+func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, start int64, onChunk func(int64)) error {
 	if start < 0 || start > file.Size {
 		start = 0
 	}
@@ -1444,6 +1507,9 @@ func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, sta
 				return err
 			}
 			offset += int64(n)
+			if onChunk != nil {
+				onChunk(int64(n))
+			}
 			callTransferHook("chunk")
 		}
 		if err == io.EOF {

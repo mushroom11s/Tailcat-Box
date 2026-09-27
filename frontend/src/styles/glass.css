@@ -3117,6 +3117,11 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.miao-receive-bytes .miao-rate {
+  margin-left: 0.7em;
+  color: var(--faint);
+}
+
 .miao-progress-wrap {
   position: relative;
   margin: 4px 0 22px;

@@ -595,6 +595,43 @@ func waitArmed(t *testing.T, hit <-chan struct{}, stage string) {
 	}
 }
 
+func TestSharePublishesPullProgress(t *testing.T) {
+	root := t.TempDir()
+	fake := adapter.NewFake()
+	svc := New(fake, root)
+	events := collectEvents(t, svc)
+	payload := bytes.Repeat([]byte("a"), chunkSize+8)
+	snap, err := svc.Start([]Source{{Name: "big.bin", Data: payload}}, Limits{MaxDownloads: 2}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := hookTransfer(t, "chunk")
+	if _, err := svc.StartReceive(context.Background(), snap.Payload, t.TempDir(), adapter.NetworkOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	var partial Snapshot
+	deadline := time.After(3 * time.Second)
+	for partial.BytesDone == 0 {
+		select {
+		case share := <-events.share:
+			if share.ID == snap.ID && share.BytesTotal == int64(len(payload)) && share.BytesDone > 0 && share.BytesDone < int64(len(payload)) {
+				partial = share
+			}
+		case <-deadline:
+			t.Fatal("timed out waiting for send progress")
+		}
+	}
+	if partial.BytesDone != int64(chunkSize) {
+		t.Fatalf("partial done=%d want %d", partial.BytesDone, chunkSize)
+	}
+	time.Sleep(sendProgressEvery + 20*time.Millisecond)
+	release()
+	cleared := waitSharePath(t, events, snap.ID, "")
+	if cleared.BytesDone != 0 || cleared.BytesTotal != 0 {
+		t.Fatalf("idle progress done=%d total=%d", cleared.BytesDone, cleared.BytesTotal)
+	}
+}
+
 func TestTransferDoesNotWaitForDirectPath(t *testing.T) {
 	root := t.TempDir()
 	fake := adapter.NewFake()

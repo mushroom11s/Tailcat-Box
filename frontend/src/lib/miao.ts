@@ -34,6 +34,9 @@ export type MiaoShare = {
   peerPath?: TailcatPath;
   relaySource?: RelaySource;
   relayName?: string;
+  // Bytes of the pull in progress. Zero when no peer is downloading.
+  bytesDone?: number;
+  bytesTotal?: number;
 };
 
 export type MiaoSavedFile = {
@@ -303,6 +306,8 @@ export function parseShare(raw: unknown): MiaoShare | null {
     peerPath: asPeerPath(readField(value, "peerPath", "PeerPath")),
     relaySource: asRelaySource(readField(value, "relaySource", "RelaySource")),
     relayName: asRelayName(readField(value, "relayName", "RelayName")),
+    bytesDone: asCount(readField(value, "bytesDone", "BytesDone")),
+    bytesTotal: asCount(readField(value, "bytesTotal", "BytesTotal")),
   };
 }
 
@@ -707,17 +712,96 @@ export function miaoErrorKey(err: unknown): MiaoErrorKey | "" {
   return KNOWN_ERRORS[message] ?? "";
 }
 
+const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
+
 export function formatBytes(size: number): string {
   if (!Number.isFinite(size) || size < 0) {
     return "0 B";
   }
-  if (size < 1024) {
-    return `${Math.round(size)} B`;
+  let value = size;
+  let unit = 0;
+  while (unit < BYTE_UNITS.length - 1 && value >= 1024) {
+    value /= 1024;
+    unit += 1;
   }
-  if (size < 1024 * 1024) {
-    return `${(size / 1024).toFixed(size >= 10 * 1024 ? 0 : 1)} KB`;
+  if (unit === 0) {
+    return `${Math.round(value)} B`;
   }
-  return `${(size / (1024 * 1024)).toFixed(size >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+  const digits = value >= 10 ? 0 : 1;
+  return `${value.toFixed(digits)} ${BYTE_UNITS[unit]}`;
+}
+
+// Quiet window before the first speed, and how long a frozen sample stays up.
+export const TRANSFER_RATE_MIN_MS = 80;
+export const TRANSFER_RATE_STALE_MS = 2500;
+const TRANSFER_RATE_ALPHA = 0.35;
+
+export type RateState = {
+  anchor: { bytes: number; at: number } | null;
+  pendingBytes: number | null;
+  rate: number | null;
+};
+
+export function emptyRateState(): RateState {
+  return { anchor: null, pendingBytes: null, rate: null };
+}
+
+function acceptRate(state: RateState, bytes: number, at: number): RateState {
+  const anchor = state.anchor;
+  if (!anchor) {
+    return { anchor: { bytes, at }, pendingBytes: null, rate: null };
+  }
+  const dt = at - anchor.at;
+  if (bytes === anchor.bytes) {
+    if (dt >= TRANSFER_RATE_STALE_MS) {
+      return { anchor: { bytes, at }, pendingBytes: null, rate: null };
+    }
+    return { anchor, pendingBytes: null, rate: state.rate };
+  }
+  const instant = ((bytes - anchor.bytes) * 1000) / dt;
+  if (!Number.isFinite(instant) || instant < 0) {
+    return { anchor: { bytes, at }, pendingBytes: null, rate: null };
+  }
+  const rate = state.rate == null ? instant : state.rate + TRANSFER_RATE_ALPHA * (instant - state.rate);
+  return { anchor: { bytes, at }, pendingBytes: null, rate };
+}
+
+// pushTransferRate folds one bytes+timestamp sample into a smoothed bytes/sec.
+// The first sample only anchors. Samples closer than TRANSFER_RATE_MIN_MS wait.
+export function pushTransferRate(state: RateState, bytes: number, at: number): RateState {
+  if (!Number.isFinite(bytes) || bytes < 0 || !Number.isFinite(at)) {
+    return emptyRateState();
+  }
+  if (!state.anchor || bytes < state.anchor.bytes) {
+    return { anchor: { bytes, at }, pendingBytes: null, rate: null };
+  }
+  const dt = at - state.anchor.at;
+  if (dt < TRANSFER_RATE_MIN_MS) {
+    return { anchor: state.anchor, pendingBytes: bytes, rate: state.rate };
+  }
+  return acceptRate(state, bytes, at);
+}
+
+// settleTransferRate promotes a sample that arrived inside the quiet window,
+// and clears a rate whose bytes have not moved for TRANSFER_RATE_STALE_MS.
+export function settleTransferRate(state: RateState, now: number): RateState {
+  if (!state.anchor || !Number.isFinite(now)) {
+    return state;
+  }
+  if (state.pendingBytes != null && now - state.anchor.at >= TRANSFER_RATE_MIN_MS) {
+    return acceptRate({ ...state, pendingBytes: null }, state.pendingBytes, state.anchor.at + TRANSFER_RATE_MIN_MS);
+  }
+  if (state.rate != null && state.pendingBytes == null && now - state.anchor.at >= TRANSFER_RATE_STALE_MS) {
+    return { anchor: state.anchor, pendingBytes: null, rate: null };
+  }
+  return state;
+}
+
+export function formatTransferRate(bytesPerSec: number | null | undefined): string {
+  if (bytesPerSec == null || !Number.isFinite(bytesPerSec) || bytesPerSec < 0) {
+    return "—";
+  }
+  return `${formatBytes(bytesPerSec)}/s`;
 }
 
 export function fileToBase64(file: Blob): Promise<string> {

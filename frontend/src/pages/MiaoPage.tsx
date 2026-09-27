@@ -16,13 +16,17 @@ import {
   extractShareCode,
   base64ToBlob,
   downloadsLeft,
+  emptyRateState,
   fileToBase64,
   formatBytes,
+  formatTransferRate,
   miaoErrorKey,
   parseReceiveJob,
   parseShare,
+  pushTransferRate,
   isTailcatPath,
   receivePercent,
+  settleTransferRate,
   receiveTerminal,
   pathAsideText,
   pathPrivacyText,
@@ -36,7 +40,10 @@ import {
   shareTooLarge,
   shouldAutoRetryDownload,
   upsertReceiveJob,
+  TRANSFER_RATE_MIN_MS,
+  TRANSFER_RATE_STALE_MS,
   type MiaoShare,
+  type RateState,
   type ReceiveJob,
   type Remaining,
 } from "../lib/miao";
@@ -143,6 +150,56 @@ function PathStatus({
   );
 }
 
+function transferRateDelay(state: RateState, now: number): number | null {
+  if (!state.anchor) {
+    return null;
+  }
+  if (state.pendingBytes != null) {
+    return Math.max(0, state.anchor.at + TRANSFER_RATE_MIN_MS - now);
+  }
+  if (state.rate != null) {
+    return Math.max(0, state.anchor.at + TRANSFER_RATE_STALE_MS - now);
+  }
+  return null;
+}
+
+function useTransferRate(active: boolean, bytes: number): number | null {
+  const stateRef = useRef(emptyRateState());
+  const [rate, setRate] = useState<number | null>(null);
+  useEffect(() => {
+    if (!active) {
+      stateRef.current = emptyRateState();
+      setRate(null);
+      return;
+    }
+    stateRef.current = pushTransferRate(stateRef.current, bytes, Date.now());
+    setRate(stateRef.current.rate);
+    let timer = 0;
+    const arm = () => {
+      const delay = transferRateDelay(stateRef.current, Date.now());
+      if (delay == null) {
+        return;
+      }
+      timer = window.setTimeout(() => {
+        const next = settleTransferRate(stateRef.current, Date.now());
+        stateRef.current = next;
+        setRate(next.rate);
+        arm();
+      }, delay);
+    };
+    arm();
+    return () => window.clearTimeout(timer);
+  }, [active, bytes]);
+  return rate;
+}
+
+function TransferRate({ active, rate }: { active: boolean; rate: number | null }) {
+  if (!active) {
+    return null;
+  }
+  return <span className="miao-rate">{`· ${formatTransferRate(rate)}`}</span>;
+}
+
 function showRunningCat(status: ReceiveJob["status"]): boolean {
   return status === "connecting" || status === "queued" || status === "downloading" || status === "done";
 }
@@ -182,6 +239,8 @@ function ShareCard({
   const [copyNote, setCopyNote] = useState("");
   const [copyError, setCopyError] = useState("");
   const left = downloadsLeft(share.maxDownloads, share.downloads);
+  const sending = (share.bytesTotal ?? 0) > 0;
+  const rate = useTransferRate(sending, share.bytesDone ?? 0);
   const ttl = remainingTTL(share.expiresAt, share.forever, now);
   const expiring = expiresSoon(share.expiresAt, share.forever, now);
   const offlineShare = share.listening === false;
@@ -246,6 +305,12 @@ function ShareCard({
           <p className="chat-quiet">
             {t("miaoTotal")} {formatBytes(share.total)}
           </p>
+          {sending ? (
+            <p className="chat-quiet miao-receive-bytes">
+              {formatBytes(share.bytesDone ?? 0)} / {formatBytes(share.bytesTotal ?? 0)}
+              <TransferRate active rate={rate} />
+            </p>
+          ) : null}
           <p className="chat-quiet">
             {t("miaoRemaining")} {ttlLabel(ttl, t)}
           </p>
@@ -327,6 +392,8 @@ function ReceiveCard({
   const canRetry = job.status === "failed";
   const error = receiveErrorText(job, t);
   const expiring = expiresSoon(job.expiresAt ?? "", false, now);
+  const sampling = job.status === "downloading";
+  const rate = useTransferRate(sampling, job.bytesDone);
   return (
     <article className="glass miao-active miao-receive-card" aria-label={label}>
       <h3>{names || t("miaoFiles")}</h3>
@@ -362,6 +429,7 @@ function ReceiveCard({
       </div>
       <p className="chat-quiet miao-receive-bytes">
         {formatBytes(job.bytesDone)} / {formatBytes(job.bytesTotal)}
+        <TransferRate active={!receiveTerminal(job.status)} rate={rate} />
       </p>
       {job.dest ? (
         <p className="chat-quiet">
