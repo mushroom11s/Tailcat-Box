@@ -2845,6 +2845,8 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Inside the scroll clip: glass card shadow (~18px y / 50px blur). */
+  padding: 10px 12px 24px;
   /* Keep scrolling when many shares; hide the bar so the default one-card
      window stays clean. Wheel / trackpad still move the column. */
   scrollbar-width: none;
@@ -2877,6 +2879,8 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Same shadow breathing room as .miao-send (join panel + receive cards). */
+  padding: 10px 12px 24px;
   scrollbar-gutter: stable;
 }
 
