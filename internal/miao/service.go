@@ -24,10 +24,18 @@ const (
 	portMiao   = 102
 	chunkSize  = 256 * 1024
 	maxTTLDays = 3650
+	// defaultChunkStreams is how many concurrent TCP streams carry miao-chunk
+	// frames for one pull. Each stream is DialTCPPort on the room's shared
+	// Tailcat client (same key pair / same tunnel). Not yamux, not multiple keys.
+	defaultChunkStreams = 4
+	maxChunkStreams     = 16
 	// sendProgressEvery is how often a live pull publishes byte counts.
 	// The UI samples those counts for speed, so this stays well under a second.
 	sendProgressEvery = 200 * time.Millisecond
 )
+
+// chunkStreams is the active concurrency for one pull. Tests may shrink it.
+var chunkStreams = defaultChunkStreams
 
 var (
 	ErrEnded           = errors.New("The share has ended.")
@@ -1003,7 +1011,6 @@ type host struct {
 	life        context.Context
 	stopLife    context.CancelFunc
 	mu          sync.Mutex
-	sendMu      sync.Mutex
 	pathMu      sync.Mutex
 	path        string
 	relaySource string
@@ -1181,15 +1188,16 @@ func (h *host) sendDeny(reply, reason string) {
 }
 
 func (h *host) sendFrame(ctx context.Context, reply string, frame []byte) error {
-	h.sendMu.Lock()
-	defer h.sendMu.Unlock()
-	if h.room == nil {
+	h.mu.Lock()
+	room := h.room
+	h.mu.Unlock()
+	if room == nil {
 		return fmt.Errorf("room closed")
 	}
-	if err := h.room.SetPeer(reply); err != nil {
+	if err := room.SetPeer(reply); err != nil {
 		return err
 	}
-	return dial(ctx, h.room, frame)
+	return dial(ctx, room, frame)
 }
 
 func (h *host) noteOriginGone() {
@@ -1480,12 +1488,36 @@ func (s *Service) emit(ev adapter.Event) {
 	}
 }
 
+func activeChunkStreams() int {
+	// Tests that pause mid-pull install a transfer hook; keep one in-flight
+	// chunk so the first shard is observable before later ones are dialed.
+	if currentTransferHook() != nil {
+		return 1
+	}
+	n := chunkStreams
+	if n < 1 {
+		return 1
+	}
+	if n > maxChunkStreams {
+		return maxChunkStreams
+	}
+	return n
+}
+
+type chunkJob struct {
+	offset int64
+	data   []byte
+}
+
 func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, start int64, onChunk func(int64)) error {
 	if start < 0 || start > file.Size {
 		start = 0
 	}
 	if start == file.Size {
 		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	in, err := os.Open(file.Path)
 	if err != nil {
@@ -1503,43 +1535,90 @@ func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, sta
 			return err
 		}
 	}
-	buf := make([]byte, chunkSize)
-	offset := start
-	for {
-		if ctx != nil {
-			if err := ctx.Err(); err != nil {
-				return err
+
+	streams := activeChunkStreams()
+	jobs := make(chan chunkJob, streams)
+	errCh := make(chan error, 1)
+	sendCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var progressMu sync.Mutex
+	worker := func() {
+		defer wg.Done()
+		for job := range jobs {
+			if sendCtx.Err() != nil {
+				return
 			}
-		}
-		n, err := in.Read(buf)
-		if n > 0 {
 			frame, packErr := chat.Pack(map[string]any{
 				"type":   "miao-chunk",
 				"id":     file.StorageName,
-				"offset": offset,
-			}, buf[:n])
+				"offset": job.offset,
+			}, job.data)
 			if packErr != nil {
-				return packErr
+				select {
+				case errCh <- packErr:
+				default:
+				}
+				cancel()
+				return
 			}
 			if err := send(frame); err != nil {
-				return err
+				select {
+				case errCh <- err:
+				default:
+				}
+				cancel()
+				return
 			}
-			offset += int64(n)
 			if onChunk != nil {
-				onChunk(int64(n))
+				progressMu.Lock()
+				onChunk(int64(len(job.data)))
+				progressMu.Unlock()
 			}
 			callTransferHook("chunk")
 		}
+	}
+	wg.Add(streams)
+	for i := 0; i < streams; i++ {
+		go worker()
+	}
+
+	offset := start
+	buf := make([]byte, chunkSize)
+	var readErr error
+	for sendCtx.Err() == nil {
+		n, err := in.Read(buf)
+		if n > 0 {
+			payload := append([]byte(nil), buf[:n]...)
+			select {
+			case <-sendCtx.Done():
+				readErr = sendCtx.Err()
+			case jobs <- chunkJob{offset: offset, data: payload}:
+				offset += int64(n)
+			}
+		}
 		if err == io.EOF {
-			return nil
+			break
 		}
 		if err != nil {
 			if file.OriginPath != "" {
-				return ErrOriginGone
+				readErr = ErrOriginGone
+			} else {
+				readErr = err
 			}
-			return err
+			cancel()
+			break
 		}
 	}
+	close(jobs)
+	wg.Wait()
+	select {
+	case err := <-errCh:
+		return err
+	default:
+	}
+	return readErr
 }
 
 func dial(ctx context.Context, room adapter.Room, frame []byte) error {
@@ -1565,13 +1644,74 @@ type receiveUpdate struct {
 }
 
 type incomingFile struct {
-	id   string
-	name string
-	size int64
-	sha  string
-	path string
-	got  int64
-	file *os.File
+	id      string
+	name    string
+	size    int64
+	sha     string
+	path    string
+	got     int64 // contiguous prefix from byte 0 (resume-safe)
+	pending map[int64][]byte
+	held    int64 // bytes buffered out-of-order beyond got
+	file    *os.File
+}
+
+// acceptChunk writes the contiguous prefix to disk and buffers later shards
+// until the gap fills. Resume state only persists got, so a quit keeps a
+// prefix the next pull can continue from.
+func (item *incomingFile) acceptChunk(offset int64, payload []byte) (int64, error) {
+	if item == nil || item.file == nil {
+		return 0, fmt.Errorf("unexpected chunk")
+	}
+	if len(payload) == 0 {
+		return 0, nil
+	}
+	if offset < item.got {
+		skip := item.got - offset
+		if skip >= int64(len(payload)) {
+			return 0, nil
+		}
+		payload = payload[skip:]
+		offset = item.got
+	}
+	if offset > item.got {
+		if item.pending == nil {
+			item.pending = map[int64][]byte{}
+		}
+		if _, exists := item.pending[offset]; exists {
+			return 0, nil
+		}
+		item.pending[offset] = append([]byte(nil), payload...)
+		item.held += int64(len(payload))
+		return int64(len(payload)), nil
+	}
+	var added int64
+	for {
+		if _, err := item.file.WriteAt(payload, offset); err != nil {
+			return added, err
+		}
+		n := int64(len(payload))
+		added += n
+		item.got = offset + n
+		next, ok := item.pending[item.got]
+		if !ok {
+			break
+		}
+		delete(item.pending, item.got)
+		item.held -= int64(len(next))
+		if item.held < 0 {
+			item.held = 0
+		}
+		payload = next
+		offset = item.got
+	}
+	return added, nil
+}
+
+func (item *incomingFile) progressBytes() int64 {
+	if item == nil {
+		return 0
+	}
+	return item.got + item.held
 }
 
 func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn func() string, ready chan<- string, done chan<- joinResult, progress func(receiveUpdate), partial *partialState, indexRoot string) {
@@ -1743,37 +1883,38 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 				}
 				offset := asInt(meta["offset"])
 				if partialMode && offset == 0 && item.got > 0 {
-					bytesDone -= item.got
+					// Host restarted this file from byte 0; drop the local prefix.
+					bytesDone -= item.progressBytes()
 					if bytesDone < 0 {
 						bytesDone = 0
 					}
 					item.got = 0
+					item.held = 0
+					item.pending = nil
 					if err := item.file.Truncate(0); err != nil {
 						fail(err)
 						return
 					}
 				}
-				if partialMode && offset != item.got {
-					bytesDone -= item.got
-					if bytesDone < 0 {
-						bytesDone = 0
-					}
-					item.got = 0
-					_ = item.file.Truncate(0)
-					persist()
-					fail(ErrPartialMismatch)
-					return
-				}
-				if _, err := item.file.WriteAt(payload, offset); err != nil {
+				before := item.progressBytes()
+				added, err := item.acceptChunk(offset, payload)
+				if err != nil {
 					fail(err)
 					return
 				}
-				end := offset + int64(len(payload))
-				if end > item.got {
-					item.got = end
+				if added == 0 && item.progressBytes() == before {
+					// Duplicate or fully overlapped chunk; ignore.
+					note(receiveUpdate{status: receiveDownloading, bytesDone: bytesDone, bytesTotal: bytesTotal})
+					continue
 				}
-				bytesDone += int64(len(payload))
+				bytesDone += item.progressBytes() - before
 				if partialMode {
+					// Only the contiguous prefix is durable; truncate past got so
+					// resume sidecars keep matching prepare()'s size == got check.
+					if err := item.file.Truncate(item.got); err != nil {
+						fail(err)
+						return
+					}
 					_ = item.file.Sync()
 					persist()
 				}

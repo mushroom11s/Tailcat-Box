@@ -10,6 +10,7 @@ import (
 
 	"github.com/tailscale/tailcat"
 	"tailscale.com/tailcfg"
+	"tailscale.com/types/key"
 )
 
 // maxChatFrame bounds one inbound chat stream. Phase 2 raised the phase 1
@@ -24,10 +25,17 @@ type realRoom struct {
 	peer    string
 	derpURL string
 	events  chan ChatEvent
+	ctx     context.Context
 	cancel  context.CancelFunc
 	once    sync.Once
 	mu      sync.Mutex
 	done    bool
+	// dialKey is this room's node identity. Outbound TCP streams reuse it so
+	// every DialTCPPort shares one Tailcat tunnel / key pair (not a fresh
+	// ephemeral client per envelope, and not yamux).
+	dialKey key.NodePrivate
+	dialMu  sync.Mutex
+	dialers map[string]*tailcat.Client
 }
 
 func (r *Real) StartRoom(ctx context.Context, opts RoomOpts) (Room, error) {
@@ -36,16 +44,24 @@ func (r *Real) StartRoom(ctx context.Context, opts RoomOpts) (Room, error) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	room := &realRoom{
-		real:   r,
-		id:     opts.SessionID,
-		events: make(chan ChatEvent, 16),
-		cancel: cancel,
+		real:    r,
+		id:      opts.SessionID,
+		events:  make(chan ChatEvent, 256),
+		ctx:     ctx,
+		cancel:  cancel,
+		dialers: map[string]*tailcat.Client{},
 	}
 	srv := &tailcat.Server{Logf: func(string, ...any) {}}
 	if err := applyRoomKey(srv, opts.PrivateKeyJSON); err != nil {
 		cancel()
 		return nil, err
 	}
+	// Materialize the server key before Start so dial-out can reuse the same
+	// identity. Start would otherwise generate an unreadable ephemeral key.
+	if srv.Key.IsZero() {
+		srv.Key = key.NewNode()
+	}
+	room.dialKey = srv.Key
 	netOpts := r.NetworkOpts()
 	if opts.Region != "" || opts.DERPMapURL != "" {
 		netOpts = NetworkOpts{Region: opts.Region, DERPMapURL: opts.DERPMapURL}
@@ -115,13 +131,17 @@ func applyRoomKey(srv *tailcat.Server, keyJSON string) error {
 
 func (r *realRoom) emit(ev ChatEvent) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
 	if r.done {
+		r.mu.Unlock()
 		return
 	}
+	ch := r.events
+	ctx := r.ctx
+	r.mu.Unlock()
+	// Block rather than drop: parallel miao-chunk streams must not lose frames.
 	select {
-	case r.events <- ev:
-	default:
+	case ch <- ev:
+	case <-ctx.Done():
 	}
 }
 
@@ -141,6 +161,25 @@ func (r *realRoom) SetPeer(addr string) error {
 	return nil
 }
 
+func (r *realRoom) peerClient(peer string) (*tailcat.Client, error) {
+	r.dialMu.Lock()
+	defer r.dialMu.Unlock()
+	if r.dialers == nil {
+		return nil, fmt.Errorf("room closed")
+	}
+	if cl := r.dialers[peer]; cl != nil {
+		return cl, nil
+	}
+	cl := &tailcat.Client{
+		Server: tailcat.Addr(peer),
+		Key:    r.dialKey,
+		Logf:   func(string, ...any) {},
+	}
+	r.real.applyClientNet(cl)
+	r.dialers[peer] = cl
+	return cl, nil
+}
+
 func (r *realRoom) SendEnvelope(ctx context.Context, port uint16, frame []byte) error {
 	r.mu.Lock()
 	peer := r.peer
@@ -152,8 +191,10 @@ func (r *realRoom) SendEnvelope(ctx context.Context, port uint16, frame []byte) 
 	if peer == "" {
 		return fmt.Errorf("no peer")
 	}
-	cl := r.real.newClient(peer)
-	defer cl.Close()
+	cl, err := r.peerClient(peer)
+	if err != nil {
+		return err
+	}
 	conn, err := cl.DialTCPPort(ctx, port)
 	if err != nil {
 		return err
@@ -169,6 +210,13 @@ func (r *realRoom) Close() error {
 		r.srv = nil
 		r.mu.Unlock()
 		r.cancel()
+		r.dialMu.Lock()
+		dialers := r.dialers
+		r.dialers = nil
+		r.dialMu.Unlock()
+		for _, cl := range dialers {
+			_ = cl.Close()
+		}
 		if srv != nil {
 			_ = srv.Close()
 		}

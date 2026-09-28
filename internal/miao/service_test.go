@@ -776,16 +776,14 @@ func hookTransfer(t *testing.T, stage string) func() {
 	t.Helper()
 	entered := make(chan struct{})
 	release := make(chan struct{})
-	var once sync.Once
+	var enterOnce sync.Once
 	var releaseOnce sync.Once
 	setTransferHook(func(got string) {
 		if got != stage {
 			return
 		}
-		once.Do(func() {
-			close(entered)
-			<-release
-		})
+		enterOnce.Do(func() { close(entered) })
+		<-release
 	})
 	unlock := func() { releaseOnce.Do(func() { close(release) }) }
 	t.Cleanup(func() {
@@ -796,7 +794,7 @@ func hookTransfer(t *testing.T, stage string) func() {
 		select {
 		case <-entered:
 		case <-time.After(8 * time.Second):
-			t.Errorf("timed out waiting for transfer stage %s", stage)
+			t.Fatalf("timed out waiting for transfer stage %s", stage)
 		}
 		unlock()
 	}
@@ -984,5 +982,70 @@ func TestByRefShareServesOriginalAndNoticesMoves(t *testing.T) {
 	kept, err := os.ReadFile(src)
 	if err != nil || string(kept) != "hello" {
 		t.Fatalf("ending the share changed the original: %q %v", kept, err)
+	}
+}
+
+func TestParallelChunkStreamsSamePull(t *testing.T) {
+	old := chunkStreams
+	chunkStreams = 4
+	t.Cleanup(func() { chunkStreams = old })
+
+	root := t.TempDir()
+	svc := New(adapter.NewFake(), root)
+	payload := bytes.Repeat([]byte("p"), chunkSize*3+17)
+	snap, err := svc.Start([]Source{{Name: "parallel.bin", Data: payload}}, Limits{MaxDownloads: 1}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := t.TempDir()
+	receipt, err := svc.Join(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(receipt.Files) != 1 || receipt.Files[0].Name != "parallel.bin" {
+		t.Fatalf("receipt=%+v", receipt.Files)
+	}
+	body, err := os.ReadFile(receipt.Files[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(body, payload) {
+		t.Fatalf("body len=%d want %d", len(body), len(payload))
+	}
+}
+
+func TestAcceptChunkOutOfOrder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "out.bin")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	item := &incomingFile{id: "a", name: "out.bin", size: 12, path: path, file: f}
+	if _, err := item.acceptChunk(4, []byte("4567")); err != nil {
+		t.Fatal(err)
+	}
+	if item.got != 0 || item.held != 4 {
+		t.Fatalf("after gap got=%d held=%d", item.got, item.held)
+	}
+	if _, err := item.acceptChunk(0, []byte("0123")); err != nil {
+		t.Fatal(err)
+	}
+	if item.got != 8 || item.held != 0 {
+		t.Fatalf("after fill got=%d held=%d", item.got, item.held)
+	}
+	if _, err := item.acceptChunk(8, []byte("89ab")); err != nil {
+		t.Fatal(err)
+	}
+	if item.got != 12 {
+		t.Fatalf("got=%d", item.got)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != "0123456789ab" {
+		t.Fatalf("body=%q", body)
 	}
 }

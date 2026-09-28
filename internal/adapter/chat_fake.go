@@ -64,7 +64,7 @@ func (f *Fake) StartRoom(ctx context.Context, opts RoomOpts) (Room, error) {
 		id:      opts.SessionID,
 		addr:    fakeRoomAddress(opts.SessionID, opts.PrivateKeyJSON),
 		derpURL: opts.DERPMapURL,
-		events:  make(chan ChatEvent, 16),
+		events:  make(chan ChatEvent, 256),
 	}
 	f.mu.Lock()
 	if f.chatRooms == nil {
