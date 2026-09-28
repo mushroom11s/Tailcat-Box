@@ -970,10 +970,14 @@ func (a *App) RevealDownloadedUpdate() error {
 }
 
 // RevealPath shows a local file or folder in Finder or Explorer.
+// Files are selected (Finder Reveal / Explorer /select); folders are opened.
 func (a *App) RevealPath(path string) error {
 	path = strings.TrimSpace(path)
 	if path == "" {
 		return fmt.Errorf("empty path")
+	}
+	if abs, err := filepath.Abs(path); err == nil {
+		path = abs
 	}
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("path not found")

@@ -27,6 +27,7 @@ import {
   pushTransferRate,
   isTailcatPath,
   receivePercent,
+  receiveRevealPaths,
   settleTransferRate,
   receiveTerminal,
   pathAsideText,
@@ -1247,15 +1248,21 @@ async function revealReceiveLocation(
   job: ReceiveJob,
   pushToast: (message: string) => void,
 ): Promise<void> {
-  const saved = job.saved?.find((file) => file.path.trim())?.path.trim();
-  const target = saved || job.dest.trim();
-  if (!target) {
+  const targets = receiveRevealPaths(job);
+  if (!targets.length) {
     return;
   }
-  try {
-    await revealPath(target);
-  } catch (err) {
-    pushToast(err instanceof Error && err.message ? err.message : target);
+  let lastError = "";
+  for (const target of targets) {
+    try {
+      await revealPath(target);
+      return;
+    } catch (err) {
+      lastError = err instanceof Error && err.message ? err.message : target;
+    }
+  }
+  if (lastError) {
+    pushToast(lastError);
   }
 }
 

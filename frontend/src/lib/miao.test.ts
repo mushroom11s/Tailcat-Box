@@ -17,6 +17,7 @@ import {
   parseShare,
   pushTransferRate,
   receivePercent,
+  receiveRevealPaths,
   settleTransferRate,
   TRANSFER_RATE_MIN_MS,
   TRANSFER_RATE_STALE_MS,
@@ -460,6 +461,24 @@ describe("transfer rate", () => {
       bytesTotal: 4096,
       peerPath: "direct",
     });
+  });
+});
+
+
+describe("receiveRevealPaths", () => {
+  it("prefers the saved file path and keeps dest as fallback", () => {
+    expect(
+      receiveRevealPaths({
+        dest: "D:\\Downloads",
+        saved: [{ name: "a.txt", size: 1, path: "D:\\Downloads\\a.txt" }],
+      }),
+    ).toEqual(["D:\\Downloads\\a.txt", "D:\\Downloads"]);
+  });
+
+  it("falls back to dest alone when no saved file path exists", () => {
+    expect(receiveRevealPaths({ dest: "/tmp/in", saved: [] })).toEqual(["/tmp/in"]);
+    expect(receiveRevealPaths({ dest: "/tmp/in", saved: [{ name: "a.txt", size: 1, path: "  " }] })).toEqual(["/tmp/in"]);
+    expect(receiveRevealPaths({ dest: "  ", saved: undefined })).toEqual([]);
   });
 });
 

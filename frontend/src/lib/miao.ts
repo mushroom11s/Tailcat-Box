@@ -244,6 +244,20 @@ export function receivePercent(job: ReceiveJob): number {
   return Math.max(0, Math.min(100, Math.round(ratio * 100)));
 }
 
+/** Prefer the finished job's saved file path; dest folder is only a fallback when the file is missing. */
+export function receiveRevealPaths(job: Pick<ReceiveJob, "saved" | "dest">): string[] {
+  const paths: string[] = [];
+  const saved = job.saved?.find((file) => file.path.trim())?.path.trim() ?? "";
+  if (saved) {
+    paths.push(saved);
+  }
+  const dest = job.dest.trim();
+  if (dest && dest !== saved) {
+    paths.push(dest);
+  }
+  return paths;
+}
+
 export function parseReceiveJob(raw: unknown): ReceiveJob | null {
   const value = asRecord(raw, (record) => readString(record, "id", "ID") !== "" && isReceiveStatus(readString(record, "status", "Status")));
   if (!value) {
