@@ -50,13 +50,13 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 		t.Fatal("windows tray must open on left-click")
 	}
 	darwin := nonCommentCode(t, "tray_install_darwin.go")
-	// energye/systray only enables status-item clicks after SetOnClick/SetOnRClick.
-	// Without one of those, the Darwin tray is inert (no menu, no open).
-	if !strings.Contains(darwin, "SetOnClick") {
-		t.Fatal("darwin must SetOnClick so enable_on_click runs; left-click opens")
+	// Permanently attach NSMenu via CreateMenu. SetOnClick/SetOnRClick enable
+	// the show_menu attach/performClick/setMenu:nil path that errors on use.
+	if strings.Contains(darwin, "SetOnClick") || strings.Contains(darwin, "SetOnRClick") {
+		t.Fatal("darwin must not SetOnClick/SetOnRClick; those break the menu")
 	}
-	if strings.Contains(darwin, "SetOnRClick") {
-		t.Fatal("darwin right-click should keep the library default menu")
+	if !strings.Contains(darwin, "CreateMenu()") {
+		t.Fatal("darwin must CreateMenu so the status item has a permanent NSMenu")
 	}
 }
 

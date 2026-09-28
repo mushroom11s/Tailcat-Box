@@ -18,28 +18,46 @@ func (c *Controller) install(icon []byte) {
 		systray.SetTooltip(tooltip)
 	})
 
-	// energye/systray does not attach NSMenu to the status item. Clicks are
-	// only delivered after SetOnClick/SetOnRClick (they call enable_on_click).
-	// Leaving both unset makes the tray completely inert. Left-click opens
-	// the window; right-click keeps the library default menu when OnRClick
-	// is unset. Do not SetOnRClick: macOS ShowMenu is only for that hook,
-	// and the nil default already shows the menu.
-	systray.SetOnClick(func(systray.IMenu) {
-		c.Open()
-	})
+	// energye/systray leaves statusItem.menu nil on Darwin. SetOnClick/
+	// SetOnRClick call enable_on_click, which intercepts mouse events and
+	// shows the menu only via show_menu: attach -> performClick -> setMenu:nil
+	// immediately. That tear-down races AppKit menu tracking and errors when
+	// opening the menu or choosing an item. Permanently attach with
+	// CreateMenu instead (standard macOS menu-bar UX: click shows the menu).
+	// Do not SetOnClick/SetOnRClick: those re-enable the broken path.
 
 	labels := c.Labels()
 	openItem := systray.AddMenuItem(labels.Open, "")
-	openItem.Click(c.Open)
+	openItem.Click(func() {
+		invokeMenu(func() {
+			c.Open()
+		})
+	})
 	hideItem := systray.AddMenuItem(labels.Hide, "")
-	hideItem.Click(c.Hide)
+	hideItem.Click(func() {
+		invokeMenu(func() {
+			c.Hide()
+		})
+	})
 	systray.AddSeparator()
 	chatItem := systray.AddMenuItem(labels.Chat, "")
-	chatItem.Click(func() { c.Navigate(PageChat) })
+	chatItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageChat)
+		})
+	})
 	tunnelItem := systray.AddMenuItem(labels.Tunnel, "")
-	tunnelItem.Click(func() { c.Navigate(PageTunnel) })
+	tunnelItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageTunnel)
+		})
+	})
 	settingsItem := systray.AddMenuItem(labels.Settings, "")
-	settingsItem.Click(func() { c.Navigate(PageSettings) })
+	settingsItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageSettings)
+		})
+	})
 	systray.AddSeparator()
 	countItem := systray.AddMenuItem(SessionCountLabel(0), "")
 	countItem.Disable()
@@ -51,8 +69,10 @@ func (c *Controller) install(icon []byte) {
 	systray.AddSeparator()
 	quitItem := systray.AddMenuItem(labels.Quit, "")
 	quitItem.Click(func() {
-		systray.Quit()
-		c.Quit()
+		invokeMenu(func() {
+			c.Quit()
+			systray.Quit()
+		})
 	})
 	c.bindLabels(func(l MenuLabels) {
 		invokeMenu(func() {
@@ -64,5 +84,6 @@ func (c *Controller) install(icon []byte) {
 			quitItem.SetTitle(l.Quit)
 		})
 	})
+	systray.CreateMenu()
 	c.Refresh()
 }
