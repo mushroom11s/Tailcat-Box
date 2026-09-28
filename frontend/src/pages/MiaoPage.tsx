@@ -8,6 +8,7 @@ import { useI18n, type MessageKey } from "../i18n";
 import miaoQrMark from "../assets/miao-qr-cat.png?inline";
 import runningCatGif from "../assets/running-cat.gif";
 import runningCatWebp from "../assets/running-cat.webp";
+import doneCat from "../assets/done-cat.png";
 import { useClipboardFieldPaste, type PasteFailure } from "../lib/clipboardPaste";
 import { copyQrImage } from "../lib/copyQrImage";
 import { encodeQrDataURL } from "../lib/qr";
@@ -201,7 +202,7 @@ function TransferRate({ active, rate }: { active: boolean; rate: number | null }
 }
 
 function showRunningCat(status: ReceiveJob["status"]): boolean {
-  return status === "connecting" || status === "queued" || status === "downloading" || status === "done";
+  return status === "connecting" || status === "queued" || status === "downloading";
 }
 
 function receiveErrorText(job: ReceiveJob, t: (key: MessageKey) => string): string {
@@ -361,6 +362,15 @@ function ShareCard({
   );
 }
 
+function statusCardClass(status: ReceiveJob["status"]): string {
+  const base = "glass miao-active miao-receive-card";
+  if (status === "done") return `${base} miao-done`;
+  if (status === "failed") return `${base} miao-failed`;
+  if (status === "cancelled") return `${base} miao-cancelled`;
+  if (status === "interrupted") return `${base} miao-interrupted`;
+  return base;
+}
+
 function ReceiveCard({
   job,
   now,
@@ -395,9 +405,11 @@ function ReceiveCard({
   const sampling = job.status === "downloading";
   const rate = useTransferRate(sampling, job.bytesDone);
   return (
-    <article className="glass miao-active miao-receive-card" aria-label={label}>
-      <h3>{names || t("miaoFiles")}</h3>
-      <p className="miao-receive-status">{status}</p>
+    <article className={statusCardClass(job.status)} aria-label={label}>
+      <div className="miao-receive-head">
+        <h3>{names || t("miaoFiles")}</h3>
+        <p className="miao-receive-status miao-status" data-status={job.status}>{status}</p>
+      </div>
       <PathStatus kind={job.peerPath} relaySource={job.relaySource} relayName={job.relayName} active={active} />
       {files.length ? (
         <ul className="miao-files">
@@ -410,21 +422,28 @@ function ReceiveCard({
         </ul>
       ) : null}
       <div className="miao-progress-wrap">
-        <div
-          className="miao-progress"
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={pct}
-          aria-label={status}
-        >
-          <span style={{ width: `${pct}%` }} />
+        <div className="miao-progress-track">
+          <div
+            className="miao-progress"
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={pct}
+            aria-label={status}
+          >
+            <span style={{ width: `${pct}%` }} />
+          </div>
+          {showRunningCat(job.status) ? (
+            <picture className="miao-progress-cat" style={{ "--miao-pct": `${pct}%` } as CSSProperties}>
+              <source srcSet={runningCatWebp} type="image/webp" />
+              <img src={runningCatGif} alt="" />
+            </picture>
+          ) : null}
         </div>
-        {showRunningCat(job.status) ? (
-          <picture className="miao-progress-cat" style={{ "--miao-pct": `${pct}%` } as CSSProperties}>
-            <source srcSet={runningCatWebp} type="image/webp" />
-            <img src={runningCatGif} alt="" />
-          </picture>
+        {job.status === "done" ? (
+          <div className="miao-done-tail">
+            <img className="miao-done-cat" src={doneCat} alt="" />
+          </div>
         ) : null}
       </div>
       <p className="chat-quiet miao-receive-bytes">
@@ -432,8 +451,8 @@ function ReceiveCard({
         <TransferRate active={!receiveTerminal(job.status)} rate={rate} />
       </p>
       {job.dest ? (
-        <p className="chat-quiet">
-          {t("miaoSaveTo")} {job.dest}
+        <p className="chat-quiet miao-dest-line">
+          <span className="miao-dest-label">{t("miaoSaveTo")}</span> <span className="miao-dest-path">{job.dest}</span>
         </p>
       ) : null}
       {expiring ? (

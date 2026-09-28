@@ -578,7 +578,7 @@ func (s *Service) ListReceives() []ReceiveJob {
 	s.mu.Unlock()
 	for _, run := range runs {
 		snap := run.snapshot()
-		if snap.Status == receiveDone || snap.Status == receiveCancelled || snap.ID == "" {
+		if snap.ID == "" {
 			continue
 		}
 		out = append(out, snap)
@@ -586,6 +586,13 @@ func (s *Service) ListReceives() []ReceiveJob {
 	}
 	for _, st := range loadIncoming(s.root) {
 		job := st.job()
+		if job.ID == "" || seen[job.ID] {
+			continue
+		}
+		out = append(out, job)
+		seen[job.ID] = true
+	}
+	for _, job := range loadFinishedReceives(s.root) {
 		if job.ID == "" || seen[job.ID] {
 			continue
 		}
@@ -621,6 +628,7 @@ func (s *Service) DiscardReceive(id string) error {
 		s.mu.Lock()
 		delete(s.receives, id)
 		s.mu.Unlock()
+		removeFinishedReceive(s.root, id)
 		return nil
 	}
 	for _, st := range loadIncoming(s.root) {
@@ -628,6 +636,13 @@ func (s *Service) DiscardReceive(id string) error {
 			continue
 		}
 		st.remove(s.root)
+		return nil
+	}
+	for _, job := range loadFinishedReceives(s.root) {
+		if job.ID != id {
+			continue
+		}
+		removeFinishedReceive(s.root, id)
 		return nil
 	}
 	return ErrUnknownReceive
@@ -788,6 +803,9 @@ func (s *Service) finishReceive(run *receiveRun, gen int, status, errText string
 	run.mu.Unlock()
 	if drop != nil {
 		drop.remove(s.root)
+	}
+	if status == receiveDone || status == receiveCancelled {
+		writeFinishedReceive(s.root, snap)
 	}
 	s.publishReceive(snap, true)
 }

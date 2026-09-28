@@ -1,4 +1,4 @@
-//go:build windows || darwin
+//go:build darwin
 
 package tray
 
@@ -14,46 +14,66 @@ func (c *Controller) install(icon []byte) {
 		systray.SetIcon(icon)
 	}
 	c.bindProduct(func(title, tooltip string) {
-		systray.SetTitle(title)
 		systray.SetTooltip(tooltip)
-	})
-	// Left-click shows the window. Right-click keeps the menu: Windows
-	// shows it by default, and macOS shows it when OnRClick is unset.
-	systray.SetOnClick(func(systray.IMenu) {
-		c.Open()
 	})
 
 	labels := c.Labels()
 	openItem := systray.AddMenuItem(labels.Open, "")
-	openItem.Click(c.Open)
+	openItem.Click(func() {
+		invokeMenu(func() {
+			c.Open()
+		})
+	})
 	hideItem := systray.AddMenuItem(labels.Hide, "")
-	hideItem.Click(c.Hide)
+	hideItem.Click(func() {
+		invokeMenu(func() {
+			c.Hide()
+		})
+	})
 	systray.AddSeparator()
 	chatItem := systray.AddMenuItem(labels.Chat, "")
-	chatItem.Click(func() { c.Navigate(PageChat) })
+	chatItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageChat)
+		})
+	})
 	tunnelItem := systray.AddMenuItem(labels.Tunnel, "")
-	tunnelItem.Click(func() { c.Navigate(PageTunnel) })
+	tunnelItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageTunnel)
+		})
+	})
 	settingsItem := systray.AddMenuItem(labels.Settings, "")
-	settingsItem.Click(func() { c.Navigate(PageSettings) })
+	settingsItem.Click(func() {
+		invokeMenu(func() {
+			c.Navigate(PageSettings)
+		})
+	})
 	systray.AddSeparator()
 	countItem := systray.AddMenuItem(SessionCountLabel(0), "")
 	countItem.Disable()
 	c.SetLabelUpdater(func(s string) {
-		countItem.SetTitle(s)
+		invokeMenu(func() {
+			countItem.SetTitle(s)
+		})
 	})
 	systray.AddSeparator()
 	quitItem := systray.AddMenuItem(labels.Quit, "")
 	quitItem.Click(func() {
-		c.Quit()
-		systray.Quit()
+		invokeMenu(func() {
+			systray.Quit()
+			c.Quit()
+		})
 	})
 	c.bindLabels(func(l MenuLabels) {
-		openItem.SetTitle(l.Open)
-		hideItem.SetTitle(l.Hide)
-		chatItem.SetTitle(l.Chat)
-		tunnelItem.SetTitle(l.Tunnel)
-		settingsItem.SetTitle(l.Settings)
-		quitItem.SetTitle(l.Quit)
+		invokeMenu(func() {
+			openItem.SetTitle(l.Open)
+			hideItem.SetTitle(l.Hide)
+			chatItem.SetTitle(l.Chat)
+			tunnelItem.SetTitle(l.Tunnel)
+			settingsItem.SetTitle(l.Settings)
+			quitItem.SetTitle(l.Quit)
+		})
 	})
 	c.Refresh()
 }

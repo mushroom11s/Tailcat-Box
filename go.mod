@@ -3,12 +3,16 @@ module github.com/mushroom11s/tailcat-box
 go 1.27.1
 
 require (
+	github.com/energye/systray v1.0.3
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/sftp v1.13.6
 	github.com/tailscale/tailcat v0.7.0
 	github.com/tphakala/go-opus v1.1.0
 	github.com/wailsapp/wails/v2 v2.16.0
 	golang.org/x/crypto v0.57.0
+	golang.org/x/sys v0.48.0
+	golang.org/x/term v0.46.0
+	tailscale.com v1.103.0-pre.0.20260916030321-a2263542f260
 )
 
 require (
@@ -21,7 +25,6 @@ require (
 	github.com/creachadair/msync v0.8.1 // indirect
 	github.com/creack/pty v1.1.24 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20240119213807-a09d6be7affa // indirect
-	github.com/energye/systray v1.0.3 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/gaissmai/bart v0.26.1 // indirect
 	github.com/go-json-experiment/json v0.0.0-20260623181947-01eb4420fa68 // indirect
@@ -73,12 +76,9 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/term v0.46.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	gvisor.dev/gvisor v0.0.0-20260915211658-a6f909f08a72 // indirect
-	tailscale.com v1.103.0-pre.0.20260916030321-a2263542f260 // indirect
 )

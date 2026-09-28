@@ -3058,8 +3058,47 @@ textarea {
   white-space: nowrap;
 }
 
+.miao-receive-card {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.miao-receive-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.miao-receive-head h3 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.miao-receive-card .miao-files {
+  margin: 0;
+}
+
+.miao-receive-card .miao-files li {
+  padding: 5px 0;
+}
+
+.miao-receive-card .miao-path,
+.miao-receive-card .miao-receive-bytes,
+.miao-receive-card .miao-dest-line,
+.miao-receive-card .miao-warn,
+.miao-receive-card .err {
+  margin: 0;
+}
+
 .miao-receive-status {
-  margin: 4px 0 8px;
+  margin: 0;
+  flex-shrink: 0;
   font-weight: 650;
 }
 
@@ -3123,10 +3162,19 @@ textarea {
 }
 
 .miao-progress-wrap {
-  position: relative;
-  margin: 4px 0 22px;
-  padding-top: 30px;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin: 2px 0 0;
+  padding-top: 50px;
   overflow: visible;
+}
+
+.miao-progress-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 1px;
 }
 
 .miao-progress {
@@ -3141,7 +3189,7 @@ textarea {
 .miao-progress-cat {
   position: absolute;
   z-index: 1;
-  top: 0;
+  bottom: calc(100% - 6px);
   left: clamp(20px, var(--miao-pct, 0%), calc(100% - 20px));
   width: 40px;
   height: 53px;
@@ -3164,6 +3212,147 @@ textarea {
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--ok) 65%, var(--accent)));
   box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.miao-done.miao-receive-card {
+  border-color: color-mix(in srgb, var(--ok) 40%, var(--hairline));
+}
+
+.miao-done .miao-progress {
+  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: color-mix(in srgb, var(--ok) 42%, var(--hairline));
+}
+
+.miao-done .miao-progress > span {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 92%, var(--accent)), var(--ok));
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ok) 55%, transparent);
+  animation: none !important;
+}
+
+.miao-done .miao-progress-wrap,
+.miao-failed .miao-progress-wrap,
+.miao-cancelled .miao-progress-wrap,
+.miao-interrupted .miao-progress-wrap {
+  margin: 0;
+  padding-top: 0;
+  align-items: flex-end;
+}
+
+.miao-done .miao-progress-track {
+  margin-bottom: 0;
+}
+
+.miao-done .miao-progress-cat {
+  display: none !important;
+}
+
+.miao-done-tail {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+
+.miao-done-cat {
+  display: block;
+  width: 44px;
+  height: auto;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, black 18%, transparent));
+  object-fit: contain;
+}
+
+.miao-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.miao-status[data-status="done"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
+}
+
+.miao-status[data-status="done"]::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background: var(--ok);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") no-repeat center / contain;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") no-repeat center / contain;
+}
+
+.miao-status[data-status="failed"] {
+  color: #e5484d;
+  background: color-mix(in srgb, #e5484d 14%, transparent);
+  border: 1px solid color-mix(in srgb, #e5484d 35%, transparent);
+}
+
+.miao-status[data-status="failed"]::before {
+  content: "!";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e5484d;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.miao-status[data-status="cancelled"] {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+}
+
+.miao-status[data-status="interrupted"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+
+.miao-status[data-status="downloading"],
+.miao-status[data-status="connecting"],
+.miao-status[data-status="queued"] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.miao-dest-line {
+  padding: 6px 10px;
+  background: color-mix(in srgb, var(--panel-2) 80%, transparent);
+  border-radius: 8px;
+  border: 1px dashed color-mix(in srgb, var(--hairline) 90%, transparent);
+}
+
+.miao-dest-label {
+  color: var(--faint);
+  margin-right: 4px;
+}
+
+.miao-dest-path {
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.miao-done .miao-dest-line {
+  border-color: color-mix(in srgb, var(--ok) 30%, transparent);
+  background: color-mix(in srgb, var(--ok) 7%, transparent);
 }
 
 .miao-join textarea,

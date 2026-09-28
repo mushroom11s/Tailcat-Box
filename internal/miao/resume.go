@@ -317,3 +317,53 @@ func cloneOffsets(in map[string]int64) map[string]int64 {
 	}
 	return out
 }
+
+const finishedDirName = "finished"
+
+func writeFinishedReceive(root string, job ReceiveJob) {
+	if root == "" || job.ID == "" {
+		return
+	}
+	dir := filepath.Join(root, finishedDirName)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return
+	}
+	path := filepath.Join(dir, job.ID+".json")
+	_ = writeJSONAtomic(path, job)
+}
+
+func removeFinishedReceive(root, id string) {
+	if root == "" || id == "" {
+		return
+	}
+	_ = os.Remove(filepath.Join(root, finishedDirName, id+".json"))
+}
+
+func loadFinishedReceives(root string) []ReceiveJob {
+	if root == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(filepath.Join(root, finishedDirName))
+	if err != nil {
+		return nil
+	}
+	var out []ReceiveJob
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		body, err := os.ReadFile(filepath.Join(root, finishedDirName, entry.Name()))
+		if err != nil {
+			continue
+		}
+		var job ReceiveJob
+		if err := json.Unmarshal(body, &job); err != nil || job.ID == "" {
+			continue
+		}
+		if job.Files == nil {
+			job.Files = []FileInfo{}
+		}
+		out = append(out, job)
+	}
+	return out
+}

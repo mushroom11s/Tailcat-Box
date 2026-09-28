@@ -42,6 +42,10 @@ export function DownloadUpdate() {
   return window['go']['main']['App']['DownloadUpdate']();
 }
 
+export function EndMiaoShare(arg1) {
+  return window['go']['main']['App']['EndMiaoShare'](arg1);
+}
+
 export function GetClientInfo() {
   return window['go']['main']['App']['GetClientInfo']();
 }
@@ -64,10 +68,6 @@ export function GetUpdateStatus() {
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
-}
-
-export function EndMiaoShare(arg1) {
-  return window['go']['main']['App']['EndMiaoShare'](arg1);
 }
 
 export function JoinMiaoShare(arg1, arg2) {
@@ -98,12 +98,20 @@ export function MiaoShareStatus() {
   return window['go']['main']['App']['MiaoShareStatus']();
 }
 
+export function OpenSSHShell(arg1, arg2) {
+  return window['go']['main']['App']['OpenSSHShell'](arg1, arg2);
+}
+
 export function ParseAddr(arg1) {
   return window['go']['main']['App']['ParseAddr'](arg1);
 }
 
 export function RecordUpdateCheck() {
   return window['go']['main']['App']['RecordUpdateCheck']();
+}
+
+export function RemoveSSHPeer(arg1) {
+  return window['go']['main']['App']['RemoveSSHPeer'](arg1);
 }
 
 export function ResendChatFile(arg1, arg2) {
@@ -114,16 +122,20 @@ export function ResolveAddr(arg1) {
   return window['go']['main']['App']['ResolveAddr'](arg1);
 }
 
-export function RevealDownloadedUpdate() {
-  return window['go']['main']['App']['RevealDownloadedUpdate']();
-}
-
 export function RestartChatRoom(arg1, arg2) {
   return window['go']['main']['App']['RestartChatRoom'](arg1, arg2);
 }
 
+export function RevealDownloadedUpdate() {
+  return window['go']['main']['App']['RevealDownloadedUpdate']();
+}
+
 export function SaveChatFile(arg1, arg2) {
   return window['go']['main']['App']['SaveChatFile'](arg1, arg2);
+}
+
+export function SaveSSHPeer(arg1, arg2) {
+  return window['go']['main']['App']['SaveSSHPeer'](arg1, arg2);
 }
 
 export function SelectDirectory(arg1) {
@@ -162,6 +174,14 @@ export function SetNetworkSettings(arg1, arg2) {
   return window['go']['main']['App']['SetNetworkSettings'](arg1, arg2);
 }
 
+export function SetSSHAllowAny(arg1, arg2) {
+  return window['go']['main']['App']['SetSSHAllowAny'](arg1, arg2);
+}
+
+export function SetSSHEnabled(arg1) {
+  return window['go']['main']['App']['SetSSHEnabled'](arg1);
+}
+
 export function SetUILocale(arg1) {
   return window['go']['main']['App']['SetUILocale'](arg1);
 }
@@ -190,16 +210,16 @@ export function StartFilesServe(arg1, arg2) {
   return window['go']['main']['App']['StartFilesServe'](arg1, arg2);
 }
 
+export function StartForward(arg1, arg2, arg3) {
+  return window['go']['main']['App']['StartForward'](arg1, arg2, arg3);
+}
+
 export function StartMiaoReceive(arg1, arg2) {
   return window['go']['main']['App']['StartMiaoReceive'](arg1, arg2);
 }
 
 export function StartMiaoShare(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['StartMiaoShare'](arg1, arg2, arg3, arg4);
-}
-
-export function StartForward(arg1, arg2, arg3) {
-  return window['go']['main']['App']['StartForward'](arg1, arg2, arg3);
 }
 
 export function StartPing(arg1, arg2) {
@@ -222,36 +242,12 @@ export function StartSOCKS(arg1, arg2) {
   return window['go']['main']['App']['StartSOCKS'](arg1, arg2);
 }
 
-export function OpenSSHShell(arg1, arg2) {
-  return window['go']['main']['App']['OpenSSHShell'](arg1, arg2);
-}
-
-export function RemoveSSHPeer(arg1) {
-  return window['go']['main']['App']['RemoveSSHPeer'](arg1);
-}
-
-export function SaveSSHPeer(arg1, arg2) {
-  return window['go']['main']['App']['SaveSSHPeer'](arg1, arg2);
-}
-
-export function SetSSHAllowAny(arg1, arg2) {
-  return window['go']['main']['App']['SetSSHAllowAny'](arg1, arg2);
-}
-
-export function SetSSHEnabled(arg1) {
-  return window['go']['main']['App']['SetSSHEnabled'](arg1);
-}
-
 export function StartSSHClient(arg1, arg2, arg3, arg4) {
   return window['go']['main']['App']['StartSSHClient'](arg1, arg2, arg3, arg4);
 }
 
 export function StartSSHServe(arg1, arg2, arg3) {
   return window['go']['main']['App']['StartSSHServe'](arg1, arg2, arg3);
-}
-
-export function WriteSSHShell(arg1, arg2) {
-  return window['go']['main']['App']['WriteSSHShell'](arg1, arg2);
 }
 
 export function StopChatRoom(arg1) {
@@ -264,4 +260,8 @@ export function StopSession(arg1) {
 
 export function TailcatVersion() {
   return window['go']['main']['App']['TailcatVersion']();
+}
+
+export function WriteSSHShell(arg1, arg2) {
+  return window['go']['main']['App']['WriteSSHShell'](arg1, arg2);
 }
