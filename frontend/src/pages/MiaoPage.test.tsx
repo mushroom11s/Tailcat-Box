@@ -128,7 +128,8 @@ describe("Mew Share page", () => {
     expect(await screen.findByRole("heading", { name: "进行中的分享" })).toBeTruthy();
     expect(screen.getByRole("article", { name: "笔记.txt" })).toBeTruthy();
     expect(screen.getByText("笔记.txt")).toBeTruthy();
-    expect((screen.getByLabelText("分享口令") as HTMLTextAreaElement).value).toBe("mw1.restored-code");
+    expect(sharePayload()).toBe("mw1.restored-code");
+    expect(document.querySelector(".miao-send .tunnel-code-copy")).toBeTruthy();
     expect(screen.getByText("还可下载 2")).toBeTruthy();
   });
 
@@ -160,9 +161,11 @@ describe("Mew Share page", () => {
     expect(await screen.findByRole("button", { name: "End share" })).toBeTruthy();
     expect(screen.getByText("notes.txt")).toBeTruthy();
     expect(screen.getByText("Drop files here, or click to choose.")).toBeTruthy();
-    const token = (await screen.findByLabelText("Share code")) as HTMLTextAreaElement;
-    expect(token.value.startsWith("mw1.")).toBe(true);
-    const parsed = parseJoin(token.value);
+    await waitFor(() => {
+      expect(sharePayload().startsWith("mw1.")).toBe(true);
+    });
+    const token = sharePayload();
+    const parsed = parseJoin(token);
     expect(parsed?.kind).toBe("miao");
     expect(parsed?.addr.startsWith("tc:fake-miao-")).toBe(true);
     expect(parsed?.token).toBeTruthy();
@@ -197,7 +200,9 @@ describe("Mew Share page", () => {
     expect(blob.size).toBeGreaterThan(8);
     expect(screen.getAllByText("QR code copied.")).toHaveLength(1);
     expect(document.querySelector(".toast-ok")).toBeNull();
-    expect(screen.getByRole("button", { name: "Copy code" })).toBeTruthy();
+    const copyCode = screen.getByRole("button", { name: "Copy code" });
+    expect(copyCode.classList.contains("tunnel-code-copy")).toBe(true);
+    expect(copyCode.closest(".row")).toBeNull();
   });
 
   it("tells the host when a large share stays on the original path", async () => {
@@ -245,8 +250,10 @@ describe("Mew Share page", () => {
     renderPage();
     const input = screen.getByLabelText("Choose files") as HTMLInputElement;
     await user.upload(input, new File(["purr"], "笔记.txt", { type: "text/plain" }));
-    const token = (await screen.findByLabelText("Share code")) as HTMLTextAreaElement;
-    const code = token.value;
+    await waitFor(() => {
+      expect(sharePayload().startsWith("mw1.")).toBe(true);
+    });
+    const code = sharePayload();
 
     await user.click(screen.getByRole("tab", { name: "Download" }));
     const join = screen.getByRole("textbox", { name: "Share code" });
@@ -287,7 +294,10 @@ describe("Mew Share page", () => {
     renderPage();
     const input = screen.getByLabelText("Choose files") as HTMLInputElement;
     await user.upload(input, new File(["purr"], "path.txt", { type: "text/plain" }));
-    const code = ((await screen.findByLabelText("Share code")) as HTMLTextAreaElement).value;
+    await waitFor(() => {
+      expect(sharePayload().startsWith("mw1.")).toBe(true);
+    });
+    const code = sharePayload();
     setBrowserReceiveHold(true);
     const seen = new Set<string>();
     const seenDetails = new Set<string>();
@@ -354,7 +364,10 @@ describe("Mew Share page", () => {
     renderPage();
     const input = screen.getByLabelText("选择文件") as HTMLInputElement;
     await user.upload(input, new File(["purr"], "path.txt", { type: "text/plain" }));
-    const code = ((await screen.findByLabelText("分享口令")) as HTMLTextAreaElement).value;
+    await waitFor(() => {
+      expect(sharePayload().startsWith("mw1.")).toBe(true);
+    });
+    const code = sharePayload();
     setBrowserReceiveHold(true);
     const seen = new Set<string>();
     const seenDetails = new Set<string>();
@@ -407,7 +420,10 @@ describe("Mew Share page", () => {
     renderPage();
     const input = screen.getByLabelText("Choose files") as HTMLInputElement;
     await user.upload(input, new File(["purr"], "notes.txt", { type: "text/plain" }));
-    const code = ((await screen.findByLabelText("Share code")) as HTMLTextAreaElement).value;
+    await waitFor(() => {
+      expect(sharePayload().startsWith("mw1.")).toBe(true);
+    });
+    const code = sharePayload();
     setBrowserReceiveHold(true);
     try {
       await user.click(screen.getByRole("tab", { name: "Download" }));
@@ -528,8 +544,14 @@ describe("Mew Share page", () => {
     expect(sendRule).toContain("min-height: 0");
     expect(sendRule).toContain("overflow-y: auto");
     expect(sendRule).toContain("overflow-x: hidden");
+    expect(sendRule).toContain("padding: 10px 12px 24px");
     expect(sendRule).toContain("scrollbar-width: none");
     expect(sendRule).toContain("-ms-overflow-style: none");
+    const receiveRule = cssBlock(css, ".miao-receive");
+    expect(receiveRule).toContain("overflow-y: auto");
+    expect(receiveRule).toContain("overflow-x: hidden");
+    expect(receiveRule).toContain("padding: 10px 12px 24px");
+    expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
     const sendBar = cssBlock(css, ".miao-send::-webkit-scrollbar");
     expect(sendBar).toContain("display: none");
     const revealBtn = cssBlock(css, ".miao-reveal-btn");
@@ -1037,6 +1059,15 @@ describe("Mew Share page", () => {
     }
   });
 });
+
+
+function sharePayload(root: ParentNode = document): string {
+  const el = root.querySelector(".miao-send .tunnel-codeblock code, .miao-active .tunnel-codeblock code");
+  if (!el?.textContent) {
+    throw new Error("missing share payload codeblock");
+  }
+  return el.textContent;
+}
 
 function cssBlock(source: string, selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

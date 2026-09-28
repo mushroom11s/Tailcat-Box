@@ -319,14 +319,26 @@ function ShareCard({
           <p className="chat-quiet">
             {t("miaoDownloadsLeft")} {left === null ? t("miaoUnlimited") : String(left)}
           </p>
-          <label className="field" htmlFor={`miao-token-${share.id}`}>
-            {t("miaoToken")}
-            <textarea id={`miao-token-${share.id}`} readOnly value={share.payload} rows={3} />
-          </label>
+          <div className="ssh-address">
+            <span className="ssh-address-label">{t("miaoToken")}</span>
+            <div className="tunnel-codeblock">
+              <pre>
+                <code className="tunnel-key" title={share.payload}>
+                  {share.payload}
+                </code>
+              </pre>
+              <button
+                className="tunnel-code-copy"
+                type="button"
+                aria-label={t("miaoCopyCode")}
+                title={t("miaoCopyCode")}
+                onClick={() => void copyText(share.payload)}
+              >
+                <CopyIcon />
+              </button>
+            </div>
+          </div>
           <div className="row">
-            <button className="btn btn-ghost" type="button" onClick={() => void copyText(share.payload)}>
-              {t("miaoCopyCode")}
-            </button>
             <button className="btn btn-danger" type="button" onClick={() => onEnd(share.id)}>
               {t("miaoEnd")}
             </button>
@@ -1264,6 +1276,22 @@ async function revealReceiveLocation(
   if (lastError) {
     pushToast(lastError);
   }
+}
+
+function CopyIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="9" width="11" height="11" rx="2" fill="none" stroke="currentColor" strokeWidth="1.75" />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 9V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h3"
+      />
+    </svg>
+  );
 }
 
 function FolderRevealIcon() {
