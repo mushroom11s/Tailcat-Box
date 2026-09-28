@@ -551,7 +551,8 @@ describe("Mew Share page", () => {
     expect(receiveRule).toContain("overflow-y: auto");
     expect(receiveRule).toContain("overflow-x: hidden");
     expect(receiveRule).toContain("padding: 10px 12px 24px");
-    expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
+    expect(css).not.toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
+    expect(css).toMatch(/\.main:has\(\.chat-page\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s);
     const sendBar = cssBlock(css, ".miao-send::-webkit-scrollbar");
     expect(sendBar).toContain("display: none");
     const revealBtn = cssBlock(css, ".miao-reveal-btn");

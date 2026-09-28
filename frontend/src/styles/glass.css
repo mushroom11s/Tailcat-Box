@@ -654,11 +654,6 @@ textarea {
   padding: 16px 18px 14px;
 }
 
-/* Match New Room (.main 32px) left inset; keep miao top/right/bottom as-is. */
-.main:has(.miao-page) {
-  padding-left: 32px;
-}
-
 .main,
 .log,
 .result,
