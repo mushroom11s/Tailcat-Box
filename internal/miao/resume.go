@@ -104,9 +104,24 @@ func (st *partialState) prepare(item manifestItem) (int64, string) {
 		return 0, path
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Size() != prev.Got {
+	if err != nil || info.Size() < prev.Got {
 		_ = os.Remove(path)
 		return 0, path
+	}
+	// File may be ahead of the last persisted Got when Sync+persist was
+	// throttled; keep the contiguous prefix and drop the unpersisted tail.
+	if info.Size() > prev.Got {
+		f, err := os.OpenFile(path, os.O_RDWR, 0o600)
+		if err != nil {
+			_ = os.Remove(path)
+			return 0, path
+		}
+		truncErr := f.Truncate(prev.Got)
+		_ = f.Close()
+		if truncErr != nil {
+			_ = os.Remove(path)
+			return 0, path
+		}
 	}
 	return prev.Got, path
 }
@@ -131,7 +146,7 @@ func (st *partialState) offsets() map[string]int64 {
 			continue
 		}
 		info, err := os.Stat(st.partPath(file.ID))
-		if err != nil || info.Size() != file.Got {
+		if err != nil || info.Size() < file.Got {
 			continue
 		}
 		out[file.ID] = file.Got

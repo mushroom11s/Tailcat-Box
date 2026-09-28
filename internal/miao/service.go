@@ -22,7 +22,7 @@ import (
 
 const (
 	portMiao   = 102
-	chunkSize  = 256 * 1024
+	chunkSize  = 256 * 1024 // mid adaptive tier; tests use this as the baseline
 	maxTTLDays = 3650
 	// defaultChunkStreams is how many concurrent TCP streams carry miao-chunk
 	// frames for one pull. Each stream is DialTCPPort on the room's shared
@@ -32,10 +32,21 @@ const (
 	// sendProgressEvery is how often a live pull publishes byte counts.
 	// The UI samples those counts for speed, so this stays well under a second.
 	sendProgressEvery = 200 * time.Millisecond
+
+	// Receivers Sync+persist the contiguous prefix on this cadence, not every
+	// chunk. Cancel/fail/done always force a flush so resume stays durable.
+	persistEveryChunks   = 8
+	persistEveryInterval = 500 * time.Millisecond
 )
 
 // chunkStreams is the active concurrency for one pull. Tests may shrink it.
 var chunkStreams = defaultChunkStreams
+
+// Persist throttle knobs (defaults above). Tests may tighten them.
+var (
+	persistChunkLimit = persistEveryChunks
+	persistTimeLimit  = persistEveryInterval
+)
 
 var (
 	ErrEnded           = errors.New("The share has ended.")
@@ -1534,6 +1545,19 @@ type chunkJob struct {
 	data   []byte
 }
 
+// chunkSizeFor picks a host read size from the file length. Receivers accept
+// any payload length, so no protocol negotiation is required; older peers keep working.
+func chunkSizeFor(fileSize int64) int {
+	switch {
+	case fileSize <= 32<<20: // <= 32 MiB — keep the historical 256 KiB size
+		return chunkSize
+	case fileSize <= 256<<20: // <= 256 MiB
+		return 1024 * 1024
+	default:
+		return 2 * 1024 * 1024
+	}
+}
+
 func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, start int64, onChunk func(int64)) error {
 	if start < 0 || start > file.Size {
 		start = 0
@@ -1610,7 +1634,7 @@ func sendFile(ctx context.Context, send func([]byte) error, file StagedFile, sta
 	}
 
 	offset := start
-	buf := make([]byte, chunkSize)
+	buf := make([]byte, chunkSizeFor(file.Size))
 	var readErr error
 	for sendCtx.Err() == nil {
 		n, err := in.Read(buf)
@@ -1749,7 +1773,12 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 		bytesDone = partial.bytesDone()
 		bytesTotal = partial.bytesTotal()
 	}
-	persist := func() {
+	var (
+		chunksSinceFlush int
+		lastFlush        time.Time
+		dirty            bool
+	)
+	persistMeta := func() {
 		if !partialMode || len(order) == 0 {
 			return
 		}
@@ -1759,6 +1788,37 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 		}
 		partial.remember(files)
 		_ = partial.save(indexRoot)
+	}
+	flushPartial := func(force bool) {
+		if !partialMode || len(order) == 0 {
+			return
+		}
+		if !force && !dirty {
+			return
+		}
+		if !force {
+			limit := persistChunkLimit
+			if limit < 1 {
+				limit = 1
+			}
+			interval := persistTimeLimit
+			if interval <= 0 {
+				interval = persistEveryInterval
+			}
+			if chunksSinceFlush < limit && (lastFlush.IsZero() || time.Since(lastFlush) < interval) {
+				return
+			}
+		}
+		for _, item := range writers {
+			if item != nil && item.file != nil {
+				_ = item.file.Sync()
+			}
+		}
+		persistMeta()
+		chunksSinceFlush = 0
+		lastFlush = time.Now()
+		dirty = false
+		callTransferHook("persist")
 	}
 	closeFiles := func(syncFile bool) {
 		for _, item := range writers {
@@ -1774,8 +1834,8 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 	}
 	fail := func(err error) {
 		if partialMode {
-			closeFiles(true)
-			persist()
+			flushPartial(true)
+			closeFiles(false) // already Synced in flushPartial
 		} else {
 			closeFiles(false)
 			for _, item := range writers {
@@ -1895,7 +1955,10 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 				bytesTotal = total
 				bytesDone = resumed
 				if partialMode {
-					persist()
+					persistMeta()
+					chunksSinceFlush = 0
+					lastFlush = time.Now()
+					dirty = false
 				}
 				expiresAt, _ := meta["expiresAt"].(string)
 				note(receiveUpdate{status: receiveDownloading, files: infos, bytesDone: bytesDone, bytesTotal: bytesTotal, expiresAt: expiresAt})
@@ -1922,29 +1985,35 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 					}
 				}
 				before := item.progressBytes()
+				beforeGot := item.got
 				added, err := item.acceptChunk(offset, payload)
 				if err != nil {
 					fail(err)
 					return
 				}
+				gotAdvanced := item.got > beforeGot
 				if added == 0 && item.progressBytes() == before {
 					// Duplicate or fully overlapped chunk; ignore.
 					note(receiveUpdate{status: receiveDownloading, bytesDone: bytesDone, bytesTotal: bytesTotal})
 					continue
 				}
 				bytesDone += item.progressBytes() - before
-				if partialMode {
+				if partialMode && gotAdvanced {
 					// Only the contiguous prefix is durable; truncate past got so
-					// resume sidecars keep matching prepare()'s size == got check.
+					// a crash leaves size >= persisted Got (prepare trims the tail).
 					if err := item.file.Truncate(item.got); err != nil {
 						fail(err)
 						return
 					}
-					_ = item.file.Sync()
-					persist()
+					dirty = true
+					chunksSinceFlush++
+					flushPartial(false)
 				}
 				note(receiveUpdate{status: receiveDownloading, bytesDone: bytesDone, bytesTotal: bytesTotal})
 			case "miao-done":
+				if partialMode {
+					flushPartial(true)
+				}
 				closeFiles(partialMode)
 				type checkedFile struct {
 					item *incomingFile
@@ -1971,7 +2040,8 @@ func receivePackage(ctx context.Context, room adapter.Room, dest string, destFn 
 								bytesDone = 0
 							}
 							item.got = 0
-							persist()
+							dirty = true
+							flushPartial(true)
 							done <- joinResult{err: ErrPartialMismatch}
 							return
 						}

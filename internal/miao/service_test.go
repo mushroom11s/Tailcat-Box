@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1047,5 +1048,203 @@ func TestAcceptChunkOutOfOrder(t *testing.T) {
 	}
 	if string(body) != "0123456789ab" {
 		t.Fatalf("body=%q", body)
+	}
+}
+
+func TestChunkSizeForAdaptive(t *testing.T) {
+	cases := []struct {
+		size int64
+		want int
+	}{
+		{0, chunkSize},
+		{1, chunkSize},
+		{32 << 20, chunkSize},
+		{(32 << 20) + 1, 1024 * 1024},
+		{256 << 20, 1024 * 1024},
+		{(256 << 20) + 1, 2 * 1024 * 1024},
+		{1 << 30, 2 * 1024 * 1024},
+	}
+	for _, tc := range cases {
+		if got := chunkSizeFor(tc.size); got != tc.want {
+			t.Fatalf("chunkSizeFor(%d)=%d want %d", tc.size, got, tc.want)
+		}
+	}
+}
+
+func TestPrepareTrimsAheadOfPersistedGot(t *testing.T) {
+	dest := t.TempDir()
+	st := &partialState{
+		V:     partialVersion,
+		ID:    "job1",
+		Addr:  "tcaddr",
+		Token: "tok",
+		Dest:  dest,
+		Files: []partialFile{{ID: "f1", Name: "a.bin", Size: 32, SHA256: "abc", Got: 16}},
+	}
+	path := st.partPath("f1")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Contiguous prefix of 24 bytes on disk, but sidecar only persisted 16.
+	if err := os.WriteFile(path, []byte("0123456789abcdefEXTRA!!!"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, part := st.prepare(manifestItem{id: "f1", name: "a.bin", size: 32, sha: "abc"})
+	if got != 16 || part != path {
+		t.Fatalf("got=%d path=%s", got, part)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Size() != 16 {
+		t.Fatalf("trimmed size=%v err=%v", info, err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil || string(body) != "0123456789abcdef" {
+		t.Fatalf("body=%q err=%v", body, err)
+	}
+	offs := st.offsets()
+	if offs["f1"] != 16 {
+		t.Fatalf("offsets=%v", offs)
+	}
+}
+
+func TestReceivePersistThrottledAndResumeSafe(t *testing.T) {
+	oldChunks, oldInterval := persistChunkLimit, persistTimeLimit
+	persistChunkLimit = 100
+	persistTimeLimit = time.Hour
+	t.Cleanup(func() {
+		persistChunkLimit = oldChunks
+		persistTimeLimit = oldInterval
+	})
+
+	ad := adapter.NewFake()
+	host := New(ad, t.TempDir())
+	recvRoot := t.TempDir()
+	recv := New(ad, recvRoot)
+	events := collectReceive(t, recv)
+
+	// Several mid-tier chunks so throttle can skip Sync+persist between them.
+	payload := bytes.Repeat([]byte("t"), chunkSize*5+64)
+	snap, err := host.Start([]Source{{Name: "throttle.bin", Data: payload}}, Limits{MaxDownloads: 4}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var persistCount atomic.Int32
+	entered := make(chan struct{})
+	release := make(chan struct{})
+	var enterOnce sync.Once
+	var releaseOnce sync.Once
+	setTransferHook(func(stage string) {
+		if stage == "persist" {
+			persistCount.Add(1)
+			return
+		}
+		if stage != "chunk" {
+			return
+		}
+		enterOnce.Do(func() { close(entered) })
+		<-release
+	})
+	unlock := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(func() {
+		setTransferHook(nil)
+		unlock()
+	})
+
+	dest := t.TempDir()
+	job, err := recv.StartReceive(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-entered:
+	case <-time.After(8 * time.Second):
+		t.Fatal("timed out waiting for first chunk")
+	}
+	partial := waitReceive(t, events, job.ID, receiveDownloading, func(job ReceiveJob) bool {
+		return job.BytesDone > 0 && job.BytesDone < int64(len(payload))
+	})
+	midPersists := persistCount.Load()
+	if midPersists != 0 {
+		t.Fatalf("mid-transfer persists=%d want 0 with high throttle", midPersists)
+	}
+	if err := recv.CancelReceive(job.ID); err != nil {
+		t.Fatal(err)
+	}
+	stopped := waitReceive(t, events, job.ID, receiveInterrupted, nil)
+	if stopped.BytesDone != partial.BytesDone || !stopped.Resumable {
+		t.Fatalf("stopped=%+v partial=%+v", stopped, partial)
+	}
+	if persistCount.Load() < 1 {
+		t.Fatal("expected force persist on cancel")
+	}
+	part := findPart(t, dest)
+	info, err := os.Stat(part)
+	if err != nil || info.Size() != stopped.BytesDone {
+		t.Fatalf("part size=%v err=%v want %d", info, err, stopped.BytesDone)
+	}
+
+	sent := armTransfer(t, "sent")
+	unlock()
+	waitArmed(t, sent, "sent")
+
+	again := New(ad, recvRoot)
+	againEvents := collectReceive(t, again)
+	resumed, err := again.StartReceive(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resumed.ID != job.ID || resumed.BytesDone != stopped.BytesDone || resumed.BytesDone == 0 {
+		t.Fatalf("resumed=%+v want %d", resumed, stopped.BytesDone)
+	}
+	done := waitReceive(t, againEvents, job.ID, receiveDone, nil)
+	if done.BytesDone != int64(len(payload)) {
+		t.Fatalf("done=%d", done.BytesDone)
+	}
+	body, err := os.ReadFile(filepath.Join(dest, "throttle.bin"))
+	if err != nil || !bytes.Equal(body, payload) {
+		t.Fatalf("saved err=%v match=%v", err, err == nil && bytes.Equal(body, payload))
+	}
+}
+
+func TestReceivePersistFlushesByChunkLimit(t *testing.T) {
+	oldChunks, oldInterval := persistChunkLimit, persistTimeLimit
+	persistChunkLimit = 2
+	persistTimeLimit = time.Hour
+	t.Cleanup(func() {
+		persistChunkLimit = oldChunks
+		persistTimeLimit = oldInterval
+	})
+
+	ad := adapter.NewFake()
+	host := New(ad, t.TempDir())
+	recv := New(ad, t.TempDir())
+	events := collectReceive(t, recv)
+	payload := bytes.Repeat([]byte("n"), chunkSize*4+8)
+	snap, err := host.Start([]Source{{Name: "n.bin", Data: payload}}, Limits{MaxDownloads: 1}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var persistCount atomic.Int32
+	setTransferHook(func(stage string) {
+		if stage == "persist" {
+			persistCount.Add(1)
+		}
+	})
+	t.Cleanup(func() { setTransferHook(nil) })
+
+	dest := t.TempDir()
+	job, err := recv.StartReceive(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := waitReceive(t, events, job.ID, receiveDone, nil)
+	if done.BytesDone != int64(len(payload)) {
+		t.Fatalf("done=%d", done.BytesDone)
+	}
+	// 4 full + 1 tail contiguous advances → with limit 2 expect mid flushes, plus done force.
+	if n := persistCount.Load(); n < 2 {
+		t.Fatalf("persists=%d want at least 2 (chunk-limit flushes)", n)
 	}
 }
