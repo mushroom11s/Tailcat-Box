@@ -92,3 +92,40 @@ func TestUpdateStateRoundTrip(t *testing.T) {
 		t.Fatalf("%+v", got)
 	}
 }
+
+func TestPersistChunkStreams(t *testing.T) {
+	dir := t.TempDir()
+	s, err := settings.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ChunkStreams() != 0 {
+		t.Fatalf("default ChunkStreams=%d want 0 (unset)", s.ChunkStreams())
+	}
+	if err := s.SetChunkStreams(8); err != nil {
+		t.Fatal(err)
+	}
+	if s.ChunkStreams() != 8 {
+		t.Fatalf("ChunkStreams=%d", s.ChunkStreams())
+	}
+	if err := s.SetChunkStreams(99); err != nil {
+		t.Fatal(err)
+	}
+	if s.ChunkStreams() != 16 {
+		t.Fatalf("clamp high ChunkStreams=%d want 16", s.ChunkStreams())
+	}
+	if err := s.SetChunkStreams(0); err != nil {
+		t.Fatal(err)
+	}
+	if s.ChunkStreams() != 1 {
+		t.Fatalf("clamp low ChunkStreams=%d want 1", s.ChunkStreams())
+	}
+
+	reloaded, err := settings.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.ChunkStreams() != 1 {
+		t.Fatalf("persisted ChunkStreams=%d want 1", reloaded.ChunkStreams())
+	}
+}

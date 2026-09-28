@@ -48,7 +48,7 @@ import {
   type ReceiveJob,
   type Remaining,
 } from "../lib/miao";
-import { cancelMiaoReceive, discardMiaoReceive, endMiaoShare, hasWailsBindings, listMiaoReceives, miaoRestoreNotes, miaoShareStatus, onTailcatEvent, selectDirectory, selectFiles, setMiaoReceiveDest, startMiaoReceive, startMiaoShare } from "../lib/wails";
+import { cancelMiaoReceive, discardMiaoReceive, endMiaoShare, getMiaoChunkStreams, hasWailsBindings, listMiaoReceives, miaoRestoreNotes, miaoShareStatus, onTailcatEvent, selectDirectory, selectFiles, setMiaoChunkStreams, setMiaoReceiveDest, startMiaoReceive, startMiaoShare } from "../lib/wails";
 
 type TTLMode = "1" | "7" | "15" | "custom" | "forever";
 type CountMode = "1" | "3" | "10" | "unlimited" | "custom";
@@ -502,6 +502,7 @@ export default function MiaoPage() {
   const [customDays, setCustomDays] = useState("30");
   const [countMode, setCountMode] = useState<CountMode>("1");
   const [customCount, setCustomCount] = useState("5");
+  const [chunkStreams, setChunkStreams] = useState(4);
   const [shares, setShares] = useState<MiaoShare[]>([]);
   const [busy, setBusy] = useState<"" | "pack" | "join">("");
   const [dragOver, setDragOver] = useState(false);
@@ -518,6 +519,23 @@ export default function MiaoPage() {
   const retryAttempts = useRef<Record<string, number>>({});
   const retryTimers = useRef<Record<string, number>>({});
   jobsRef.current = jobs;
+
+  useEffect(() => {
+    void getMiaoChunkStreams()
+      .then((n) => setChunkStreams(n))
+      .catch(() => {
+        /* keep default */
+      });
+  }, []);
+
+  async function onChunkStreamsChange(value: string): Promise<void> {
+    const n = Number(value);
+    try {
+      setChunkStreams(await setMiaoChunkStreams(n));
+    } catch (err) {
+      showError(err, "miaoShareUnready");
+    }
+  }
   const endedRef = useRef(new Set<string>());
   const savedRef = useRef(new Set<string>());
   const busyRef = useRef(busy);
@@ -1010,6 +1028,31 @@ export default function MiaoPage() {
 
       {mode === "send" ? (
         <div className="miao-send">
+          <section className="glass settings-panel">
+            <div className="setting-row">
+              <div className="setting-label">
+                <label htmlFor="miao-chunk-streams">{t("miaoChunkStreams")}</label>
+              </div>
+              <select
+                id="miao-chunk-streams"
+                className="nickname-input"
+                value={chunkStreams}
+                onChange={(ev) => {
+                  void onChunkStreamsChange(ev.target.value);
+                }}
+                aria-describedby="miao-chunk-streams-help"
+              >
+                {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <p id="miao-chunk-streams-help" className="setting-help">
+              {t("miaoChunkStreamsHelp")}
+            </p>
+          </section>
           <div className="miao-limits">
             <label className="field">
               {t("miaoTTL")}

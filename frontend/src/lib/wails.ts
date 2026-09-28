@@ -10,6 +10,7 @@ import {
   DiscardChatMessage as bindDiscardChatMessage,
   DownloadUpdate as bindDownloadUpdate,
   DialPipe as bindDialPipe,
+  GetMiaoChunkStreams as bindGetMiaoChunkStreams,
   GetNetworkSettings as bindGetNetworkSettings,
   ListKeys as bindListKeys,
   ListSessions as bindListSessions,
@@ -32,6 +33,7 @@ import {
   StartChatRoom as bindStartChatRoom,
   StartCopy as bindStartCopy,
   StartFilesServe as bindStartFilesServe,
+  SetMiaoChunkStreams as bindSetMiaoChunkStreams,
   SetMiaoReceiveDest as bindSetMiaoReceiveDest,
   StartMiaoReceive as bindStartMiaoReceive,
   StartMiaoShare as bindStartMiaoShare,
@@ -229,6 +231,7 @@ type FakeState = {
   startedAt: string;
   lastUpdateCheck: string;
   launchAtLogin: boolean;
+  miaoChunkStreams: number;
   update: UpdateStatus;
   updateChecks: number;
 };
@@ -267,6 +270,7 @@ const fake: FakeState = {
   startedAt: new Date().toISOString(),
   lastUpdateCheck: "",
   launchAtLogin: false,
+  miaoChunkStreams: 4,
   update: emptyUpdateStatus(),
   updateChecks: 0,
 };
@@ -1558,6 +1562,60 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<SystemInfo> {
   }
   fake.launchAtLogin = enabled;
   return fakeSystemInfo();
+}
+
+
+const MIAO_CHUNK_STREAMS_KEY = "tailcat-miao-chunk-streams";
+
+function clampChunkStreams(n: number): number {
+  if (!Number.isFinite(n)) {
+    return 4;
+  }
+  const v = Math.trunc(n);
+  if (v < 1) {
+    return 1;
+  }
+  if (v > 16) {
+    return 16;
+  }
+  return v;
+}
+
+function readBrowserChunkStreams(): number {
+  try {
+    const raw = localStorage.getItem(MIAO_CHUNK_STREAMS_KEY);
+    if (raw == null || raw === "") {
+      return fake.miaoChunkStreams;
+    }
+    return clampChunkStreams(Number(raw));
+  } catch {
+    return fake.miaoChunkStreams;
+  }
+}
+
+function writeBrowserChunkStreams(n: number): number {
+  const v = clampChunkStreams(n);
+  fake.miaoChunkStreams = v;
+  try {
+    localStorage.setItem(MIAO_CHUNK_STREAMS_KEY, String(v));
+  } catch {
+    // ignore
+  }
+  return v;
+}
+
+export async function getMiaoChunkStreams(): Promise<number> {
+  if (hasWailsBindings()) {
+    return clampChunkStreams(Number(await bindGetMiaoChunkStreams()));
+  }
+  return readBrowserChunkStreams();
+}
+
+export async function setMiaoChunkStreams(n: number): Promise<number> {
+  if (hasWailsBindings()) {
+    return clampChunkStreams(Number(await bindSetMiaoChunkStreams(n)));
+  }
+  return writeBrowserChunkStreams(n);
 }
 
 export async function startMiaoShare(

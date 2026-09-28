@@ -430,6 +430,8 @@ export const zhCN = {
   miaoForever: "长期有效",
   miaoDays: "天数",
   miaoDownloads: "下载次数",
+  miaoChunkStreams: "分片并发",
+  miaoChunkStreamsHelp: "同一密钥、同一隧道上的多路 TCP 分片连接，默认 4。",
   miaoOnce: "1 次",
   miaoUnlimited: "不限次数",
   miaoCount3: "3 次",

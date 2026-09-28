@@ -44,6 +44,7 @@ type updateRecord struct {
 type fileRecord struct {
 	LaunchAtLogin   bool          `json:"LaunchAtLogin"`
 	LastUpdateCheck string        `json:"LastUpdateCheck,omitempty"`
+	ChunkStreams    int           `json:"ChunkStreams,omitempty"`
 	Update          *updateRecord `json:"Update,omitempty"`
 }
 
@@ -53,6 +54,7 @@ type Store struct {
 	dir             string
 	LaunchAtLogin   bool
 	LastUpdateCheck time.Time
+	chunkStreams    int
 	update          UpdateState
 }
 
@@ -71,6 +73,7 @@ func Load(dir string) (*Store, error) {
 		return nil, err
 	}
 	s.LaunchAtLogin = rec.LaunchAtLogin
+	s.chunkStreams = clampChunkStreams(rec.ChunkStreams)
 	if rec.LastUpdateCheck != "" {
 		parsed, err := time.Parse(time.RFC3339, rec.LastUpdateCheck)
 		if err != nil {
@@ -142,11 +145,44 @@ func (s *Store) SetUpdateState(st UpdateState) error {
 	return s.saveLocked()
 }
 
+const maxChunkStreams = 16
+
+func clampChunkStreams(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	if n > maxChunkStreams {
+		return maxChunkStreams
+	}
+	return n
+}
+
+// ChunkStreams returns the persisted miao chunk concurrency, or 0 when unset (package default).
+func (s *Store) ChunkStreams() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.chunkStreams
+}
+
+// SetChunkStreams persists host pull concurrency (clamped to 1-16).
+func (s *Store) SetChunkStreams(n int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n < 1 {
+		n = 1
+	}
+	if n > maxChunkStreams {
+		n = maxChunkStreams
+	}
+	s.chunkStreams = n
+	return s.saveLocked()
+}
+
 func (s *Store) saveLocked() error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	rec := fileRecord{LaunchAtLogin: s.LaunchAtLogin}
+	rec := fileRecord{LaunchAtLogin: s.LaunchAtLogin, ChunkStreams: s.chunkStreams}
 	if !s.LastUpdateCheck.IsZero() {
 		rec.LastUpdateCheck = s.LastUpdateCheck.UTC().Format(time.RFC3339)
 	}

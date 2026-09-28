@@ -432,6 +432,8 @@ export const en = {
   miaoForever: "Until I end it",
   miaoDays: "Days",
   miaoDownloads: "Downloads",
+  miaoChunkStreams: "Chunk streams",
+  miaoChunkStreamsHelp: "Same-key / same-tunnel multi TCP streams for shards. Default 4.",
   miaoOnce: "1",
   miaoUnlimited: "Unlimited",
   miaoCount3: "3",

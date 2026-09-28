@@ -1488,6 +1488,31 @@ func (s *Service) emit(ev adapter.Event) {
 	}
 }
 
+// SetChunkStreams sets host pull concurrency for miao-chunk TCP streams
+// on one Tailcat tunnel (same key). Values are clamped to 1..maxChunkStreams.
+func SetChunkStreams(n int) int {
+	if n < 1 {
+		n = 1
+	}
+	if n > maxChunkStreams {
+		n = maxChunkStreams
+	}
+	chunkStreams = n
+	return n
+}
+
+// GetChunkStreams returns the configured concurrency (clamped), ignoring test hooks.
+func GetChunkStreams() int {
+	n := chunkStreams
+	if n < 1 {
+		return 1
+	}
+	if n > maxChunkStreams {
+		return maxChunkStreams
+	}
+	return n
+}
+
 func activeChunkStreams() int {
 	// Tests that pause mid-pull install a transfer hook; keep one in-flight
 	// chunk so the first shard is observable before later ones are dialed.

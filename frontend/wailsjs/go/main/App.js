@@ -50,6 +50,10 @@ export function GetClientInfo() {
   return window['go']['main']['App']['GetClientInfo']();
 }
 
+export function GetMiaoChunkStreams() {
+  return window['go']['main']['App']['GetMiaoChunkStreams']();
+}
+
 export function GetNetworkSettings() {
   return window['go']['main']['App']['GetNetworkSettings']();
 }
@@ -164,6 +168,10 @@ export function SendChatVoice(arg1, arg2, arg3, arg4, arg5, arg6) {
 
 export function SetLaunchAtLogin(arg1) {
   return window['go']['main']['App']['SetLaunchAtLogin'](arg1);
+}
+
+export function SetMiaoChunkStreams(arg1) {
+  return window['go']['main']['App']['SetMiaoChunkStreams'](arg1);
 }
 
 export function SetMiaoReceiveDest(arg1, arg2) {

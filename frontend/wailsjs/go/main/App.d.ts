@@ -29,6 +29,7 @@ export function DownloadUpdate():Promise<main.UpdateStatus>;
 export function EndMiaoShare(arg1:string):Promise<void>;
 
 export function GetClientInfo():Promise<main.ClientInfo>;
+export function GetMiaoChunkStreams():Promise<number>;
 
 export function GetNetworkSettings():Promise<store.Settings>;
 
@@ -88,6 +89,7 @@ export function SendChatVoice(arg1:string,arg2:string,arg3:number,arg4:string,ar
 
 export function SetLaunchAtLogin(arg1:boolean):Promise<main.SystemInfo>;
 
+export function SetMiaoChunkStreams(arg1:number):Promise<number>;
 export function SetMiaoReceiveDest(arg1:string,arg2:string):Promise<void>;
 
 export function SetNetworkSettings(arg1:string,arg2:string):Promise<void>;

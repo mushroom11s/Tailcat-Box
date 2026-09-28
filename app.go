@@ -216,13 +216,17 @@ func NewApp() *App {
 	}
 	rooms := chat.NewManager(chatAd, chatDataDir())
 	shares := miao.New(chatAd, miaoDataDir())
+	settingsStore := newSettingsStore()
+	if n := settingsStore.ChunkStreams(); n > 0 {
+		miao.SetChunkStreams(n)
+	}
 	return &App{
 		svc:        svc,
 		svcAdapter: ad,
 		rooms:      rooms,
 		miao:       shares,
 		keys:       keys,
-		settings:   newSettingsStore(),
+		settings:   settingsStore,
 		ssh:        newSSHStore(),
 		trayIcon:   tray.DefaultIcon,
 		startedAt:  time.Now(),
@@ -751,6 +755,27 @@ func (a *App) DiscardMiaoReceive(id string) error {
 		return miao.ErrUnknownReceive
 	}
 	return a.miao.DiscardReceive(id)
+}
+
+// GetMiaoChunkStreams returns the host multi-stream chunk concurrency (1–16, default 4).
+func (a *App) GetMiaoChunkStreams() int {
+	if a.settings != nil {
+		if n := a.settings.ChunkStreams(); n > 0 {
+			return miao.SetChunkStreams(n)
+		}
+	}
+	return miao.GetChunkStreams()
+}
+
+// SetMiaoChunkStreams persists and applies host chunk-stream concurrency (clamped 1–16).
+func (a *App) SetMiaoChunkStreams(n int) (int, error) {
+	n = miao.SetChunkStreams(n)
+	if a.settings != nil {
+		if err := a.settings.SetChunkStreams(n); err != nil {
+			return n, err
+		}
+	}
+	return n, nil
 }
 
 // SetMiaoReceiveDest changes the save folder before files start writing.
