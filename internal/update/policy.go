@@ -28,7 +28,10 @@ func validateAssetURL(raw string, permissive bool) error {
 	if !strings.EqualFold(u.Hostname(), "github.com") {
 		return errors.New("unexpected download host")
 	}
-	if !strings.HasPrefix(u.Path, releaseDownloadPrefix) {
+	// GitHub returns the canonical repo casing in browser_download_url
+	// (Tailcat-Box). Compare the path case-insensitively so Check succeeds
+	// and Download is not rejected for the same release.
+	if !strings.HasPrefix(strings.ToLower(u.Path), releaseDownloadPrefix) {
 		return errors.New("unexpected download path")
 	}
 	return nil

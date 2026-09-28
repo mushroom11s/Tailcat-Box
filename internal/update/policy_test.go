@@ -7,9 +7,13 @@ import (
 
 func TestValidateAssetURL(t *testing.T) {
 	t.Parallel()
-	ok := "https://github.com/mushroom11s/tailcat-box/releases/download/v0.1.0/tailcat-box-macos-arm64-v0.1.0.zip"
-	if err := validateAssetURL(ok, false); err != nil {
-		t.Fatal(err)
+	for _, ok := range []string{
+		"https://github.com/mushroom11s/tailcat-box/releases/download/v0.1.0/tailcat-box-macos-arm64-v0.1.0.zip",
+		"https://github.com/mushroom11s/Tailcat-Box/releases/download/v1.2.1/tailcat-box-windows-amd64-installer-v1.2.1.exe",
+	} {
+		if err := validateAssetURL(ok, false); err != nil {
+			t.Fatalf("validateAssetURL(%q): %v", ok, err)
+		}
 	}
 	for _, raw := range []string{
 		"http://github.com/mushroom11s/tailcat-box/releases/download/v0.1.0/a.zip",

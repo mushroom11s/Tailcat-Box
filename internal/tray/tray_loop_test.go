@@ -21,27 +21,37 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 		t.Fatal("TAILCAT_NO_TRAY must still skip the darwin tray")
 	}
 
-	shared := nonCommentCode(t, "tray_native.go")
-	if strings.Contains(shared, "go start()") || strings.Contains(shared, "RunWithExternalLoop") || strings.Contains(shared, "systray.Run(") {
-		t.Fatal("shared tray setup must not start the platform loop")
-	}
-	if strings.Contains(shared, "SetOnRClick") {
-		t.Fatal("right-click should keep the platform default menu")
-	}
-	for _, needle := range []string{
-		"SetOnClick",
-		"labels.Open",
-		"labels.Hide",
-		"labels.Chat",
-		"labels.Tunnel",
-		"labels.Settings",
-		"labels.Quit",
-		"SessionCountLabel",
-		"countItem.Disable()",
-	} {
-		if !strings.Contains(shared, needle) {
-			t.Fatalf("tray menu missing %s", needle)
+	// tray_native.go was split into platform install files.
+	for _, name := range []string{"tray_install_darwin.go", "tray_install_windows.go"} {
+		install := nonCommentCode(t, name)
+		if strings.Contains(install, "go start()") || strings.Contains(install, "RunWithExternalLoop") || strings.Contains(install, "systray.Run(") {
+			t.Fatalf("%s must not start the platform loop", name)
 		}
+		if strings.Contains(install, "SetOnRClick") {
+			t.Fatalf("%s: right-click should keep the platform default menu", name)
+		}
+		for _, needle := range []string{
+			"labels.Open",
+			"labels.Hide",
+			"labels.Chat",
+			"labels.Tunnel",
+			"labels.Settings",
+			"labels.Quit",
+			"SessionCountLabel",
+			"countItem.Disable()",
+		} {
+			if !strings.Contains(install, needle) {
+				t.Fatalf("%s menu missing %s", name, needle)
+			}
+		}
+	}
+	windows := nonCommentCode(t, "tray_install_windows.go")
+	if !strings.Contains(windows, "SetOnClick") {
+		t.Fatal("windows tray must open on left-click")
+	}
+	darwin := nonCommentCode(t, "tray_install_darwin.go")
+	if strings.Contains(darwin, "SetOnClick") {
+		t.Fatal("darwin must not SetOnClick; left-click should keep the menu")
 	}
 }
 

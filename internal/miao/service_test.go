@@ -394,10 +394,18 @@ func TestReceiveResumeContinuesFromPartial(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dest, partialRootName)); !os.IsNotExist(err) {
 		t.Fatalf("partial remains err=%v", err)
 	}
+	foundDone := false
 	for _, listedJob := range again.ListReceives() {
-		if listedJob.ID == job.ID {
-			t.Fatalf("finished download still listed: %+v", listedJob)
+		if listedJob.ID != job.ID {
+			continue
 		}
+		foundDone = true
+		if listedJob.Status != receiveDone || listedJob.BytesDone != int64(len(payload)) {
+			t.Fatalf("finished download: %+v", listedJob)
+		}
+	}
+	if !foundDone {
+		t.Fatalf("finished download missing from ListReceives: %+v", again.ListReceives())
 	}
 	host.Close()
 	recv.Close()
@@ -599,6 +607,7 @@ func TestSharePublishesPullProgress(t *testing.T) {
 	root := t.TempDir()
 	fake := adapter.NewFake()
 	svc := New(fake, root)
+	t.Cleanup(svc.Close)
 	events := collectEvents(t, svc)
 	payload := bytes.Repeat([]byte("a"), chunkSize+8)
 	snap, err := svc.Start([]Source{{Name: "big.bin", Data: payload}}, Limits{MaxDownloads: 2}, adapter.NetworkOpts{})
@@ -606,7 +615,8 @@ func TestSharePublishesPullProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	release := hookTransfer(t, "chunk")
-	if _, err := svc.StartReceive(context.Background(), snap.Payload, t.TempDir(), adapter.NetworkOpts{}); err != nil {
+	job, err := svc.StartReceive(context.Background(), snap.Payload, t.TempDir(), adapter.NetworkOpts{})
+	if err != nil {
 		t.Fatal(err)
 	}
 	var partial Snapshot
@@ -630,6 +640,8 @@ func TestSharePublishesPullProgress(t *testing.T) {
 	if cleared.BytesDone != 0 || cleared.BytesTotal != 0 {
 		t.Fatalf("idle progress done=%d total=%d", cleared.BytesDone, cleared.BytesTotal)
 	}
+	// Finish the pull so incoming/ is not still being written when TempDir cleans up.
+	waitReceive(t, events.receive, job.ID, receiveDone, nil)
 }
 
 func TestTransferDoesNotWaitForDirectPath(t *testing.T) {
