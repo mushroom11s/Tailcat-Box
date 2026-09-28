@@ -400,6 +400,52 @@ describe("shell scroll", () => {
       style.remove();
     }
   });
+
+  it("keeps the same sidebar DOM and left content gutter for 喵传 and 聊天", async () => {
+    // Optical left column = sidebar + shell gap + .main pad-left + page inner pad-left.
+    // Before: .miao-send/.miao-receive pad 12px made 喵传 content start 12px further right.
+    expect(cssBlock(css, ":root")).toContain("--sidebar-w: 260px");
+    expect(cssBlock(css, ".shell")).toContain("gap: 14px");
+    expect(css).toMatch(
+      /\.main:has\(\.chat-page\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s,
+    );
+    expect(cssBlock(css, ".miao-send")).toContain("padding: 10px 0 24px");
+    expect(cssBlock(css, ".miao-receive")).toContain("padding: 10px 0 24px");
+    expect(cssBlock(css, ".miao-send")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
+    expect(cssBlock(css, ".miao-receive")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
+
+    const sidebarW = 260;
+    const shellGap = 14;
+    const mainPadLeft = 18;
+    const miaoInnerPadLeft = 0;
+    const chatPageInnerPadLeft = 0; // chat-log pad is message inset, not page chrome
+    const miaoLeftChrome = sidebarW + shellGap + mainPadLeft + miaoInnerPadLeft;
+    const chatLeftChrome = sidebarW + shellGap + mainPadLeft + chatPageInnerPadLeft;
+    expect(miaoLeftChrome).toBe(chatLeftChrome);
+    expect(miaoLeftChrome).toBe(292);
+
+    const user = userEvent.setup();
+    localStorage.setItem("tailcat-locale", "zh-CN");
+    render(
+      <LocaleProvider>
+        <App />
+      </LocaleProvider>,
+    );
+
+    const sidebar = document.querySelector(".sidebar") as HTMLElement;
+    expect(document.querySelector(".miao-page")).toBeTruthy();
+    expect(document.querySelector(".shell")?.contains(sidebar)).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: "聊天" }));
+    expect(document.querySelector(".chat-lobby")).toBeTruthy();
+    expect(document.querySelector(".sidebar")).toBe(sidebar);
+    expect(document.querySelector(".miao-page")).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "喵传" }));
+    expect(document.querySelector(".miao-page")).toBeTruthy();
+    expect(document.querySelector(".sidebar")).toBe(sidebar);
+  });
+
 });
 
 function availableUpdate(): UpdateStatus {

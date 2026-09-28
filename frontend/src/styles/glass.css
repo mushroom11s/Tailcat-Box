@@ -2840,8 +2840,8 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Scroll clip inset; per-card drop shadow softened on .miao-active (not full --shadow). */
-  padding: 10px 12px 24px;
+  /* Vertical scroll-clip inset for soft card shadows; no horizontal pad so left gutter matches chat (.main 18px only). */
+  padding: 10px 0 24px;
   /* Keep scrolling when many shares; hide the bar so the default one-card
      window stays clean. Wheel / trackpad still move the column. */
   scrollbar-width: none;
@@ -2874,8 +2874,8 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Same scroll inset as .miao-send (join panel + receive cards). */
-  padding: 10px 12px 24px;
+  /* Same vertical scroll inset as .miao-send; no horizontal pad (align with chat). */
+  padding: 10px 0 24px;
   scrollbar-gutter: stable;
 }
 

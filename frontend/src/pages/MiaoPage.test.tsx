@@ -544,15 +544,17 @@ describe("Mew Share page", () => {
     expect(sendRule).toContain("min-height: 0");
     expect(sendRule).toContain("overflow-y: auto");
     expect(sendRule).toContain("overflow-x: hidden");
-    expect(sendRule).toContain("padding: 10px 12px 24px");
+    expect(sendRule).toContain("padding: 10px 0 24px");
     expect(sendRule).toContain("scrollbar-width: none");
     expect(sendRule).toContain("-ms-overflow-style: none");
     const receiveRule = cssBlock(css, ".miao-receive");
     expect(receiveRule).toContain("overflow-y: auto");
     expect(receiveRule).toContain("overflow-x: hidden");
-    expect(receiveRule).toContain("padding: 10px 12px 24px");
+    expect(receiveRule).toContain("padding: 10px 0 24px");
     expect(css).not.toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
     expect(css).toMatch(/\.main:has\(\.chat-page\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s);
+    // Left chrome before content: 260 + 14 + 18 + miao inner 0 = 292 (was +12 via miao-send).
+    expect(260 + 14 + 18 + 0).toBe(292);
     const sendBar = cssBlock(css, ".miao-send::-webkit-scrollbar");
     expect(sendBar).toContain("display: none");
     const revealBtn = cssBlock(css, ".miao-reveal-btn");
