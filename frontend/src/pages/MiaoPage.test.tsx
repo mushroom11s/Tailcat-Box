@@ -562,6 +562,9 @@ describe("Mew Share page", () => {
     const cardRule = cssBlock(css, ".miao-active");
     expect(cardRule).toContain("overflow: visible");
     expect(cardRule).not.toContain("min-height: 0");
+    expect(cardRule).toContain("0 8px 22px");
+    expect(cardRule).not.toContain("var(--shadow)");
+    expect(cssBlock(css, ".miao-share-meta > .ssh-address + .row")).toContain("margin-top: 16px");
     const qrPlace = cssBlock(css, ".miao-active-grid > .miao-qr");
     expect(qrPlace).toContain("grid-row: 2 / span 2");
     expect(qrPlace).toContain("align-self: start");

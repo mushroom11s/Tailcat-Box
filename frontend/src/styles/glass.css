@@ -2845,7 +2845,7 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Inside the scroll clip: glass card shadow (~18px y / 50px blur). */
+  /* Scroll clip inset; per-card drop shadow softened on .miao-active (not full --shadow). */
   padding: 10px 12px 24px;
   /* Keep scrolling when many shares; hide the bar so the default one-card
      window stays clean. Wheel / trackpad still move the column. */
@@ -2879,7 +2879,7 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* Same shadow breathing room as .miao-send (join panel + receive cards). */
+  /* Same scroll inset as .miao-send (join panel + receive cards). */
   padding: 10px 12px 24px;
   scrollbar-gutter: stable;
 }
@@ -2995,6 +2995,11 @@ textarea {
   min-width: 0;
   height: 100%;
   overflow: visible;
+  /* Softer than .glass --shadow (0 18px 50px): stacked share cards read as
+     discrete dark slabs; chat bubbles/panels use ~8–10px / 18–26px. */
+  box-shadow:
+    0 8px 22px rgba(55, 40, 110, 0.10),
+    var(--glass-highlight);
 }
 
 .miao-active h3 {
@@ -3008,6 +3013,11 @@ textarea {
 
 .miao-active .row {
   margin-bottom: 0;
+}
+
+/* Token codeblock + End were glued; keep End alone with clear air below ssh-address. */
+.miao-share-meta > .ssh-address + .row {
+  margin-top: 16px;
 }
 
 .miao-join {
