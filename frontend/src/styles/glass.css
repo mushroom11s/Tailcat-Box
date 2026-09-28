@@ -159,7 +159,7 @@ textarea {
   overflow: hidden;
   margin: 14px;
   padding: 0;
-  gap: 0;
+  gap: 14px; /* Gutter between sidebar and main content column. */
   border-radius: 24px;
   background: var(--window-bg);
   border: 1px solid var(--glass-border);
@@ -651,8 +651,7 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Extra left padding so content is not flush against the sidebar edge. */
-  padding: 16px 18px 14px 28px;
+  padding: 16px 18px 14px;
 }
 
 .main,

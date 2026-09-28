@@ -255,6 +255,7 @@ describe("shell scroll", () => {
   it("widens the sidebar and insets the active pill inside the clip", () => {
     expect(cssBlock(css, ":root")).toContain("--sidebar-w: 260px");
     expect(cssBlock(css, ".shell")).toContain("grid-template-columns: var(--sidebar-w) minmax(0, 1fr)");
+    expect(cssBlock(css, ".shell")).toContain("gap: 14px");
     const navRule = cssBlock(css, ".nav");
     expect(navRule).toContain("padding-left: 8px");
     expect(navRule).toContain("padding-right: 8px");
