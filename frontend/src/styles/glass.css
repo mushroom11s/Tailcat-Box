@@ -651,7 +651,8 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 18px 14px;
+  /* Extra left padding so content is not flush against the sidebar edge. */
+  padding: 16px 18px 14px 28px;
 }
 
 .main,
@@ -2840,7 +2841,27 @@ textarea {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
+  /* Keep scrolling when many shares; hide the bar so the default one-card
+     window stays clean. Wheel / trackpad still move the column. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.miao-send::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+.miao-send > .settings-panel {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.miao-send > .settings-panel .setting-row:first-child {
+  border-top: 0;
+  padding-top: 4px;
 }
 
 .miao-receive {
@@ -3347,10 +3368,18 @@ textarea {
 }
 
 .miao-dest-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   padding: 6px 10px;
   background: color-mix(in srgb, var(--panel-2) 80%, transparent);
   border-radius: 8px;
   border: 1px dashed color-mix(in srgb, var(--hairline) 90%, transparent);
+}
+
+.miao-dest-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .miao-dest-label {
@@ -3363,6 +3392,19 @@ textarea {
   font-family: var(--mono);
   font-size: 12px;
   word-break: break-all;
+}
+
+.miao-reveal-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin: -2px 0;
+  align-self: center;
+}
+
+.miao-reveal-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .miao-done .miao-dest-line {

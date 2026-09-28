@@ -134,6 +134,10 @@ export function RevealDownloadedUpdate() {
   return window['go']['main']['App']['RevealDownloadedUpdate']();
 }
 
+export function RevealPath(arg1) {
+  return window['go']['main']['App']['RevealPath'](arg1);
+}
+
 export function SaveChatFile(arg1, arg2) {
   return window['go']['main']['App']['SaveChatFile'](arg1, arg2);
 }

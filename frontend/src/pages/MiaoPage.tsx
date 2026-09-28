@@ -48,7 +48,7 @@ import {
   type ReceiveJob,
   type Remaining,
 } from "../lib/miao";
-import { cancelMiaoReceive, discardMiaoReceive, endMiaoShare, getMiaoChunkStreams, hasWailsBindings, listMiaoReceives, miaoRestoreNotes, miaoShareStatus, onTailcatEvent, selectDirectory, selectFiles, setMiaoChunkStreams, setMiaoReceiveDest, startMiaoReceive, startMiaoShare } from "../lib/wails";
+import { cancelMiaoReceive, discardMiaoReceive, endMiaoShare, getMiaoChunkStreams, hasWailsBindings, listMiaoReceives, miaoRestoreNotes, miaoShareStatus, onTailcatEvent, revealPath, selectDirectory, selectFiles, setMiaoChunkStreams, setMiaoReceiveDest, startMiaoReceive, startMiaoShare } from "../lib/wails";
 
 type TTLMode = "1" | "7" | "15" | "custom" | "forever";
 type CountMode = "1" | "3" | "10" | "unlimited" | "custom";
@@ -391,6 +391,7 @@ function ReceiveCard({
   onDiscard: (id: string) => void;
 }) {
   const { t } = useI18n();
+  const { push: pushToast } = useToasts();
   const files = job.files ?? [];
   const names = files.map((file) => file.name).join(", ");
   const label = names || t("miaoReceiveJob");
@@ -452,7 +453,21 @@ function ReceiveCard({
       </p>
       {job.dest ? (
         <p className="chat-quiet miao-dest-line">
-          <span className="miao-dest-label">{t("miaoSaveTo")}</span> <span className="miao-dest-path">{job.dest}</span>
+          <span className="miao-dest-text">
+            <span className="miao-dest-label">{t("miaoSaveTo")}</span>{" "}
+            <span className="miao-dest-path">{job.dest}</span>
+          </span>
+          {job.status === "done" ? (
+            <button
+              className="btn icon-btn miao-reveal-btn"
+              type="button"
+              aria-label={revealLocationLabel(t)}
+              title={revealLocationLabel(t)}
+              onClick={() => void revealReceiveLocation(job, pushToast)}
+            >
+              <FolderRevealIcon />
+            </button>
+          ) : null}
         </p>
       ) : null}
       {expiring ? (
@@ -1213,5 +1228,56 @@ export default function MiaoPage() {
         </div>
       )}
     </section>
+  );
+}
+
+function revealLocationLabel(t: (key: MessageKey) => string): string {
+  const platform =
+    typeof navigator !== "undefined" ? `${navigator.platform} ${navigator.userAgent}` : "";
+  if (/Mac|iPhone|iPad|iPod/i.test(platform)) {
+    return t("revealUpdateMac");
+  }
+  if (/Win/i.test(platform)) {
+    return t("revealUpdateWin");
+  }
+  return t("revealUpdate");
+}
+
+async function revealReceiveLocation(
+  job: ReceiveJob,
+  pushToast: (message: string) => void,
+): Promise<void> {
+  const saved = job.saved?.find((file) => file.path.trim())?.path.trim();
+  const target = saved || job.dest.trim();
+  if (!target) {
+    return;
+  }
+  try {
+    await revealPath(target);
+  } catch (err) {
+    pushToast(err instanceof Error && err.message ? err.message : target);
+  }
+}
+
+function FolderRevealIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M3 8.5A1.5 1.5 0 0 1 4.5 7H9l2 2h8.5A1.5 1.5 0 0 1 21 10.5v7A1.5 1.5 0 0 1 19.5 19h-15A1.5 1.5 0 0 1 3 17.5v-9z"
+      />
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.75"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14 13h4.5M16.5 10.5 19 13l-2.5 2.5"
+      />
+    </svg>
   );
 }

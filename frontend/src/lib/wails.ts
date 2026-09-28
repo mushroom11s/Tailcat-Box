@@ -17,6 +17,7 @@ import {
   ParseAddr as bindParseAddr,
   ResolveAddr as bindResolveAddr,
   RevealDownloadedUpdate as bindRevealDownloadedUpdate,
+  RevealPath as bindRevealPath,
   StartBrowse as bindStartBrowse,
   StartForward as bindStartForward,
   StartPing as bindStartPing,
@@ -1471,6 +1472,16 @@ export async function revealDownloadedUpdate(): Promise<void> {
   }
   if (!fake.update.DownloadedPath) {
     throw new Error("no downloaded update");
+  }
+}
+
+export async function revealPath(path: string): Promise<void> {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new Error("empty path");
+  }
+  if (hasWailsBindings()) {
+    await bindRevealPath(trimmed);
   }
 }
 

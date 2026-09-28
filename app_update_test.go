@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -191,5 +192,17 @@ func TestRevealDownloadedUpdateRequiresFile(t *testing.T) {
 	a := NewApp()
 	if err := a.RevealDownloadedUpdate(); err == nil {
 		t.Fatal("expected missing download to fail")
+	}
+}
+
+func TestRevealPathRequiresExistingPath(t *testing.T) {
+	t.Setenv("TAILCAT_ADAPTER", "fake")
+	t.Setenv("TAILCAT_SETTINGS_DIR", t.TempDir())
+	a := NewApp()
+	if err := a.RevealPath(""); err == nil {
+		t.Fatal("expected empty path to fail")
+	}
+	if err := a.RevealPath(filepath.Join(t.TempDir(), "missing-file")); err == nil {
+		t.Fatal("expected missing path to fail")
 	}
 }

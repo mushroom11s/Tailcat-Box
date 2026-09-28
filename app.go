@@ -969,6 +969,18 @@ func (a *App) RevealDownloadedUpdate() error {
 	return update.Reveal(status.DownloadedPath)
 }
 
+// RevealPath shows a local file or folder in Finder or Explorer.
+func (a *App) RevealPath(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return fmt.Errorf("empty path")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("path not found")
+	}
+	return update.Reveal(path)
+}
+
 func (a *App) checkerLocked() *update.Checker {
 	if a.updates != nil {
 		return a.updates

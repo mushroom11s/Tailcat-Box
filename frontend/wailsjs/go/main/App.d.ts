@@ -71,6 +71,8 @@ export function RestartChatRoom(arg1:string,arg2:string):Promise<session.Session
 
 export function RevealDownloadedUpdate():Promise<void>;
 
+export function RevealPath(arg1:string):Promise<void>;
+
 export function SaveChatFile(arg1:string,arg2:string):Promise<void>;
 
 export function SaveSSHPeer(arg1:string,arg2:string):Promise<main.SSHDeskStatus>;

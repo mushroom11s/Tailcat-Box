@@ -528,6 +528,14 @@ describe("Mew Share page", () => {
     expect(sendRule).toContain("min-height: 0");
     expect(sendRule).toContain("overflow-y: auto");
     expect(sendRule).toContain("overflow-x: hidden");
+    expect(sendRule).toContain("scrollbar-width: none");
+    expect(sendRule).toContain("-ms-overflow-style: none");
+    const sendBar = cssBlock(css, ".miao-send::-webkit-scrollbar");
+    expect(sendBar).toContain("display: none");
+    const revealBtn = cssBlock(css, ".miao-reveal-btn");
+    expect(revealBtn).toContain("width: 28px");
+    expect(css).toMatch(/\.miao-dest-line\s*\{[^}]*display:\s*flex/s);
+    expect(cssBlock(css, ".miao-dest-text")).toContain("min-width: 0");
 
     const cardRule = cssBlock(css, ".miao-active");
     expect(cardRule).toContain("overflow: visible");
@@ -543,9 +551,8 @@ describe("Mew Share page", () => {
     const catRule = cssBlock(css, ".loading-cat.lg img");
     expect(catRule).toContain("width: 90px");
     expect(catRule).toContain("height: 120px");
-    const smCat = cssBlock(css, ".loading-cat.sm img,\n.btn .loading-cat img");
-    expect(smCat).toContain("width: 30px");
-    expect(smCat).toContain("height: 40px");
+    expect(css).toMatch(/\.loading-cat\.sm img,\s*\.btn \.loading-cat img\s*\{[^}]*width:\s*30px/s);
+    expect(css).toMatch(/\.loading-cat\.sm img,\s*\.btn \.loading-cat img\s*\{[^}]*height:\s*40px/s);
     expect(qrWidth).toBeGreaterThanOrEqual(160);
     expect(qrWidth).toBeLessThanOrEqual(180);
 
