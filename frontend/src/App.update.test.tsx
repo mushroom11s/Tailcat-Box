@@ -189,6 +189,22 @@ describe("in-app update", () => {
     );
     open.mockRestore();
 
+    // GitHub returns canonical Tailcat-Box casing in html_url.
+    const openCanon = vi.spyOn(window, "open").mockImplementation(() => null);
+    emitUpdateStatus(
+      status({
+        UpdateAvailable: true,
+        ReleaseURL: "https://github.com/mushroom11s/Tailcat-Box/releases/tag/v0.2.0",
+      }),
+    );
+    await user.click(await screen.findByRole("button", { name: "View release" }));
+    expect(openCanon).toHaveBeenCalledWith(
+      "https://github.com/mushroom11s/Tailcat-Box/releases/tag/v0.2.0",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    openCanon.mockRestore();
+
     localStorage.setItem("tailcat-locale", "zh-CN");
     cleanup();
     renderApp();

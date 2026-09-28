@@ -1471,7 +1471,8 @@ export async function revealDownloadedUpdate(): Promise<void> {
 }
 
 export function openReleasePage(url: string): void {
-  if (!url.startsWith("https://github.com/mushroom11s/tailcat-box/")) {
+  // GitHub html_url may use Tailcat-Box (canonical) or tailcat-box.
+  if (!/^https:\/\/github\.com\/mushroom11s\/tailcat-box\//i.test(url.trim())) {
     return;
   }
   openHttpURL(url);

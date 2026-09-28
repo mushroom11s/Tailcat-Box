@@ -2897,6 +2897,21 @@ textarea {
   flex: 1;
 }
 
+.miao-limits .field input,
+.miao-limits .field select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  height: 42px;
+  margin: 0;
+  padding: 8px 12px;
+  line-height: 1.25;
+  font: inherit;
+  font-size: 15px;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .miao-drop {
   --wails-drop-target: drop;
   flex: 1 0 auto;

@@ -1025,7 +1025,9 @@ export default function MiaoPage() {
               <label className="field">
                 {t("miaoDays")}
                 <input
+                  type="text"
                   inputMode="numeric"
+                  className="miao-limit-input"
                   value={customDays}
                   onChange={(ev) => setCustomDays(ev.target.value)}
                   aria-label={t("miaoDays")}
@@ -1046,7 +1048,9 @@ export default function MiaoPage() {
               <label className="field">
                 {t("miaoCount")}
                 <input
+                  type="text"
                   inputMode="numeric"
+                  className="miao-limit-input"
                   value={customCount}
                   onChange={(ev) => setCustomCount(ev.target.value)}
                   aria-label={t("miaoCount")}
