@@ -511,7 +511,7 @@ export const en = {
   tunnelBusy: "Working…",
   sshDeskTitle: "SSH",
   sshDeskLede:
-    "A shell for your other computers. It trusts the Tailcat address and your allowlist, not an OS password or SSH key.",
+    "A shell for other computers. It trusts the Tailcat address and the allowlist, not an OS password or SSH key.",
   sshAllow: "Allow SSH",
   sshAllowHelp: "Off until you turn this on. Only saved devices and open chat rooms can connect.",
   sshStatusOff: "Off",

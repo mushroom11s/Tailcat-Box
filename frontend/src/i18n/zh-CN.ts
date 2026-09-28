@@ -508,7 +508,7 @@ export const zhCN = {
   miaoCustomCountInvalid: "请填写下载次数。",
   tunnelBusy: "请稍等…",
   sshDeskTitle: "SSH",
-  sshDeskLede: "给你的其他电脑开一个 shell。它认的是 Tailcat 地址和允许名单，不是系统密码，也不是 SSH 密钥。",
+  sshDeskLede: "给其他电脑开一个 shell。认的是 Tailcat 地址和允许名单，不是系统密码，也不是 SSH 密钥。",
   sshAllow: "允许 SSH",
   sshAllowHelp: "默认关闭。只有已保存的设备和已打开的聊天房间可以连进来。",
   sshStatusOff: "关闭",
