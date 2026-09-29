@@ -40,6 +40,29 @@ describe("measureGuideTarget", () => {
     });
   });
 
+  it("ignores visualViewport offset so fixed coords match getBoundingClientRect", () => {
+    const node = document.createElement("button");
+    node.setAttribute("data-guide", "chat");
+    document.body.appendChild(node);
+    stubRect(node, { top: 40, left: 20, width: 100, height: 32 });
+    vi.stubGlobal("visualViewport", {
+      offsetLeft: 24,
+      offsetTop: 16,
+      width: 800,
+      height: 600,
+      scale: 1,
+      addEventListener() {},
+      removeEventListener() {},
+    });
+    // Adding vv offset would yield top:48 left:36 — must stay at raw rect - PAD.
+    expect(measureGuideTarget("chat")).toEqual({
+      top: 32,
+      left: 12,
+      width: 116,
+      height: 48,
+    });
+  });
+
   it("returns null when the target is missing or zero-sized", () => {
     expect(measureGuideTarget("missing")).toBeNull();
     const node = document.createElement("div");
@@ -57,6 +80,26 @@ describe("Onboarding spotlight remasure", () => {
       (cb: FrameRequestCallback) => window.setTimeout(() => cb(performance.now()), 0) as unknown as number,
     );
     vi.stubGlobal("cancelAnimationFrame", (id: number) => window.clearTimeout(id));
+  });
+
+  it("portals the guide to document.body outside .shell", async () => {
+    const shell = document.createElement("div");
+    shell.className = "shell";
+    document.body.appendChild(shell);
+    const mount = document.createElement("div");
+    shell.appendChild(mount);
+
+    render(
+      <LocaleProvider>
+        <Onboarding open onSkip={() => {}} onDismiss={() => {}} onStep={() => {}} />
+      </LocaleProvider>,
+      { container: mount },
+    );
+
+    await waitFor(() => expect(screen.getByTestId("guide-root")).toBeTruthy());
+    const guide = screen.getByTestId("guide-root");
+    expect(guide.parentElement).toBe(document.body);
+    expect(shell.contains(guide)).toBe(false);
   });
 
   it("waits for a late-mounted target after onStep page switch", async () => {

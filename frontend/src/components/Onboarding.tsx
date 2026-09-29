@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n, type MessageKey } from "../i18n";
 
 const STEPS: Array<{ title: MessageKey; body: MessageKey; target: string }> = [
@@ -22,6 +23,18 @@ const PAD = 8;
 /** Keep polling briefly after a page switch until the target mounts. */
 const TARGET_WAIT_MS = 1200;
 
+/**
+ * Measure a [data-guide] target into CSS pixels for position:fixed.
+ *
+ * getBoundingClientRect already returns viewport CSS pixels. That matches
+ * fixed positioning when the overlay lives in the same coordinate space as
+ * the viewport (portaled to document.body). Do NOT add visualViewport
+ * offsetLeft/Top — on Windows WebView2 those offsets are already reflected
+ * in the rect (or are 0); adding them double-counts and shifts the ring.
+ *
+ * Parent .shell uses backdrop-filter, which creates a fixed containing block.
+ * The guide must be portaled out of .shell so fixed top/left stay viewport-relative.
+ */
 export function measureGuideTarget(target: string): Box | null {
   const el = document.querySelector(`[data-guide="${target}"]`);
   if (!el) {
@@ -36,14 +49,9 @@ export function measureGuideTarget(target: string): Box | null {
   if (rect.width < 1 && rect.height < 1) {
     return null;
   }
-  // getBoundingClientRect is viewport CSS pixels — matches position:fixed.
-  // visualViewport offset covers pinch-zoom / some embedded webviews.
-  const vv = window.visualViewport;
-  const ox = vv?.offsetLeft ?? 0;
-  const oy = vv?.offsetTop ?? 0;
   return {
-    top: Math.max(8, rect.top + oy - PAD),
-    left: Math.max(8, rect.left + ox - PAD),
+    top: Math.max(8, rect.top - PAD),
+    left: Math.max(8, rect.left - PAD),
     width: rect.width + PAD * 2,
     height: rect.height + PAD * 2,
   };
@@ -195,8 +203,8 @@ export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
   const progress = t("onboardingProgress").replace("{n}", String(step + 1)).replace("{total}", String(STEPS.length));
   const card = placeCard(spot);
 
-  return (
-    <div className="guide">
+  const overlay = (
+    <div className="guide" data-testid="guide-root">
       <div className="guide-shade" onClick={onSkip} />
       {spot ? <div className="guide-spot" data-testid="guide-spot" style={spot} /> : null}
       <div
@@ -235,4 +243,11 @@ export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
       </div>
     </div>
   );
+
+  // Portal out of .shell: its backdrop-filter creates a fixed containing block, so
+  // viewport getBoundingClientRect coords would not match position:fixed inside .shell.
+  if (typeof document === "undefined") {
+    return overlay;
+  }
+  return createPortal(overlay, document.body);
 }

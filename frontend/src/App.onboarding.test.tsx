@@ -118,6 +118,10 @@ describe("first-run onboarding", () => {
       expect(spot.style.width).toBe("136px");
       expect(spot.style.height).toBe("52px");
     });
+    const guide = document.querySelector(".guide") as HTMLElement;
+    expect(guide).toBeTruthy();
+    expect(guide.parentElement).toBe(document.body);
+    expect(document.querySelector(".shell")?.contains(guide)).toBe(false);
 
     await user.click(screen.getByRole("button", { name: "Next" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
