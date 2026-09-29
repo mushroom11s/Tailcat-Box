@@ -18,23 +18,34 @@ type Box = { top: number; left: number; width: number; height: number };
 
 const GAP = 14;
 const CARD_W = 340;
+const PAD = 8;
+/** Keep polling briefly after a page switch until the target mounts. */
+const TARGET_WAIT_MS = 1200;
 
-function measure(target: string): Box | null {
+export function measureGuideTarget(target: string): Box | null {
   const el = document.querySelector(`[data-guide="${target}"]`);
   if (!el) {
     return null;
   }
-  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  try {
+    el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  } catch {
+    /* happy-dom / older engines */
+  }
   const rect = el.getBoundingClientRect();
   if (rect.width < 1 && rect.height < 1) {
     return null;
   }
-  const pad = 8;
+  // getBoundingClientRect is viewport CSS pixels — matches position:fixed.
+  // visualViewport offset covers pinch-zoom / some embedded webviews.
+  const vv = window.visualViewport;
+  const ox = vv?.offsetLeft ?? 0;
+  const oy = vv?.offsetTop ?? 0;
   return {
-    top: Math.max(8, rect.top - pad),
-    left: Math.max(8, rect.left - pad),
-    width: rect.width + pad * 2,
-    height: rect.height + pad * 2,
+    top: Math.max(8, rect.top + oy - PAD),
+    left: Math.max(8, rect.left + ox - PAD),
+    width: rect.width + PAD * 2,
+    height: rect.height + PAD * 2,
   };
 }
 
@@ -56,6 +67,16 @@ function placeCard(spot: Box | null): { top: number; left: number } {
   return { top, left };
 }
 
+function boxesEqual(a: Box | null, b: Box | null): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
+}
+
 export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
   const { t } = useI18n();
   const [step, setStep] = useState(0);
@@ -67,7 +88,8 @@ export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
     }
   }, [open]);
 
-  useEffect(() => {
+  // Switch chat/miao in layout so the next paint (and our rAF remasure) sees the target.
+  useLayoutEffect(() => {
     if (!open) {
       return;
     }
@@ -76,16 +98,78 @@ export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
 
   useLayoutEffect(() => {
     if (!open) {
+      setSpot(null);
       return;
     }
     const target = STEPS[step]?.target ?? STEPS[0].target;
-    const update = () => setSpot(measure(target));
-    update();
-    const frame = window.requestAnimationFrame(update);
-    window.addEventListener("resize", update);
+    let cancelled = false;
+    let observed: Element | null = null;
+    let raf1 = 0;
+    let raf2 = 0;
+    let pollId = 0;
+    let waitTimer = 0;
+    let ro: ResizeObserver | null = null;
+
+    const apply = () => {
+      if (cancelled) {
+        return;
+      }
+      const next = measureGuideTarget(target);
+      setSpot((prev) => (boxesEqual(prev, next) ? prev : next));
+
+      const el = document.querySelector(`[data-guide="${target}"]`);
+      if (el && el !== observed && typeof ResizeObserver !== "undefined") {
+        ro?.disconnect();
+        observed = el;
+        ro = new ResizeObserver(() => {
+          apply();
+        });
+        ro.observe(el);
+      }
+      if (el && pollId) {
+        window.clearInterval(pollId);
+        pollId = 0;
+      }
+    };
+
+    // Immediate + double rAF so we catch layout after page switch / CSS settle.
+    apply();
+    raf1 = window.requestAnimationFrame(() => {
+      apply();
+      raf2 = window.requestAnimationFrame(apply);
+    });
+
+    // Target may mount only after parent re-renders from onStep (miao-drop).
+    pollId = window.setInterval(apply, 32);
+    waitTimer = window.setTimeout(() => {
+      if (pollId) {
+        window.clearInterval(pollId);
+        pollId = 0;
+      }
+    }, TARGET_WAIT_MS);
+
+    const main = document.querySelector(".main");
+    window.addEventListener("resize", apply);
+    main?.addEventListener("scroll", apply, { passive: true });
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", apply);
+    vv?.addEventListener("scroll", apply);
+
     return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", update);
+      cancelled = true;
+      window.cancelAnimationFrame(raf1);
+      window.cancelAnimationFrame(raf2);
+      if (pollId) {
+        window.clearInterval(pollId);
+      }
+      if (waitTimer) {
+        window.clearTimeout(waitTimer);
+      }
+      ro?.disconnect();
+      window.removeEventListener("resize", apply);
+      main?.removeEventListener("scroll", apply);
+      vv?.removeEventListener("resize", apply);
+      vv?.removeEventListener("scroll", apply);
     };
   }, [open, step]);
 
@@ -114,7 +198,7 @@ export default function Onboarding({ open, onSkip, onDismiss, onStep }: Props) {
   return (
     <div className="guide">
       <div className="guide-shade" onClick={onSkip} />
-      {spot ? <div className="guide-spot" style={spot} /> : null}
+      {spot ? <div className="guide-spot" data-testid="guide-spot" style={spot} /> : null}
       <div
         className="glass guide-pop"
         role="dialog"
