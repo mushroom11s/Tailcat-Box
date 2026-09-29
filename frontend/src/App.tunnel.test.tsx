@@ -182,7 +182,7 @@ describe("tunnel page", () => {
     expect(screen.getByRole("checkbox", { name: "用浏览器打开" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "浏览" })).toBeNull();
     expect(screen.queryByRole("button", { name: "打开对方 80 端口" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "开始 SSH 服务" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "开 SSH" })).toBeNull();
     await user.type(screen.getByLabelText("地址"), "tc:zh-key");
     await user.click(screen.getByRole("button", { name: "保存映射" }));
     const key = document.querySelector(".tunnel-detail code.tunnel-key");

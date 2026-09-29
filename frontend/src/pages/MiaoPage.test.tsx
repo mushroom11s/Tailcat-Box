@@ -541,18 +541,16 @@ describe("Mew Share page", () => {
     expect(cssBlock(css, ".chat-lobby-head .lede")).toContain("max-width: 62ch");
 
     const sendRule = cssBlock(css, ".miao-send");
-    expect(sendRule).toContain("min-height: 0");
-    expect(sendRule).toContain("overflow-y: auto");
-    expect(sendRule).toContain("overflow-x: hidden");
-    expect(sendRule).toContain("padding: 10px 0 24px");
-    expect(sendRule).toContain("scrollbar-width: none");
-    expect(sendRule).toContain("-ms-overflow-style: none");
+    expect(sendRule).toContain("overflow: visible");
+    expect(sendRule).toContain("padding: 0");
+    expect(sendRule).not.toContain("overflow-y: auto");
+    expect(sendRule).not.toContain("scrollbar-width: none");
     const receiveRule = cssBlock(css, ".miao-receive");
-    expect(receiveRule).toContain("overflow-y: auto");
-    expect(receiveRule).toContain("overflow-x: hidden");
-    expect(receiveRule).toContain("padding: 10px 0 24px");
+    expect(receiveRule).toContain("overflow: visible");
+    expect(receiveRule).toContain("padding: 0");
+    expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{[^}]*overflow-x:\s*clip;/s);
     expect(css).not.toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
-    expect(css).toMatch(/\.main:has\(\.chat-page\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s);
+    expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s);
     // Left chrome before content: 260 + 14 + 18 + miao inner 0 = 292 (was +12 via miao-send).
     expect(260 + 14 + 18 + 0).toBe(292);
     const sendBar = cssBlock(css, ".miao-send::-webkit-scrollbar");
@@ -565,8 +563,8 @@ describe("Mew Share page", () => {
     const cardRule = cssBlock(css, ".miao-active");
     expect(cardRule).toContain("overflow: visible");
     expect(cardRule).not.toContain("min-height: 0");
-    expect(cardRule).toContain("0 8px 22px");
-    expect(cardRule).not.toContain("var(--shadow)");
+    expect(cardRule).toContain("var(--shadow)");
+    expect(cardRule).toContain("height: auto");
     expect(cssBlock(css, ".miao-share-meta > .ssh-address + .row")).toContain("margin-top: 16px");
     const qrPlace = cssBlock(css, ".miao-active-grid > .miao-qr");
     expect(qrPlace).toContain("grid-row: 2 / span 2");
@@ -618,7 +616,7 @@ describe("Mew Share page", () => {
       expect(fileInput.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
       const sendStyle = getComputedStyle(send);
-      expect(sendStyle.overflowY).toBe("auto");
+      expect(sendStyle.overflowY).toBe("visible");
       expect(parseFloat(sendStyle.minHeight)).toBe(0);
       const listStyle = getComputedStyle(list);
       expect(listStyle.maxHeight === "none" || listStyle.maxHeight === "").toBe(true);

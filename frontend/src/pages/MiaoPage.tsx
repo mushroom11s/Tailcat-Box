@@ -1056,7 +1056,7 @@ export default function MiaoPage() {
 
       {mode === "send" ? (
         <div className="miao-send">
-          <section className="glass settings-panel">
+          <section className="glass chat-lobby-panel">
             <div className="setting-row">
               <div className="setting-label">
                 <label htmlFor="miao-chunk-streams">{t("miaoChunkStreams")}</label>
@@ -1081,6 +1081,7 @@ export default function MiaoPage() {
               {t("miaoChunkStreamsHelp")}
             </p>
           </section>
+          <div className="glass chat-lobby-panel">
           <div className="miao-limits">
             <label className="field">
               {t("miaoTTL")}
@@ -1132,6 +1133,7 @@ export default function MiaoPage() {
           <button
             type="button"
             className={`miao-drop${dragOver ? " drag" : ""}`}
+            data-guide="miao-drop"
             disabled={busy !== ""}
             onClick={() => {
               if (hasWailsBindings()) {
@@ -1172,6 +1174,7 @@ export default function MiaoPage() {
               void acceptFileList(list);
             }}
           />
+          </div>
           {shares.length ? (
             <div className="miao-share-list">
               <h3>{t("miaoActive")}</h3>

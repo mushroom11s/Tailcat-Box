@@ -107,6 +107,9 @@ function AppShell() {
   pushRef.current = push;
   const [page, setPageState] = useState<Page>("miao");
   const [guideOpen, setGuideOpen] = useState(() => shouldAutoShowOnboarding());
+  const onGuideStep = useCallback((step: number) => {
+    setPage(step >= 2 ? "miao" : "chat");
+  }, []);
   const [theme, setTheme] = useState<Theme>(() => readTheme());
   const [nickname, setNickname] = useState(() => readNickname());
   const [remarks, setRemarks] = useState<RemarkMap>(() => readRemarks());
@@ -1001,6 +1004,7 @@ function AppShell() {
                 <button
                   type="button"
                   className={`nav-btn ${page === "chat" ? "active" : ""}`}
+                  data-guide="chat"
                   onClick={openChat}
                 >
                   <NavGlyph name="chat" />
@@ -1010,6 +1014,7 @@ function AppShell() {
                   <button
                     type="button"
                     className={`nav-btn nav-child nav-new${showLobby ? " open" : ""}`}
+                    data-guide="new-room"
                     onClick={openLobby}
                   >
                     {t("navNewRoom")}
@@ -1221,6 +1226,7 @@ function AppShell() {
       ) : null}
       <Onboarding
         open={guideOpen}
+        onStep={onGuideStep}
         onSkip={() => setGuideOpen(false)}
         onDismiss={() => {
           writeOnboardingSeen();

@@ -183,6 +183,10 @@ textarea {
 .sidebar {
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  max-width: var(--sidebar-w);
   padding: 22px 14px 16px;
   min-height: 0;
   overflow: hidden;
@@ -647,11 +651,17 @@ textarea {
 }
 
 .main:has(.chat-page),
+.main:has(.chat-lobby),
 .main:has(.miao-page) {
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 16px 18px 14px;
+}
+
+.main:has(.miao-page) {
+  overflow-x: clip;
+  overflow-y: auto;
 }
 
 .main,
@@ -1688,6 +1698,55 @@ textarea {
   margin: 0 0 6px;
   font-size: 12px;
   letter-spacing: 0.04em;
+}
+
+.guide {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+}
+
+.guide-shade {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+}
+
+.guide-spot {
+  position: fixed;
+  z-index: 41;
+  border-radius: 18px;
+  pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.46);
+  outline: 2px solid rgba(255, 255, 255, 0.92);
+  outline-offset: 0;
+}
+
+.guide-pop {
+  position: fixed;
+  z-index: 42;
+  width: min(340px, calc(100vw - 24px));
+  padding: 18px 18px 14px;
+  pointer-events: auto;
+  text-align: left;
+  box-shadow: var(--shadow), var(--glass-highlight);
+}
+
+.guide-pop h3 {
+  margin: 0 0 8px;
+  font-size: 17px;
+}
+
+.guide-pop p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.guide-pop .row {
+  margin-bottom: 0;
 }
 
 .modal p {
@@ -2820,6 +2879,8 @@ textarea {
   flex: 1;
   min-height: 0;
   gap: 12px;
+  width: 100%;
+  max-width: 640px;
 }
 
 .miao-page .chat-lobby-head .lede {
@@ -2835,17 +2896,22 @@ textarea {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* Vertical scroll-clip inset for soft card shadows; no horizontal pad so left gutter matches chat (.main 18px only). */
-  padding: 10px 0 24px;
-  /* Keep scrolling when many shares; hide the bar so the default one-card
-     window stays clean. Wheel / trackpad still move the column. */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  /* Visible so the glass shadow can fade into the main padding, the same
+     way chat cards fade toward the sidebar. auto/hidden clips it at the card. */
+  overflow: visible;
+  padding: 0;
+}
+
+.miao-receive {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 0 auto;
+  min-height: 0;
+  overflow: visible;
+  padding: 0;
 }
 
 .miao-send::-webkit-scrollbar {
@@ -2855,28 +2921,18 @@ textarea {
   background: transparent;
 }
 
-.miao-send > .settings-panel {
-  margin-top: 0;
-  flex-shrink: 0;
+.miao-send > .chat-lobby-panel {
+  align-items: stretch;
+  width: 100%;
 }
 
-.miao-send > .settings-panel .setting-row:first-child {
+.miao-send > .chat-lobby-panel:first-child {
+  margin-top: 0;
+}
+
+.miao-send > .chat-lobby-panel .setting-row:first-child {
   border-top: 0;
   padding-top: 4px;
-}
-
-.miao-receive {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  /* Same vertical scroll inset as .miao-send; no horizontal pad (align with chat). */
-  padding: 10px 0 24px;
-  scrollbar-gutter: stable;
 }
 
 .miao-receive > .miao-join {
@@ -2938,13 +2994,13 @@ textarea {
 
 .miao-drop {
   --wails-drop-target: drop;
-  flex: 1 0 auto;
+  flex: 0 0 auto;
   min-height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 28px;
-  border-radius: var(--radius);
+  border-radius: 22px;
   border: 1.5px dashed color-mix(in srgb, var(--glow) 55%, var(--hairline));
   background: color-mix(in srgb, var(--glass-bg) 72%, transparent);
   color: var(--text);
@@ -2988,13 +3044,9 @@ textarea {
   padding: 16px 18px;
   flex: 0 0 auto;
   min-width: 0;
-  height: 100%;
+  height: auto;
   overflow: visible;
-  /* Softer than .glass --shadow (0 18px 50px): stacked share cards read as
-     discrete dark slabs; chat bubbles/panels use ~8–10px / 18–26px. */
-  box-shadow:
-    0 8px 22px rgba(55, 40, 110, 0.10),
-    var(--glass-highlight);
+  box-shadow: var(--shadow), var(--glass-highlight);
 }
 
 .miao-active h3 {

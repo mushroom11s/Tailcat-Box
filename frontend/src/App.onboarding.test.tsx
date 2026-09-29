@@ -28,8 +28,11 @@ describe("first-run onboarding", () => {
     const dialog = await screen.findByRole("dialog", { name: "Share your address" });
     expect(dialog.textContent).toContain("1 / 3");
     expect(dialog.textContent).not.toMatch(/DERP/i);
+    expect(document.querySelector("[data-guide='chat']")).toBeTruthy();
+    expect(document.querySelector(".guide-spot")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("dialog", { name: "Join or create a room" })).toBeTruthy();
+    expect(document.querySelector("[data-guide='new-room']")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("dialog", { name: "Mew Share pickup codes" }).textContent).toContain("pickup code");
     await user.click(screen.getByRole("button", { name: "Back" }));

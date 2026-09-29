@@ -407,10 +407,11 @@ describe("shell scroll", () => {
     expect(cssBlock(css, ":root")).toContain("--sidebar-w: 260px");
     expect(cssBlock(css, ".shell")).toContain("gap: 14px");
     expect(css).toMatch(
-      /\.main:has\(\.chat-page\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s,
+      /\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s,
     );
-    expect(cssBlock(css, ".miao-send")).toContain("padding: 10px 0 24px");
-    expect(cssBlock(css, ".miao-receive")).toContain("padding: 10px 0 24px");
+    expect(cssBlock(css, ".miao-send")).toContain("overflow: visible");
+    expect(cssBlock(css, ".miao-send")).toContain("padding: 0");
+    expect(cssBlock(css, ".miao-receive")).toContain("overflow: visible");
     expect(cssBlock(css, ".miao-send")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
     expect(cssBlock(css, ".miao-receive")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
 
