@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/mushroom11s/tailcat-box/internal/appinfo"
 	"github.com/mushroom11s/tailcat-box/internal/settings"
@@ -204,5 +205,99 @@ func TestRevealPathRequiresExistingPath(t *testing.T) {
 	}
 	if err := a.RevealPath(filepath.Join(t.TempDir(), "missing-file")); err == nil {
 		t.Fatal("expected missing path to fail")
+	}
+}
+
+func TestDownloadUpdateStatusSurvivesAcrossGetUpdateStatus(t *testing.T) {
+	t.Setenv("TAILCAT_ADAPTER", "fake")
+	t.Setenv("TAILCAT_SETTINGS_DIR", t.TempDir())
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	payload := []byte("0123456789abcdef") // 16 bytes
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" && r.URL.Path != "" {
+			w.Header().Set("Content-Length", "16")
+			w.WriteHeader(http.StatusOK)
+			flusher, _ := w.(http.Flusher)
+			_, _ = w.Write(payload[:8])
+			if flusher != nil {
+				flusher.Flush()
+			}
+			close(started)
+			<-release
+			_, _ = w.Write(payload[8:])
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"tag_name":"v0.2.0",
+			"draft":false,
+			"prerelease":false,
+			"html_url":"https://github.com/mushroom11s/tailcat-box/releases/tag/v0.2.0",
+			"body":"Newer cat.",
+			"assets":[{"name":"tailcat-box-macos-arm64-v0.2.0.zip","browser_download_url":"` + srv.URL + `/tailcat-box-macos-arm64-v0.2.0.zip","size":16}]
+		}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	downloads := t.TempDir()
+	a := NewApp()
+	a.updates = update.New(update.Config{
+		CurrentVersion:   appinfo.ClientVersion(),
+		LatestURL:        srv.URL,
+		HTTPClient:       srv.Client(),
+		GOOS:             "darwin",
+		GOARCH:           "arm64",
+		DownloadsDir:     downloads,
+		PermissiveAssets: true,
+		UserAgent:        "TailcatBox/test (+https://github.com/mushroom11s/tailcat-box)",
+	})
+	if _, err := a.CheckForUpdate(); err != nil {
+		t.Fatal(err)
+	}
+
+	type dlResult struct {
+		status UpdateStatus
+		err    error
+	}
+	done := make(chan dlResult, 1)
+	go func() {
+		st, err := a.DownloadUpdate()
+		done <- dlResult{status: st, err: err}
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("download did not start")
+	}
+
+	mid := a.GetUpdateStatus()
+	if mid.Status != update.StatusDownloading {
+		t.Fatalf("mid status=%q want downloading", mid.Status)
+	}
+	if !mid.UpdateAvailable {
+		t.Fatal("mid should still advertise update")
+	}
+	if mid.ProgressPercent < 0 || mid.ProgressPercent > 100 {
+		t.Fatalf("bad progress %d", mid.ProgressPercent)
+	}
+
+	close(release)
+	select {
+	case final := <-done:
+		if final.err != nil {
+			t.Fatalf("download: %v", final.err)
+		}
+		if final.status.Status != update.StatusDownloaded {
+			t.Fatalf("final %+v", final.status)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("download did not finish")
+	}
+	if got := a.GetUpdateStatus(); got.Status != update.StatusDownloaded {
+		t.Fatalf("after %+v", got)
 	}
 }

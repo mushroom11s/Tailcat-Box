@@ -73,7 +73,12 @@ type App struct {
 	portKeys  map[string]string // sessionID -> keyName
 	updates   *update.Checker
 	updateMu  sync.Mutex
-	uiLocale  string
+	// updateProgMu guards in-flight download UI state so GetUpdateStatus
+	// can report progress after Settings unmounts mid-download.
+	updateProgMu      sync.Mutex
+	updateDownloading bool
+	updateProgressPct int
+	uiLocale          string
 	// windowFullscreen tracks the View menu label (Enter vs Exit Full Screen).
 	// The native window title stays windowTitle in both states.
 	windowFullscreen bool
@@ -980,16 +985,22 @@ func (a *App) RecordUpdateCheck() (ClientInfo, error) {
 }
 
 // GetUpdateStatus returns the persisted update card without contacting GitHub.
+// While a zip download is in flight, Status is StatusDownloading and ProgressPercent
+// reflects the latest emit even if the Settings page has unmounted.
 func (a *App) GetUpdateStatus() UpdateStatus {
 	var st settings.UpdateState
 	if a.settings != nil {
 		st = a.settings.UpdateState()
 	}
-	return composeUpdateStatus(st, appinfo.ClientVersion(), goruntime.GOOS)
+	status := composeUpdateStatus(st, appinfo.ClientVersion(), goruntime.GOOS)
+	return overlayUpdateDownload(status, a.downloadProgress())
 }
 
 // CheckForUpdate fetches the latest stable GitHub Release and stores the result.
 func (a *App) CheckForUpdate() (UpdateStatus, error) {
+	if prog := a.downloadProgress(); prog.downloading {
+		return a.GetUpdateStatus(), nil
+	}
 	a.updateMu.Lock()
 	defer a.updateMu.Unlock()
 	if a.settings == nil {
@@ -1008,30 +1019,66 @@ func (a *App) CheckForUpdate() (UpdateStatus, error) {
 }
 
 // DownloadUpdate writes the stored release zip into the Downloads folder.
+// Progress and StatusDownloading live on App so the download keeps going when
+// the Settings page unmounts; returning to Settings rehydrates from GetUpdateStatus.
+// updateMu is not held for the HTTP transfer so GetUpdateStatus/CheckForUpdate stay responsive.
 func (a *App) DownloadUpdate() (UpdateStatus, error) {
+	if prog := a.downloadProgress(); prog.downloading {
+		return a.GetUpdateStatus(), nil
+	}
+
 	a.updateMu.Lock()
-	defer a.updateMu.Unlock()
 	if a.settings == nil {
+		a.updateMu.Unlock()
 		return UpdateStatus{}, fmt.Errorf("settings store is not available")
+	}
+	if prog := a.downloadProgress(); prog.downloading {
+		status := composeUpdateStatus(a.settings.UpdateState(), appinfo.ClientVersion(), goruntime.GOOS)
+		a.updateMu.Unlock()
+		return overlayUpdateDownload(status, prog), nil
 	}
 	st := a.settings.UpdateState()
 	status := composeUpdateStatus(st, appinfo.ClientVersion(), goruntime.GOOS)
 	if !status.UpdateAvailable || st.DownloadURL == "" || st.AssetName == "" {
+		a.updateMu.Unlock()
 		return status, fmt.Errorf("no update to download")
 	}
+	downloadURL := st.DownloadURL
+	assetName := st.AssetName
+	checker := a.checkerLocked()
+	a.setDownloadProgress(true, 0)
+	status.Status = update.StatusDownloading
+	status.ProgressPercent = 0
+	status.UpdateAvailable = true
+	status.Error = ""
+	status.DownloadedPath = ""
+	a.updateMu.Unlock()
+	a.emitUpdate(status)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	path, err := a.checkerLocked().Download(ctx, st.DownloadURL, st.AssetName, func(p update.Progress) {
+	path, err := checker.Download(ctx, downloadURL, assetName, func(p update.Progress) {
+		a.setDownloadProgress(true, p.Percent)
 		a.emitProgress(UpdateProgress{Received: p.Received, Total: p.Total, Percent: p.Percent})
 	})
+
+	a.updateMu.Lock()
+	defer a.updateMu.Unlock()
+	a.setDownloadProgress(false, 0)
+	if a.settings == nil {
+		return UpdateStatus{}, fmt.Errorf("settings store is not available")
+	}
 	if err != nil {
+		status = composeUpdateStatus(a.settings.UpdateState(), appinfo.ClientVersion(), goruntime.GOOS)
 		status.Error = update.ErrDownload
 		status.Status = update.StatusAvailable
 		status.UpdateAvailable = true
 		status.DownloadedPath = ""
+		status.ProgressPercent = 0
 		a.emitUpdate(status)
 		return status, nil
 	}
+	st = a.settings.UpdateState()
 	st.DownloadedPath = path
 	st.Status = update.StatusDownloaded
 	st.Error = ""
@@ -1042,6 +1089,46 @@ func (a *App) DownloadUpdate() (UpdateStatus, error) {
 	status.ProgressPercent = 100
 	a.emitUpdate(status)
 	return status, nil
+}
+
+type updateDownloadProgress struct {
+	downloading bool
+	percent     int
+}
+
+func (a *App) downloadProgress() updateDownloadProgress {
+	a.updateProgMu.Lock()
+	defer a.updateProgMu.Unlock()
+	return updateDownloadProgress{downloading: a.updateDownloading, percent: a.updateProgressPct}
+}
+
+func (a *App) setDownloadProgress(active bool, percent int) {
+	a.updateProgMu.Lock()
+	defer a.updateProgMu.Unlock()
+	a.updateDownloading = active
+	if active {
+		if percent < 0 {
+			percent = 0
+		}
+		if percent > 100 {
+			percent = 100
+		}
+		a.updateProgressPct = percent
+		return
+	}
+	a.updateProgressPct = 0
+}
+
+func overlayUpdateDownload(status UpdateStatus, prog updateDownloadProgress) UpdateStatus {
+	if !prog.downloading {
+		return status
+	}
+	status.Status = update.StatusDownloading
+	status.ProgressPercent = prog.percent
+	status.UpdateAvailable = true
+	status.Error = ""
+	status.DownloadedPath = ""
+	return status
 }
 
 // RevealDownloadedUpdate shows the downloaded zip in Finder or Explorer.

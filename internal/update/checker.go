@@ -21,6 +21,8 @@ const (
 	StatusAvailable = "available"
 	// StatusDownloaded means that zip is already in Downloads.
 	StatusDownloaded = "downloaded"
+	// StatusDownloading means the zip is being written to Downloads.
+	StatusDownloading = "downloading"
 	// StatusUnsupported means this OS has no published package.
 	StatusUnsupported = "unsupported"
 	// StatusError means the check failed and must not advertise an update.

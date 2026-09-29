@@ -213,4 +213,31 @@ describe("in-app update", () => {
     expect(await screen.findByRole("button", { name: "下载更新" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "查看这个版本" })).toBeTruthy();
   });
+
+  it("keeps download progress after leaving Settings and returning", async () => {
+    const user = userEvent.setup();
+    emitUpdateStatus(status({ UpdateAvailable: true }));
+    renderApp();
+    emitTrayNavigate("settings");
+
+    await user.click(await screen.findByRole("button", { name: "Download" }));
+    expect(await screen.findByRole("progressbar", { name: "Downloading…" })).toBeTruthy();
+
+    emitTrayNavigate("chat");
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Settings" })).toBeNull();
+    });
+
+    emitTrayNavigate("settings");
+    const bar = await screen.findByRole("progressbar", { name: "Downloading…" });
+    expect(bar).toBeTruthy();
+    await waitFor(() => {
+      const now = Number(bar.getAttribute("aria-valuenow") ?? "0");
+      expect(now).toBeGreaterThan(0);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Downloaded\. Use the steps below/)).toBeTruthy();
+    });
+  });
+
 });
