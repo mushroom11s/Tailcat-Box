@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/base64"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -915,4 +916,29 @@ func chatHas(a *App, roomID, direction, body string) bool {
 		}
 	}
 	return false
+}
+
+func TestNavigateDefersOffMenuCallback(t *testing.T) {
+	src, err := os.ReadFile("app.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := string(src)
+	idx := strings.Index(code, "func (a *App) navigate(page string)")
+	if idx < 0 {
+		t.Fatal("navigate missing")
+	}
+	body := code[idx:]
+	next := strings.Index(body[1:], "\nfunc ")
+	if next >= 0 {
+		body = body[:1+next]
+	}
+	if !strings.Contains(body, "go func()") {
+		t.Fatal("navigate must defer Wails Show/EventsEmit onto a goroutine so Darwin menu actions can return first")
+	}
+	emit := strings.Index(body, "EventsEmit")
+	goIdx := strings.Index(body, "go func()")
+	if emit < 0 || goIdx < 0 || goIdx > emit {
+		t.Fatal("EventsEmit must run inside the deferred goroutine")
+	}
 }
