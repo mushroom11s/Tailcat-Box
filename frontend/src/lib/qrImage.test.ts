@@ -2,6 +2,7 @@ import * as QRCode from "qrcode";
 import { describe, expect, it } from "vitest";
 import miaoQrMark from "../assets/miao-qr-cat.png?inline";
 import roomQrMark from "../assets/room-qr-cat.png?inline";
+import sshQrMark from "../assets/ssh-qr-cat.png?inline";
 import navyCardFixture from "./fixtures/room-cat-navy-card.png?inline";
 import { decodeQrImageData, encodeQrDataURL } from "./qr";
 import { decodeQrFromFile } from "./qrImage";
@@ -256,6 +257,16 @@ describe("decodeQrFromFile", () => {
       await expect(decodeQrFromFile(await pngFile(shot, "navy-card.png"))).resolves.toBe(text);
     }
   });
+
+  it("reads a ssh-cat QR on a white card inside a large navy screenshot", async () => {
+    const text = `mw1.${"A".repeat(160)}`;
+    const native = await rasterPng(await encodeQrDataURL(text, { centerMark: sshQrMark }));
+    const card = roundedCard(bilinear(native, 172, 172));
+    const shot = placeOnNavy(card, 1440, 900, Math.round(1440 * 0.62), Math.round(900 * 0.18));
+    expect(decodeQrImageData(toClamped(shot), shot.width, shot.height)).toBeNull();
+    await expect(decodeQrFromFile(await pngFile(shot, "ssh-navy-card.png"))).resolves.toBe(text);
+  });
+
 
   it("reads the committed navy-card room QR fixture", async () => {
     const text = `mw1.${"A".repeat(160)}`;

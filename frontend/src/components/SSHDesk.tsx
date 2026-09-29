@@ -1,4 +1,5 @@
 import { FormEvent, KeyboardEvent, useState } from "react";
+import sshQrMark from "../assets/ssh-qr-cat.png?inline";
 import QrScanButton from "./QrScanButton";
 import QrShareButton from "./QrShareButton";
 import { useI18n } from "../i18n";
@@ -157,7 +158,7 @@ export default function SSHDesk({
               <CopyIcon />
             </button>
           </div>
-          {liveKey ? <QrShareButton value={liveKey} /> : null}
+          {liveKey ? <QrShareButton value={liveKey} centerMark={sshQrMark} /> : null}
         </div>
       ) : (
         <p className="chat-quiet">{t("sshAllowHelp")}</p>
