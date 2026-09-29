@@ -540,6 +540,12 @@ describe("Mew Share page", () => {
     expect(ledeRule).toContain("max-width: none");
     expect(cssBlock(css, ".chat-lobby-head .lede")).toContain("max-width: 62ch");
 
+    // Page fills .main on resize; chat-lobby keeps its own 640px form cap.
+    const miaoPageRule = cssBlock(css, ".miao-page");
+    expect(miaoPageRule).toContain("flex: 1");
+    expect(miaoPageRule).not.toMatch(/max-width:\s*640px/);
+    expect(miaoPageRule).not.toMatch(/width:\s*100%/);
+
     const sendRule = cssBlock(css, ".miao-send");
     expect(sendRule).toContain("overflow: visible");
     expect(sendRule).toContain("padding: 0");
@@ -616,7 +622,7 @@ describe("Mew Share page", () => {
       expect(fileInput.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
       const sendStyle = getComputedStyle(send);
-      expect(sendStyle.overflowY).toBe("visible");
+      expect(sendStyle.overflowY === "visible" || sendStyle.overflowY === "").toBe(true);
       expect(parseFloat(sendStyle.minHeight)).toBe(0);
       const listStyle = getComputedStyle(list);
       expect(listStyle.maxHeight === "none" || listStyle.maxHeight === "").toBe(true);

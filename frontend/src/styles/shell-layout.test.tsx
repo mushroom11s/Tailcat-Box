@@ -287,6 +287,13 @@ describe("shell scroll", () => {
     expect(footerRule).toContain("padding-right: 8px");
     expect(cssBlock(css, ".sidebar")).toContain("overflow: hidden");
 
+    // Grid track sizes the sidebar; do not hard-lock width/min/max or @media
+    // (max-width: 760px) single-column layout cannot stretch the nav.
+    const sidebarRule = cssBlock(css, ".sidebar");
+    expect(sidebarRule).not.toMatch(/min-width:\s*var\(--sidebar-w\)/);
+    expect(sidebarRule).not.toMatch(/max-width:\s*var\(--sidebar-w\)/);
+    expect(sidebarRule).not.toMatch(/(?:^|[^-])width:\s*var\(--sidebar-w\)/);
+
     const style = document.createElement("style");
     style.textContent = [navRule, chatRule, footerRule, cssBlock(css, ".sidebar")].join("\n");
     document.head.appendChild(style);

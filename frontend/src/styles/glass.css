@@ -184,9 +184,6 @@ textarea {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  width: var(--sidebar-w);
-  min-width: var(--sidebar-w);
-  max-width: var(--sidebar-w);
   padding: 22px 14px 16px;
   min-height: 0;
   overflow: hidden;
@@ -2879,8 +2876,6 @@ textarea {
   flex: 1;
   min-height: 0;
   gap: 12px;
-  width: 100%;
-  max-width: 640px;
 }
 
 .miao-page .chat-lobby-head .lede {
