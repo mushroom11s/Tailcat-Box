@@ -165,6 +165,9 @@ describe("Mew Share page", () => {
       expect(sharePayload().startsWith("mw1.")).toBe(true);
     });
     const token = sharePayload();
+    const codeEl = document.querySelector(".miao-active .tunnel-codeblock code") as HTMLElement;
+    expect(codeEl?.getAttribute("title")).toBe(token);
+    expect(codeEl?.textContent).toBe(token);
     const parsed = parseJoin(token);
     expect(parsed?.kind).toBe("miao");
     expect(parsed?.addr.startsWith("tc:fake-miao-")).toBe(true);
@@ -572,6 +575,14 @@ describe("Mew Share page", () => {
     expect(cardRule).toContain("var(--shadow)");
     expect(cardRule).toContain("height: auto");
     expect(cssBlock(css, ".miao-share-meta > .ssh-address + .row")).toContain("margin-top: 16px");
+    const tokenPre = cssBlock(css, ".miao-share-meta .tunnel-codeblock pre");
+    expect(tokenPre).toContain("overflow: hidden");
+    const tokenCode = cssBlock(css, ".miao-share-meta .tunnel-codeblock code");
+    expect(tokenCode).toContain("white-space: nowrap");
+    expect(tokenCode).toContain("overflow: hidden");
+    expect(tokenCode).toContain("text-overflow: ellipsis");
+    expect(tokenCode).toContain("overflow-wrap: normal");
+    expect(tokenCode).toContain("word-break: normal");
     const qrPlace = cssBlock(css, ".miao-active-grid > .miao-qr");
     expect(qrPlace).toContain("grid-row: 2 / span 2");
     expect(qrPlace).toContain("align-self: start");

@@ -3062,6 +3062,19 @@ textarea {
   margin-top: 16px;
 }
 
+/* Long mw1. share codes: one compact ellipsis line; full token stays in DOM text, title, and copy. */
+.miao-share-meta .tunnel-codeblock pre {
+  overflow: hidden;
+}
+
+.miao-share-meta .tunnel-codeblock code {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .miao-join {
   padding: 18px;
   flex: 1;
