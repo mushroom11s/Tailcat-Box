@@ -395,3 +395,155 @@ describe("burn preview and file download affordances", () => {
     expect(translate("zh-CN", "chatSelectToggle")).toBe("选择消息");
   });
 });
+
+describe("stick to bottom", () => {
+  function mockLogScroll(log: HTMLElement, scrollHeight = 500, clientHeight = 100) {
+    let top = 0;
+    Object.defineProperty(log, "clientHeight", { configurable: true, value: clientHeight });
+    Object.defineProperty(log, "scrollHeight", { configurable: true, get: () => scrollHeight });
+    Object.defineProperty(log, "scrollTop", {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = value;
+      },
+    });
+    return {
+      get top() {
+        return top;
+      },
+      set top(value: number) {
+        top = value;
+      },
+    };
+  }
+
+  it("scrolls the transcript to the bottom after send", async () => {
+    const user = userEvent.setup();
+    renderChat({ messages: thread });
+    const log = document.querySelector(".chat-log") as HTMLElement;
+    const scroll = mockLogScroll(log);
+    scroll.top = 0;
+    fireEvent.scroll(log);
+
+    const composer = screen.getByLabelText("Message");
+    await user.type(composer, "latest ping");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+
+    expect(screen.getByText("latest ping")).toBeTruthy();
+    expect(scroll.top).toBe(500);
+  });
+
+  it("keeps following when a new inbound message lands near the bottom", async () => {
+    const view = renderChat({ messages: thread });
+    const log = document.querySelector(".chat-log") as HTMLElement;
+    const scroll = mockLogScroll(log);
+    scroll.top = 400;
+    fireEvent.scroll(log);
+
+    const next: ChatMessage[] = [
+      ...thread,
+      { id: "e", direction: "in", type: "text", body: "fresh inbound", at: "2026-09-22T00:00:04.000Z" },
+    ];
+    view.rerender(
+      <LocaleProvider>
+        <ChatPage
+          address="tc:room"
+          peer="tc:peer"
+          messages={next}
+          roomError=""
+          onConnect={vi.fn()}
+          onSend={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByText("fresh inbound")).toBeTruthy();
+    expect(scroll.top).toBe(500);
+  });
+
+  it("remount lands on the latest message", () => {
+    const prior = renderChat({ messages: thread });
+    prior.unmount();
+
+    // Mock scroll metrics before paint by spying on HTMLElement prototype getters used after mount.
+    const descH = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight");
+    const descC = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
+    const tops = new WeakMap<HTMLElement, number>();
+    Object.defineProperty(HTMLElement.prototype, "scrollHeight", {
+      configurable: true,
+      get() {
+        if ((this as HTMLElement).classList?.contains("chat-log")) {
+          return 800;
+        }
+        return descH?.get?.call(this) ?? 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "clientHeight", {
+      configurable: true,
+      get() {
+        if ((this as HTMLElement).classList?.contains("chat-log")) {
+          return 100;
+        }
+        return descC?.get?.call(this) ?? 0;
+      },
+    });
+    Object.defineProperty(HTMLElement.prototype, "scrollTop", {
+      configurable: true,
+      get() {
+        return tops.get(this as HTMLElement) ?? 0;
+      },
+      set(value: number) {
+        tops.set(this as HTMLElement, value);
+      },
+    });
+
+    try {
+      renderChat({
+        messages: [
+          ...thread,
+          { id: "z", direction: "out", type: "text", body: "after leave", at: "2026-09-22T00:00:09.000Z" },
+        ],
+      });
+      const log = document.querySelector(".chat-log") as HTMLElement;
+      expect(screen.getByText("after leave")).toBeTruthy();
+      expect(tops.get(log)).toBe(800);
+    } finally {
+      if (descH) Object.defineProperty(HTMLElement.prototype, "scrollHeight", descH);
+      else delete (HTMLElement.prototype as unknown as { scrollHeight?: unknown }).scrollHeight;
+      if (descC) Object.defineProperty(HTMLElement.prototype, "clientHeight", descC);
+      else delete (HTMLElement.prototype as unknown as { clientHeight?: unknown }).clientHeight;
+      delete (HTMLElement.prototype as unknown as { scrollTop?: unknown }).scrollTop;
+    }
+  });
+
+  it("does not steal the scroll position when reading older history", async () => {
+    const view = renderChat({ messages: thread });
+    const log = document.querySelector(".chat-log") as HTMLElement;
+    const scroll = mockLogScroll(log);
+    scroll.top = 0;
+    fireEvent.scroll(log);
+
+    const next: ChatMessage[] = [
+      ...thread,
+      { id: "e", direction: "in", type: "text", body: "while scrolled up", at: "2026-09-22T00:00:04.000Z" },
+    ];
+    view.rerender(
+      <LocaleProvider>
+        <ChatPage
+          address="tc:room"
+          peer="tc:peer"
+          messages={next}
+          roomError=""
+          onConnect={vi.fn()}
+          onSend={vi.fn()}
+          onRetry={vi.fn()}
+        />
+      </LocaleProvider>,
+    );
+
+    expect(screen.getByText("while scrolled up")).toBeTruthy();
+    expect(scroll.top).toBe(0);
+  });
+});

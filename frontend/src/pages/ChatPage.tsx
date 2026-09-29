@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
@@ -82,6 +82,14 @@ type Props = {
 };
 
 const noRemarks: RemarkMap = {};
+
+/** Pixels from the bottom that still count as "following" the transcript. */
+const NEAR_BOTTOM_PX = 80;
+
+function isNearBottom(el: HTMLElement): boolean {
+  return el.scrollHeight - el.scrollTop - el.clientHeight <= NEAR_BOTTOM_PX;
+}
+
 
 function peerPasteKey(reason: PasteFailure): MessageKey {
   if (reason === "empty") {
@@ -269,6 +277,8 @@ export default function ChatPage({
   const sendSignalRef = useRef(onSendSignal);
   const signalSeq = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
+  const stickBottomRef = useRef(true);
+  const forceScrollRef = useRef(true);
   const dragRectEl = useRef<HTMLDivElement>(null);
   const bubbleEls = useRef(new Map<string, HTMLElement>());
   const dragRef = useRef<{
@@ -552,6 +562,54 @@ export default function ChatPage({
     });
   }, [messages]);
 
+  function scrollLogToBottom(): void {
+    const log = logRef.current;
+    if (!log) {
+      return;
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Room address change (and remount, where forceScroll starts true): land on latest.
+  const prevAddressRef = useRef(address);
+  useLayoutEffect(() => {
+    if (prevAddressRef.current !== address) {
+      prevAddressRef.current = address;
+      stickBottomRef.current = true;
+      forceScrollRef.current = true;
+    }
+  }, [address]);
+
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) {
+      return;
+    }
+    const onScroll = () => {
+      stickBottomRef.current = isNearBottom(log);
+      if (!stickBottomRef.current) {
+        forceScrollRef.current = false;
+      }
+    };
+    log.addEventListener("scroll", onScroll, { passive: true });
+    const ro =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            if (stickBottomRef.current) {
+              scrollLogToBottom();
+            }
+          })
+        : null;
+    ro?.observe(log);
+    for (const child of Array.from(log.children)) {
+      ro?.observe(child);
+    }
+    return () => {
+      log.removeEventListener("scroll", onScroll);
+      ro?.disconnect();
+    };
+  }, []);
+
   const countdownID = viewer && viewer.left != null ? viewer.id : "";
   useEffect(() => {
     if (!countdownID || !viewer || viewer.left == null) {
@@ -715,6 +773,8 @@ export default function ChatPage({
         ttlSec: choice.ttl,
       },
     };
+    forceScrollRef.current = true;
+    stickBottomRef.current = true;
     setPending((prev) => [...prev, item]);
     setDraft("");
     try {
@@ -956,6 +1016,34 @@ export default function ChatPage({
     return [msg.body, msg.name].filter((part) => Boolean(part && part.trim())).join("\n");
   }
   const shown = query ? transcript.filter((msg) => matchesQuery(searchableText(msg), query)) : transcript;
+  const lastShownId = shown.length > 0 ? shown[shown.length - 1].id : "";
+
+  useLayoutEffect(() => {
+    if (!forceScrollRef.current && !stickBottomRef.current) {
+      return;
+    }
+    scrollLogToBottom();
+    stickBottomRef.current = true;
+    forceScrollRef.current = false;
+    // Flex/WebView often finalizes scrollHeight after the first paint.
+    let inner = 0;
+    const outer = window.requestAnimationFrame(() => {
+      if (stickBottomRef.current) {
+        scrollLogToBottom();
+      }
+      inner = window.requestAnimationFrame(() => {
+        if (stickBottomRef.current) {
+          scrollLogToBottom();
+        }
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(outer);
+      if (inner) {
+        window.cancelAnimationFrame(inner);
+      }
+    };
+  }, [address, lastShownId, shown.length]);
 
   function sideActions(msg: ChatMessage): ReactNode {
     const inboundBurn = Boolean(msg.burn && msg.direction === "in");
