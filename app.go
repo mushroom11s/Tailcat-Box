@@ -342,12 +342,18 @@ func (a *App) hideWindow() {
 }
 
 // navigate shows the window and asks the frontend to open page.
+// The body runs on a fresh goroutine so Darwin NSMenu / app-menu callbacks
+// can return before Wails touches the window or emits into the webview.
+// Synchronous EventsEmit inside an AppKit menu action aborts on macOS.
 func (a *App) navigate(page string) {
-	a.showWindow()
-	if a.ctx == nil {
-		return
-	}
-	runtime.EventsEmit(a.ctx, tray.NavigateEvent, page)
+	pageCopy := page
+	go func() {
+		a.showWindow()
+		if a.ctx == nil {
+			return
+		}
+		runtime.EventsEmit(a.ctx, tray.NavigateEvent, pageCopy)
+	}()
 }
 
 func (a *App) quitApp() {

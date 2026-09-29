@@ -58,6 +58,24 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 	if !strings.Contains(darwin, "CreateMenu()") {
 		t.Fatal("darwin must CreateMenu so the status item has a permanent NSMenu")
 	}
+	// Click handlers already run on the AppKit main thread. Wrapping Wails
+	// Open/Navigate/Quit in invokeMenu runs them inline during menu tracking
+	// and crashes. Actions must go through runAction (async goroutine).
+	if !strings.Contains(darwin, "runAction(") {
+		t.Fatal("darwin menu actions must use runAction so Wails work leaves the NSMenu callback")
+	}
+	if strings.Contains(darwin, "runAction(") && strings.Contains(darwin, "invokeMenu(c.") {
+		t.Fatal("darwin must not invokeMenu controller actions")
+	}
+	// Ensure Chat/Tunnel/Settings go through runAction, not a bare Navigate in Click.
+	for _, page := range []string{"PageChat", "PageTunnel", "PageSettings"} {
+		if !strings.Contains(darwin, "c.Navigate("+page+")") || !strings.Contains(darwin, "runAction(func() {") {
+			t.Fatalf("darwin %s action must use runAction(Navigate)", page)
+		}
+	}
+	if strings.Contains(darwin, "systray.Quit()") {
+		t.Fatal("darwin quit must not call systray.Quit ([NSApp terminate] races Wails)")
+	}
 }
 
 func TestWindowsTrayMessageLoopSharesOSThread(t *testing.T) {
