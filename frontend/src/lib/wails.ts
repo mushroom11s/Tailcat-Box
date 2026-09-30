@@ -236,6 +236,8 @@ type FakeState = {
   miaoChunkStreams: number;
   update: UpdateStatus;
   updateChecks: number;
+  updateDownload: Promise<UpdateStatus> | null;
+  updateDownloadTimer: ReturnType<typeof setInterval> | null;
 };
 
 function emptyUpdateStatus(): UpdateStatus {
@@ -276,6 +278,8 @@ const fake: FakeState = {
   miaoChunkStreams: 4,
   update: emptyUpdateStatus(),
   updateChecks: 0,
+  updateDownload: null,
+  updateDownloadTimer: null,
 };
 
 function newID(): string {
@@ -1468,23 +1472,73 @@ export async function downloadUpdate(): Promise<UpdateStatus> {
   if (hasWailsBindings()) {
     return normalizeUpdateStatus(await bindDownloadUpdate());
   }
+  if (fake.update.Status === "downloading" && fake.updateDownload) {
+    return fake.updateDownload;
+  }
   if (!fake.update.UpdateAvailable || !fake.update.DownloadURL) {
     throw new Error("no update to download");
   }
   const name = fake.update.AssetName || "tailcat-box.zip";
-  for (const listener of [...fake.progressListeners]) {
-    listener({ Received: 4, Total: 4, Percent: 100 });
-  }
-  const next = normalizeUpdateStatus({
+  const started = normalizeUpdateStatus({
     ...fake.update,
-    Status: "downloaded",
-    DownloadedPath: `Downloads/${name}`,
-    ProgressPercent: 100,
+    Status: "downloading",
+    DownloadedPath: "",
+    ProgressPercent: 0,
     Error: "",
     UpdateAvailable: true,
   });
-  publishUpdate(next);
-  return next;
+  publishUpdate(started);
+  emitFakeProgress(0, 4);
+
+  if (fake.updateDownloadTimer) {
+    clearInterval(fake.updateDownloadTimer);
+    fake.updateDownloadTimer = null;
+  }
+
+  fake.updateDownload = new Promise<UpdateStatus>((resolve) => {
+    let step = 0;
+    const total = 4;
+    fake.updateDownloadTimer = setInterval(() => {
+      step += 1;
+      const percent = Math.min(100, Math.round((step / total) * 100));
+      const mid = normalizeUpdateStatus({
+        ...fake.update,
+        Status: "downloading",
+        DownloadedPath: "",
+        ProgressPercent: percent,
+        Error: "",
+        UpdateAvailable: true,
+      });
+      publishUpdate(mid);
+      emitFakeProgress(step, total);
+      if (step < total) {
+        return;
+      }
+      if (fake.updateDownloadTimer) {
+        clearInterval(fake.updateDownloadTimer);
+        fake.updateDownloadTimer = null;
+      }
+      const next = normalizeUpdateStatus({
+        ...fake.update,
+        Status: "downloaded",
+        DownloadedPath: `Downloads/${name}`,
+        ProgressPercent: 100,
+        Error: "",
+        UpdateAvailable: true,
+      });
+      publishUpdate(next);
+      fake.updateDownload = null;
+      resolve(next);
+    }, 40);
+  });
+  return fake.updateDownload;
+}
+
+function emitFakeProgress(received: number, total: number): void {
+  const percent = total > 0 ? Math.min(100, Math.round((received / total) * 100)) : 0;
+  for (const listener of [...fake.progressListeners]) {
+    listener({ Received: received, Total: total, Percent: percent });
+  }
 }
 
 export async function revealDownloadedUpdate(): Promise<void> {
@@ -1576,6 +1630,11 @@ export function updateCheckCount(): number {
 }
 
 export function resetFakeUpdateState(): void {
+  if (fake.updateDownloadTimer) {
+    clearInterval(fake.updateDownloadTimer);
+    fake.updateDownloadTimer = null;
+  }
+  fake.updateDownload = null;
   fake.update = emptyUpdateStatus();
   fake.updateChecks = 0;
   fake.updateListeners = [];

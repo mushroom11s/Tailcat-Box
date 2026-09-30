@@ -228,18 +228,34 @@ export default function SettingsPage({
 
   useEffect(() => {
     let revision = 0;
+    const applyStatus = (status: UpdateStatus) => {
+      setUpdate(status);
+      if (status.Status === "downloading") {
+        setDownloading(true);
+        setProgress(status.ProgressPercent);
+        return;
+      }
+      if (status.Status === "downloaded") {
+        setDownloading(false);
+        setProgress(100);
+        return;
+      }
+      // available / error / upToDate after a finished or failed download
+      setDownloading(false);
+    };
     const offStatus = onUpdateStatus((status) => {
       revision += 1;
-      setUpdate(status);
+      applyStatus(status);
     });
     const offProgress = onUpdateProgress((next) => {
+      setDownloading(true);
       setProgress(next.Percent);
     });
     const ticket = revision;
     void getUpdateStatus()
       .then((status) => {
         if (revision === ticket) {
-          setUpdate(status);
+          applyStatus(status);
         }
       })
       .catch((err) => {
@@ -289,15 +305,29 @@ export default function SettingsPage({
   }
 
   async function onDownload(): Promise<void> {
+    if (downloading || update?.Status === "downloading") {
+      return;
+    }
     setBusy(true);
     setDownloading(true);
     setProgress(0);
     try {
-      setUpdate(await downloadUpdate());
+      const next = await downloadUpdate();
+      setUpdate(next);
+      if (next.Status === "downloading") {
+        setProgress(next.ProgressPercent);
+        return;
+      }
+      if (next.Status === "downloaded") {
+        setProgress(100);
+        setDownloading(false);
+        return;
+      }
+      setDownloading(false);
     } catch (err) {
       report(err);
-    } finally {
       setDownloading(false);
+    } finally {
       setBusy(false);
     }
   }
@@ -329,6 +359,8 @@ export default function SettingsPage({
   const checkedAt = update?.LastChecked || client?.LastUpdateCheck || "";
   const downloaded = update?.Status === "downloaded" && Boolean(update.DownloadedPath);
   const canDownload = Boolean(update?.UpdateAvailable && update.DownloadURL);
+  const updateBusy = downloading || update?.Status === "downloading";
+  const progressValue = updateBusy ? Math.max(progress, update?.ProgressPercent ?? 0) : progress;
   const statusText = update ? describeUpdate(update, t) : "";
   const downloadError = update?.Error === "download" ? t("updateErrDownload") : "";
 
@@ -450,19 +482,19 @@ export default function SettingsPage({
               <ReleaseNotes markdown={update.Notes} />
             </div>
           ) : null}
-          {downloading ? (
+          {updateBusy ? (
             <LoadingCat size="sm" label={t("downloadingUpdate")} />
           ) : null}
-          {downloading ? (
+          {updateBusy ? (
             <div
               className="update-progress"
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={progress}
+              aria-valuenow={progressValue}
               aria-label={t("downloadingUpdate")}
             >
-              <span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }} />
+              <span style={{ width: `${Math.max(0, Math.min(100, progressValue))}%` }} />
             </div>
           ) : null}
           {downloadError ? <p className="err">{downloadError}</p> : null}
@@ -471,8 +503,8 @@ export default function SettingsPage({
               {t("onboardingOpen")}
             </button>
             {canDownload && !downloaded ? (
-              <button className="btn btn-small" type="button" disabled={localBusy} onClick={() => void onDownload()}>
-                {downloading ? t("downloadingUpdate") : t("downloadUpdate")}
+              <button className="btn btn-small" type="button" disabled={localBusy || updateBusy} onClick={() => void onDownload()}>
+                {updateBusy ? t("downloadingUpdate") : t("downloadUpdate")}
               </button>
             ) : null}
             {downloaded ? (
@@ -481,8 +513,8 @@ export default function SettingsPage({
               </button>
             ) : null}
             {downloaded ? (
-              <button className="btn-link" type="button" disabled={localBusy} onClick={() => void onDownload()}>
-                {downloading ? t("downloadingUpdate") : t("downloadAgain")}
+              <button className="btn-link" type="button" disabled={localBusy || updateBusy} onClick={() => void onDownload()}>
+                {updateBusy ? t("downloadingUpdate") : t("downloadAgain")}
               </button>
             ) : null}
             {update?.ReleaseURL ? (
@@ -543,6 +575,8 @@ function describeUpdate(update: UpdateStatus, t: (key: MessageKey) => string): s
       return t("updateAvailableLabel");
     case "downloaded":
       return t("updateDownloaded");
+    case "downloading":
+      return t("downloadingUpdate");
     case "unsupported":
       return t("updateNoPackage");
     default:
