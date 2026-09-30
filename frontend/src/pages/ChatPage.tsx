@@ -13,6 +13,7 @@ import { localizeChatError, systemText } from "../lib/chatText";
 import { purgeDiscardIds } from "../lib/chatPurge";
 import { createLiveCall, type CallMode, type CallView, type LiveCall, type LiveDevices } from "../lib/liveCall";
 import { startVoiceCapture, type VoiceCapture } from "../lib/voiceCapture";
+import { readPlayedVoices, rememberPlayedVoice } from "../lib/voicePlayed";
 import { displayNickname } from "../lib/nickname";
 import { labelPeerAddress, remarkAddress, remarkFor, type RemarkMap } from "../lib/remark";
 import { abbreviateAddress } from "../lib/roomLabel";
@@ -257,6 +258,18 @@ export default function ChatPage({
   }, [draftPeer, draft, burnOn]);
   const [viewer, setViewer] = useState<{ id: string; left: number | null } | null>(null);
   const [recording, setRecording] = useState(false);
+  const [playedVoices, setPlayedVoices] = useState<Set<string>>(() => new Set(readPlayedVoices()));
+  const markVoicePlayed = (id: string) => {
+    setPlayedVoices((prev) => {
+      if (prev.has(id)) {
+        return prev;
+      }
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    rememberPlayedVoice(id);
+  };
   const [multiSelectActive, setMultiSelectActive] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -1382,6 +1395,7 @@ export default function ChatPage({
                 left={viewer?.id === msg.id ? viewer.left : null}
                 query={query}
                 onClose={() => finishBurn(msg.id)}
+                onVoicePlay={() => markVoicePlayed(msg.id)}
                 canPlayMime={canPlayMime}
                 decodeVoice={decodeVoice}
               />
@@ -1399,6 +1413,9 @@ export default function ChatPage({
                 </div>
               ) : null}
             </article>
+            {msg.type === "voice" && msg.direction === "in" && !playedVoices.has(msg.id) ? (
+              <span className="chat-voice-unread" role="img" aria-label={t("chatVoiceUnplayed")} />
+            ) : null}
             {outsideFilePreview(msg)}
             {sideActions(msg)}
             </div>
@@ -1647,6 +1664,7 @@ function BubbleBody({
   left,
   query,
   onClose,
+  onVoicePlay,
   canPlayMime,
   decodeVoice,
 }: {
@@ -1656,6 +1674,7 @@ function BubbleBody({
   left: number | null;
   query: string;
   onClose: () => Promise<void>;
+  onVoicePlay?: () => void;
   canPlayMime?: (mime: string) => boolean;
   decodeVoice?: (mime: string, audio: string) => Promise<string | null>;
 }) {
@@ -1674,7 +1693,7 @@ function BubbleBody({
         <VoiceNote
           mime={msg.mime ?? ""}
           audio={msg.audio ?? ""}
-          autoPlay={msg.direction === "in"}
+          onPlay={onVoicePlay}
           onEnded={() => {
             if (inboundBurn) {
               void onClose();
