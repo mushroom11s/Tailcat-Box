@@ -175,6 +175,7 @@ describe("qr share and scan", () => {
               remotePort: 0,
               peer: "",
               openBrowser: false,
+              keyName: "",
             },
             {
               id: "fwd",
@@ -184,6 +185,7 @@ describe("qr share and scan", () => {
               remotePort: 8080,
               peer: "tc:peer",
               openBrowser: false,
+              keyName: "",
             },
           ]}
           sessions={[
@@ -200,6 +202,10 @@ describe("qr share and scan", () => {
           ]}
           links={{ serve: "port" }}
           busy={false}
+          keys={[]}
+          keyDraft=""
+          onKeyDraft={vi.fn()}
+          onSaveKey={vi.fn()}
           ssh={{
             desk: emptySSHDesk(),
             busy: false,

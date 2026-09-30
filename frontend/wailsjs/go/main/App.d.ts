@@ -124,7 +124,7 @@ export function StartPing(arg1:string,arg2:boolean):Promise<session.Session>;
 
 export function StartPipeServe():Promise<session.Session>;
 
-export function StartPortServe(arg1:Array<adapter.PortMapping>):Promise<session.Session>;
+export function StartPortServe(arg1:Array<adapter.PortMapping>,arg2:string):Promise<session.Session>;
 
 export function StartRecv(arg1:string,arg2:boolean):Promise<session.Session>;
 
