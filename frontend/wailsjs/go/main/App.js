@@ -242,8 +242,8 @@ export function StartPipeServe() {
   return window['go']['main']['App']['StartPipeServe']();
 }
 
-export function StartPortServe(arg1) {
-  return window['go']['main']['App']['StartPortServe'](arg1);
+export function StartPortServe(arg1, arg2) {
+  return window['go']['main']['App']['StartPortServe'](arg1, arg2);
 }
 
 export function StartRecv(arg1, arg2) {

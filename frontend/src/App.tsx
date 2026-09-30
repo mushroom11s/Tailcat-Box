@@ -8,6 +8,7 @@ import SettingsPage from "./pages/SettingsPage";
 import type { SSHShell } from "./components/SSHDesk";
 import TunnelPage from "./pages/TunnelPage";
 import { readMappings, toPortMapping, writeMappings, type PortMappingRecord } from "./lib/portMappings";
+import { filterAvailableKeys, occupiedKeyNames } from "./lib/occupiedKeys";
 import { sameKeys, sameSessions } from "./lib/snapshot";
 import { translate, useI18n, type MessageKey } from "./i18n";
 import iconUrl from "./assets/icon.png";
@@ -128,6 +129,8 @@ function AppShell() {
   const lobbyBusyRef = useRef<"" | "temp" | "permanent" | "connect">("");
   const [lobbyKey, setLobbyKey] = useState("");
   const [lobbyKeyDraft, setLobbyKeyDraft] = useState("");
+  const [tunnelKeyDraft, setTunnelKeyDraft] = useState("");
+
   const [closeAsk, setCloseAsk] = useState("");
   const [mappings, setMappings] = useState<PortMappingRecord[]>(() => readMappings());
   const [links, setLinks] = useState<Record<string, string>>({});
@@ -477,6 +480,13 @@ function AppShell() {
   }, [mappings]);
 
   useEffect(() => {
+    const occupied = occupiedKeyNames({ mappings });
+    if (lobbyKey && occupied.has(lobbyKey)) {
+      setLobbyKey("");
+    }
+  }, [mappings, lobbyKey]);
+
+  useEffect(() => {
     const node = mainRef.current;
     if (!node) {
       return;
@@ -713,6 +723,22 @@ function AppShell() {
     }
   }
 
+  async function saveTunnelKey(): Promise<void> {
+    const name = tunnelKeyDraft.trim();
+    if (!name) {
+      pushError(t("lobbyKeyNameRequired"));
+      return;
+    }
+    try {
+      await createKey(name, false, region);
+      setTunnelKeyDraft("");
+      const next = await listKeys();
+      setKeys((prev) => (sameKeys(prev, next) ? prev : next));
+    } catch (err) {
+      pushError(showError(err));
+    }
+  }
+
   function roomHasUserMessage(room: RoomSlice | undefined): boolean {
     return Boolean(room?.messages.some((msg) => msg.direction === "in" || msg.direction === "out"));
   }
@@ -828,7 +854,7 @@ function AppShell() {
       const port = toPortMapping(mapping);
       const started =
         mapping.mode === "serve"
-          ? await startPortServe([port])
+          ? await startPortServe([port], mapping.keyName)
           : await startForward(mapping.peer, [port], mapping.openBrowser);
       const next = { ...linksRef.current, [id]: started.ID };
       linksRef.current = next;
@@ -1094,7 +1120,10 @@ function AppShell() {
             <LobbyPage
               peer={lobbyPeer}
               error={lobbyError}
-              keys={keys.map((key) => ({ name: key.Name, source: key.Source }))}
+              keys={filterAvailableKeys(
+                keys.map((key) => ({ name: key.Name, source: key.Source })),
+                occupiedKeyNames({ mappings }),
+              )}
               keyName={lobbyKey}
               keyDraft={lobbyKeyDraft}
               onPeer={(value) => {
@@ -1150,6 +1179,13 @@ function AppShell() {
             sessions={sessions}
             links={links}
             busy={tunnelBusy}
+            keys={filterAvailableKeys(
+              keys.map((key) => ({ name: key.Name, source: key.Source })),
+              occupiedKeyNames({ rooms: Object.values(rooms) }),
+            )}
+            keyDraft={tunnelKeyDraft}
+            onKeyDraft={setTunnelKeyDraft}
+            onSaveKey={() => void saveTunnelKey()}
             ssh={{
               desk: sshDesk,
               busy: sshBusy,

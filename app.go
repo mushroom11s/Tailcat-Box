@@ -67,9 +67,13 @@ type App struct {
 	ssh        *sshdesk.Store
 	sshMu      sync.Mutex
 	sshSession string
-	updates    *update.Checker
-	updateMu   sync.Mutex
-	uiLocale   string
+	// portKeys tracks named keys currently listening on port-serve sessions
+	// so chat rooms and port serves cannot share the same key at once.
+	portKeyMu sync.Mutex
+	portKeys  map[string]string // sessionID -> keyName
+	updates   *update.Checker
+	updateMu  sync.Mutex
+	uiLocale  string
 	// windowFullscreen tracks the View menu label (Enter vs Exit Full Screen).
 	// The native window title stays windowTitle in both states.
 	windowFullscreen bool
@@ -228,6 +232,7 @@ func NewApp() *App {
 		keys:       keys,
 		settings:   settingsStore,
 		ssh:        newSSHStore(),
+		portKeys:   map[string]string{},
 		trayIcon:   tray.DefaultIcon,
 		startedAt:  time.Now(),
 	}
@@ -419,8 +424,76 @@ func (a *App) DialPipe(addr string, payload string) (session.Session, error) {
 }
 
 // StartPortServe starts a TCP port serve session.
-func (a *App) StartPortServe(mappings []adapter.PortMapping) (session.Session, error) {
-	return a.svc.StartPortServe(mappings)
+// keyName selects a saved identity+PSK so the tc… address stays stable across restarts.
+// Empty keyName is ephemeral (new address each start).
+func (a *App) StartPortServe(mappings []adapter.PortMapping, keyName string) (session.Session, error) {
+	keyName = strings.TrimSpace(keyName)
+	opts := adapter.PortServeOpts{}
+	if keyName != "" {
+		if a.roomUsesKey(keyName) {
+			return session.Session{}, fmt.Errorf("That key is already listening in a chat room.")
+		}
+		if a.portUsesKey(keyName) {
+			return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+		}
+		raw, err := a.keys.ReadRaw(keyName)
+		if err != nil {
+			return session.Session{}, err
+		}
+		material, err := roomKeyMaterial(raw)
+		if err != nil {
+			return session.Session{}, err
+		}
+		opts.IdentityJSON = material
+	}
+	sess, err := a.svc.StartPortServe(mappings, opts)
+	if err != nil {
+		return sess, err
+	}
+	if keyName != "" && sess.ID != "" {
+		a.portKeyMu.Lock()
+		if a.portKeys == nil {
+			a.portKeys = map[string]string{}
+		}
+		a.portKeys[sess.ID] = keyName
+		a.portKeyMu.Unlock()
+	}
+	return sess, nil
+}
+
+func (a *App) roomUsesKey(key string) bool {
+	if a == nil || a.rooms == nil || key == "" {
+		return false
+	}
+	for _, id := range a.rooms.Order() {
+		if name, ok := a.rooms.KeyName(id); ok && name == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) portUsesKey(key string) bool {
+	if a == nil || key == "" {
+		return false
+	}
+	a.portKeyMu.Lock()
+	defer a.portKeyMu.Unlock()
+	for _, name := range a.portKeys {
+		if name == key {
+			return true
+		}
+	}
+	return false
+}
+
+func (a *App) clearPortKey(sessionID string) {
+	if a == nil || sessionID == "" {
+		return
+	}
+	a.portKeyMu.Lock()
+	delete(a.portKeys, sessionID)
+	a.portKeyMu.Unlock()
 }
 
 // StartForward starts local TCP forwards to addr.
@@ -470,7 +543,9 @@ func (a *App) DeleteKey(name string) error {
 
 // StopSession stops a running session.
 func (a *App) StopSession(id string) error {
-	return a.svc.Stop(id)
+	err := a.svc.Stop(id)
+	a.clearPortKey(id)
+	return err
 }
 
 // ListSessions returns a snapshot of all sessions.
@@ -530,6 +605,9 @@ func (a *App) StartChatRoom(keyName string) (session.Session, error) {
 	opts, err := a.chatOpts(keyName)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if opts.KeyName != "" && a.portUsesKey(opts.KeyName) {
+		return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
 	}
 	return a.rooms.Start(opts)
 }
@@ -617,6 +695,9 @@ func (a *App) RestartChatRoom(roomID string, keyName string) (session.Session, e
 	opts, err := a.chatOpts(keyName)
 	if err != nil {
 		return session.Session{}, err
+	}
+	if opts.KeyName != "" && a.portUsesKey(opts.KeyName) {
+		return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
 	}
 	sess, err := a.rooms.Restart(roomID, opts)
 	if sess.ID != "" {

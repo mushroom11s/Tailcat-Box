@@ -12,6 +12,8 @@ export type PortMappingRecord = {
   remotePort: number;
   peer: string;
   openBrowser: boolean;
+  /** Saved key for serve mode; empty means ephemeral address each start. */
+  keyName: string;
 };
 
 export function newMappingId(): string {
@@ -26,6 +28,7 @@ export function draftMapping(input: {
   spec: string;
   peer: string;
   openBrowser: boolean;
+  keyName?: string;
 }): PortMappingRecord {
   if (input.mode === "forward" && !input.peer.trim()) {
     throw new Error("peer-required");
@@ -42,6 +45,7 @@ export function draftMapping(input: {
     mapping: parsed[0],
     peer: input.peer,
     openBrowser: input.openBrowser,
+    keyName: input.keyName,
   });
 }
 
@@ -51,6 +55,7 @@ export function mappingRecord(input: {
   mapping: PortMapping;
   peer?: string;
   openBrowser?: boolean;
+  keyName?: string;
 }): PortMappingRecord {
   return {
     id: input.id ?? newMappingId(),
@@ -60,6 +65,7 @@ export function mappingRecord(input: {
     remotePort: input.mapping.RemotePort,
     peer: input.mode === "forward" ? (input.peer ?? "").trim() : "",
     openBrowser: input.mode === "forward" && Boolean(input.openBrowser),
+    keyName: input.mode === "serve" ? (input.keyName ?? "").trim() : "",
   };
 }
 
@@ -107,6 +113,9 @@ function isRecord(value: unknown): value is PortMappingRecord {
   if (typeof item.peer !== "string" || typeof item.openBrowser !== "boolean") {
     return false;
   }
+  if (item.keyName !== undefined && typeof item.keyName !== "string") {
+    return false;
+  }
   if (item.mode === "serve") {
     return item.localPort > 0;
   }
@@ -131,6 +140,7 @@ export function readMappings(): PortMappingRecord[] {
       remotePort: item.remotePort,
       peer: item.mode === "forward" ? item.peer.trim() : "",
       openBrowser: item.mode === "forward" && item.openBrowser,
+      keyName: item.mode === "serve" && typeof item.keyName === "string" ? item.keyName.trim() : "",
     }));
   } catch {
     return [];

@@ -131,7 +131,7 @@ func waitRunning(t *testing.T, svc *service.Service, id string) session.Session 
 
 func TestStartPortServeThenForward(t *testing.T) {
 	svc := service.New(adapter.NewFake())
-	serveSess, err := svc.StartPortServe([]adapter.PortMapping{{LocalPort: 8080}})
+	serveSess, err := svc.StartPortServe([]adapter.PortMapping{{LocalPort: 8080}}, adapter.PortServeOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestListSessionsStableOrder(t *testing.T) {
 		if _, err := svc.StartPipeServe(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := svc.StartPortServe([]adapter.PortMapping{{LocalPort: uint16(8080 + i)}}); err != nil {
+		if _, err := svc.StartPortServe([]adapter.PortMapping{{LocalPort: uint16(8080 + i)}}, adapter.PortServeOpts{}); err != nil {
 			t.Fatal(err)
 		}
 	}

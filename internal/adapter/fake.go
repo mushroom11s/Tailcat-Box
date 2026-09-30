@@ -2,6 +2,8 @@ package adapter
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -136,10 +138,14 @@ func (f *Fake) DialPipe(ctx context.Context, sessionID string, addr string, payl
 	return ch, nil
 }
 
-func (f *Fake) StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping) (<-chan Event, error) {
+func (f *Fake) StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping, opts PortServeOpts) (<-chan Event, error) {
 	ch := make(chan Event, 4)
 	stop := f.track(sessionID)
 	addr := "tc:fake-port-" + sessionID
+	if id := strings.TrimSpace(opts.IdentityJSON); id != "" {
+		sum := sha256.Sum256([]byte(id))
+		addr = "tc:fake-port-key-" + hex.EncodeToString(sum[:6])
+	}
 
 	f.mu.Lock()
 	f.ports[sessionID] = addr

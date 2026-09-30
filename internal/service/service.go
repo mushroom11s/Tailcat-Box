@@ -73,9 +73,9 @@ func (s *Service) DialPipe(addr string, payload string) (session.Session, error)
 	})
 }
 
-func (s *Service) StartPortServe(mappings []adapter.PortMapping) (session.Session, error) {
+func (s *Service) StartPortServe(mappings []adapter.PortMapping, opts adapter.PortServeOpts) (session.Session, error) {
 	return s.start(session.KindPortServe, "", func(ctx context.Context, id string) (<-chan adapter.Event, error) {
-		return s.ad.StartPortServe(ctx, id, mappings)
+		return s.ad.StartPortServe(ctx, id, mappings, opts)
 	})
 }
 

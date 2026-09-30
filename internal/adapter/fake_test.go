@@ -76,7 +76,7 @@ func TestFakePortServeAddress(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch, err := f.StartPortServe(ctx, "p1", []adapter.PortMapping{{LocalPort: 8080}})
+	ch, err := f.StartPortServe(ctx, "p1", []adapter.PortMapping{{LocalPort: 8080}}, adapter.PortServeOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestFakeForwardAgainstPortServe(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	serveCh, err := f.StartPortServe(ctx, "p1", []adapter.PortMapping{{LocalPort: 8080}})
+	serveCh, err := f.StartPortServe(ctx, "p1", []adapter.PortMapping{{LocalPort: 8080}}, adapter.PortServeOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,5 +470,46 @@ func TestFakeSOCKSExitExecAndNetworkOpts(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("timeout exec")
+	}
+}
+
+func TestFakePortServeStableKeyAddress(t *testing.T) {
+	f := adapter.NewFake()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	opts := adapter.PortServeOpts{IdentityJSON: `{"fake":"stable-port"}`}
+	ch1, err := f.StartPortServe(ctx, "a", []adapter.PortMapping{{LocalPort: 8080}}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ch2, err := f.StartPortServe(ctx, "b", []adapter.PortMapping{{LocalPort: 9090}}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var addr1, addr2 string
+	select {
+	case ev := <-ch1:
+		if ev.Kind != adapter.EventReady {
+			t.Fatalf("%+v", ev)
+		}
+		addr1 = ev.Address
+	case <-ctx.Done():
+		t.Fatal("timeout")
+	}
+	select {
+	case ev := <-ch2:
+		if ev.Kind != adapter.EventReady {
+			t.Fatalf("%+v", ev)
+		}
+		addr2 = ev.Address
+	case <-ctx.Done():
+		t.Fatal("timeout")
+	}
+	if addr1 == "" || !strings.HasPrefix(addr1, "tc:fake-port-key-") {
+		t.Fatalf("addr1=%q", addr1)
+	}
+	if addr1 != addr2 {
+		t.Fatalf("keyed addresses differ: %q vs %q", addr1, addr2)
 	}
 }

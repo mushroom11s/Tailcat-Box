@@ -14,7 +14,19 @@ describe("port mapping drafts", () => {
     expect(record.remotePort).toBe(0);
     expect(record.peer).toBe("");
     expect(record.openBrowser).toBe(false);
+    expect(record.keyName).toBe("");
     expect(record.id).toBeTruthy();
+  });
+
+  it("saves a serve mapping with a persisted key name", () => {
+    const record = draftMapping({
+      mode: "serve",
+      spec: "8080",
+      peer: "",
+      openBrowser: false,
+      keyName: " home ",
+    });
+    expect(record.keyName).toBe("home");
   });
 
   it("saves a serve mapping with a remote host", () => {
@@ -31,6 +43,7 @@ describe("port mapping drafts", () => {
       remotePort: 3306,
       peer: "",
       openBrowser: false,
+      keyName: "",
     });
   });
 
@@ -44,6 +57,7 @@ describe("port mapping drafts", () => {
       remotePort: 8080,
       peer: "tc:peer",
       openBrowser: false,
+      keyName: "",
     });
     expect(
       draftMapping({ mode: "forward", spec: "80", peer: "tc:peer", openBrowser: true }),
@@ -51,6 +65,7 @@ describe("port mapping drafts", () => {
       localPort: 0,
       remotePort: 80,
       openBrowser: true,
+      keyName: "",
     });
   });
 
