@@ -9,6 +9,7 @@ import { opusMIME } from "./lib/voiceCapture";
 
 beforeEach(() => {
   localStorage.setItem("tailcat-locale", "en");
+  localStorage.removeItem("tailcat-voice-played");
 });
 
 afterEach(() => {
@@ -136,21 +137,38 @@ describe("phase 3 voice notes", () => {
     expect(onSend).toHaveBeenCalledWith("hi\n", false, 0);
   });
 
-  it("autoplays an incoming voice note and says to tap play when blocked", async () => {
-    HTMLMediaElement.prototype.play = vi.fn(
-      () => Promise.reject(Object.assign(new Error("blocked"), { name: "NotAllowedError" })),
-    ) as typeof HTMLMediaElement.prototype.play;
-    renderChat({ messages: [voice] });
-    expect(await screen.findByText("Voice received — tap play")).toBeTruthy();
-    expect(document.querySelector("audio")).toBeTruthy();
-  });
-
-  it("does not show the tap-play line when autoplay is allowed", async () => {
+  it("does not autoplay an incoming voice note and shows an unplayed dot", async () => {
     HTMLMediaElement.prototype.play = vi.fn(() => Promise.resolve()) as typeof HTMLMediaElement.prototype.play;
     renderChat({ messages: [voice] });
+    expect(await screen.findByRole("img", { name: "Unplayed" })).toBeTruthy();
+    expect(document.querySelector("audio")).toBeTruthy();
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(screen.queryByText("Played")).toBeNull();
+  });
+
+  it("clears the unplayed dot after the user plays and keeps that locally", async () => {
+    const first = renderChat({ messages: [voice] });
+    const audio = await vi.waitFor(() => {
+      const el = document.querySelector("audio");
+      if (!el) {
+        throw new Error("audio missing");
+      }
+      return el;
+    });
+    fireEvent.play(audio);
+    expect(screen.queryByRole("img", { name: "Unplayed" })).toBeNull();
+    expect(screen.queryByText("Played")).toBeNull();
+    first.unmount();
+    renderChat({ messages: [voice] });
     expect(await screen.findByRole("button", { name: "Record voice note" })).toBeTruthy();
-    await vi.waitFor(() => expect(HTMLMediaElement.prototype.play).toHaveBeenCalled());
-    expect(screen.queryByText("Voice received — tap play")).toBeNull();
+    expect(screen.queryByRole("img", { name: "Unplayed" })).toBeNull();
+  });
+
+  it("does not mark an outgoing voice note unplayed", async () => {
+    renderChat({ messages: [{ ...voice, id: "voice-out", direction: "out" }] });
+    expect(await screen.findByRole("button", { name: "Record voice note" })).toBeTruthy();
+    expect(document.querySelector("audio")).toBeTruthy();
+    expect(screen.queryByRole("img", { name: "Unplayed" })).toBeNull();
   });
 
   it("decodes to wav when the webview cannot play the mime", async () => {
@@ -225,7 +243,7 @@ describe("phase 3 voice notes", () => {
     ) as typeof HTMLMediaElement.prototype.play;
     renderChat({ messages: [voice] });
     expect(screen.getByRole("button", { name: "按住说话" })).toBeTruthy();
-    expect(await screen.findByText("收到语音，点一下播放")).toBeTruthy();
+    expect(await screen.findByRole("img", { name: "未播放" })).toBeTruthy();
   });
 });
 

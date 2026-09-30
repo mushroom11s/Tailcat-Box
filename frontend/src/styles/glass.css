@@ -2067,6 +2067,15 @@ textarea {
 .chat-msg.out .chat-bubble-wrap {
   margin-left: auto;
 }
+.chat-voice-unread {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #fa5151;
+  align-self: center;
+}
 .chat-outside-actions {
   display: flex;
   flex-direction: column;
