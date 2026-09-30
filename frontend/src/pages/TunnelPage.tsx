@@ -9,6 +9,11 @@ import { draftMapping, mappingPrimary, type PortMappingRecord } from "../lib/por
 import { shareableAddress } from "../lib/qr";
 import type { Session, SSHDeskState } from "../lib/wails";
 
+export type TunnelKey = {
+  name: string;
+  source: string;
+};
+
 export type TunnelSSH = {
   desk: SSHDeskState;
   busy: boolean;
@@ -29,6 +34,11 @@ type Props = {
   links: Record<string, string>;
   busy: boolean;
   ssh: TunnelSSH;
+  /** Keys not already used by an open chat room (or another serve mapping). */
+  keys: TunnelKey[];
+  keyDraft: string;
+  onKeyDraft: (value: string) => void;
+  onSaveKey: () => void;
   onAdd: (record: PortMappingRecord) => void;
   onStart: (id: string) => void;
   onStop: (id: string) => void;
@@ -51,7 +61,21 @@ async function copyText(text: string): Promise<void> {
   }
 }
 
-export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd, onStart, onStop, onDelete }: Props) {
+export default function TunnelPage({
+  mappings,
+  sessions,
+  links,
+  busy,
+  ssh,
+  keys,
+  keyDraft,
+  onKeyDraft,
+  onSaveKey,
+  onAdd,
+  onStart,
+  onStop,
+  onDelete,
+}: Props) {
   const { t } = useI18n();
   const [creating, setCreating] = useState(false);
   const [selected, setSelected] = useState("");
@@ -60,6 +84,7 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
   const [forwardSpec, setForwardSpec] = useState("18080:8080");
   const [peer, setPeer] = useState("");
   const [openBrowser, setOpenBrowser] = useState(false);
+  const [serveKey, setServeKey] = useState("");
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -67,6 +92,12 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
       setSelected("");
     }
   }, [mappings, selected]);
+
+  useEffect(() => {
+    if (serveKey && !keys.some((key) => key.name === serveKey)) {
+      setServeKey("");
+    }
+  }, [keys, serveKey]);
 
   function openCreate() {
     setCreating(true);
@@ -76,6 +107,7 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
     setForwardSpec("18080:8080");
     setPeer("");
     setOpenBrowser(false);
+    setServeKey("");
     setFormError("");
   }
 
@@ -95,6 +127,7 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
         spec: mode === "serve" ? serveSpec : forwardSpec,
         peer,
         openBrowser,
+        keyName: mode === "serve" ? serveKey : "",
       });
       onAdd(record);
       setCreating(false);
@@ -148,7 +181,12 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
           const session = sessionFor(mapping.id, links, sessions);
           const live = isLive(session);
           const primary = mappingPrimary(mapping, t("tunnelEphemeral"));
-          const kind = mapping.mode === "serve" ? t("tunnelServe") : mapping.peer;
+          const kind =
+            mapping.mode === "serve"
+              ? mapping.keyName
+                ? `${t("tunnelServe")} · ${mapping.keyName}`
+                : t("tunnelServe")
+              : mapping.peer;
           const statusKey = statusMessageKey(session?.Status || "stopped");
           const status = statusKey ? t(statusKey) : session?.Status || "";
           return (
@@ -250,6 +288,40 @@ export default function TunnelPage({ mappings, sessions, links, busy, ssh, onAdd
               autoComplete="off"
             />
           </div>
+          {mode === "serve" ? (
+            <>
+              <div className="field">
+                <label htmlFor="tunnel-serve-key">{t("tunnelServeKey")}</label>
+                <select
+                  id="tunnel-serve-key"
+                  value={serveKey}
+                  onChange={(ev) => setServeKey(ev.target.value)}
+                >
+                  <option value="">{t("tunnelServeKeyEphemeral")}</option>
+                  {keys.map((key) => (
+                    <option key={`${key.source}:${key.name}`} value={key.name}>
+                      {key.source && key.source !== "app" ? `${key.name} · ${key.source}` : key.name}
+                    </option>
+                  ))}
+                </select>
+                <p className="chat-quiet">{t("tunnelServeKeyHelp")}</p>
+              </div>
+              <div className="chat-lobby-key-save">
+                <div className="field">
+                  <label htmlFor="tunnel-serve-key-name">{t("lobbyNewKey")}</label>
+                  <input
+                    id="tunnel-serve-key-name"
+                    value={keyDraft}
+                    onChange={(ev) => onKeyDraft(ev.target.value)}
+                    autoComplete="off"
+                  />
+                </div>
+                <button className="btn btn-ghost" type="button" disabled={busy} onClick={onSaveKey}>
+                  {t("lobbySaveKey")}
+                </button>
+              </div>
+            </>
+          ) : null}
           {mode === "forward" ? (
             <label className="check">
               <input
@@ -294,11 +366,16 @@ function MappingDetail({
   const kind = mapping.mode === "serve" ? t("tunnelServe") : t("tunnelForward");
   const peerText = mapping.mode === "forward" ? mapping.peer.trim() : "";
   const liveKey = shareableAddress(session?.Address ?? "");
+  const keyLabel =
+    mapping.mode === "serve"
+      ? mapping.keyName.trim() || t("tunnelServeKeyEphemeral")
+      : "";
   return (
     <section className="glass tunnel-detail" aria-label={primary}>
       <h3>{primary}</h3>
       <p className="tunnel-meta">
         <span>{kind}</span>
+        {keyLabel ? <span>{keyLabel}</span> : null}
         <span className={`pill ${session?.Status || "stopped"}`}>{statusKey ? t(statusKey) : session?.Status}</span>
         {mapping.openBrowser ? <span>{t("openInBrowser")}</span> : null}
       </p>

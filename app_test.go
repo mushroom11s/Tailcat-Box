@@ -90,7 +90,7 @@ func TestAppPlan2Bindings(t *testing.T) {
 	t.Setenv("TAILCAT_KEYS_DIR", t.TempDir())
 	a := NewApp()
 
-	serveSess, err := a.StartPortServe([]adapter.PortMapping{{LocalPort: 8080}})
+	serveSess, err := a.StartPortServe([]adapter.PortMapping{{LocalPort: 8080}}, "")
 	if err != nil {
 		t.Fatal(err)
 	}

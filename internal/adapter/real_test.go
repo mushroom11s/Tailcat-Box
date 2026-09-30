@@ -34,7 +34,7 @@ func TestRealParseAddr(t *testing.T) {
 
 func TestRealPortServeRequiresMappings(t *testing.T) {
 	r := adapter.NewReal()
-	if _, err := r.StartPortServe(context.Background(), "s", nil); err == nil {
+	if _, err := r.StartPortServe(context.Background(), "s", nil, adapter.PortServeOpts{}); err == nil {
 		t.Fatal("expected error")
 	}
 }

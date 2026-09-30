@@ -133,6 +133,7 @@ export default function LobbyPage({
               </option>
             ))}
           </select>
+          <p className="chat-quiet">{t("lobbyKeyFilterHelp")}</p>
         </div>
         {busy === "permanent" ? null : (
           <div className="row">

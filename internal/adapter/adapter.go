@@ -113,13 +113,21 @@ type FileEntry struct {
 	ModTime time.Time
 }
 
+// PortServeOpts configures StartPortServe.
+// IdentityJSON is a persisted tailcat private key (same material as chat room keys /
+// SSH desk identity) so the advertised address stays stable across restarts.
+type PortServeOpts struct {
+	IdentityJSON string
+}
+
 type TailcatAdapter interface {
 	// StartPipeServe begins an ephemeral server; emits EventReady with Address, then EventData/Closed/Error.
 	StartPipeServe(ctx context.Context, sessionID string) (<-chan Event, error)
 	// DialPipe connects to addr and writes payload; emits EventData for any reply optional; then EventClosed.
 	DialPipe(ctx context.Context, sessionID string, addr string, payload string) (<-chan Event, error)
 	// StartPortServe advertises TCP ports / mappings and emits EventReady with the serve address.
-	StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping) (<-chan Event, error)
+	// opts.IdentityJSON reuses a saved Tailcat private key (identity+PSK) so the tc… address stays stable.
+	StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping, opts PortServeOpts) (<-chan Event, error)
 	// StartForward listens locally and forwards to serverAddr using mappings.
 	// openBrowser opens the system browser to the first local listener once it is ready,
 	// matching CLI `forward --open-browser`.

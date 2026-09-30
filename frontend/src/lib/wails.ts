@@ -227,6 +227,7 @@ type FakeState = {
   progressListeners: Array<(progress: UpdateProgress) => void>;
   serveStops: Map<string, () => void>;
   ports: Map<string, string>;
+  portKeys: Map<string, string>;
   files: Map<string, string>;
   peers: Map<string, string>;
   startedAt: string;
@@ -266,6 +267,7 @@ const fake: FakeState = {
   progressListeners: [],
   serveStops: new Map(),
   ports: new Map(),
+  portKeys: new Map(),
   files: new Map(),
   peers: new Map(),
   startedAt: new Date().toISOString(),
@@ -370,9 +372,21 @@ function keepRunning(sess: Session, address: string): void {
   fake.serveStops.set(sess.ID, () => window.clearTimeout(timer));
 }
 
-async function fakeStartPortServe(): Promise<Session> {
+async function fakeStartPortServe(keyName = ""): Promise<Session> {
   const sess = newSess("port_serve");
-  const addr = "tc:fake-port-" + sess.ID;
+  const name = keyName.trim();
+  if (name) {
+    if ([...browserRooms.values()].some((room) => room.keyName === name)) {
+      throw new Error("That key is already listening in a chat room.");
+    }
+    if ([...fake.portKeys.values()].some((used) => used === name)) {
+      throw new Error("That key is already listening on a port serve.");
+    }
+  }
+  const addr = name ? `tc:fake-port-key-${name}` : "tc:fake-port-" + sess.ID;
+  if (name) {
+    fake.portKeys.set(sess.ID, name);
+  }
   fake.ports.set(sess.ID, addr);
   keepRunning(sess, addr);
   return { ...sess };
@@ -444,6 +458,8 @@ async function fakeStopSession(id: string): Promise<void> {
     stop();
     fake.serveStops.delete(id);
   }
+  fake.portKeys.delete(id);
+  fake.ports.delete(id);
   const current = fake.sessions.find((s) => s.ID === id);
   if (!current) {
     throw new Error("unknown session " + id);
@@ -844,11 +860,11 @@ export async function dialPipe(addr: string, payload: string): Promise<Session> 
   return fakeDialPipe(addr, payload);
 }
 
-export async function startPortServe(mappings: PortMapping[]): Promise<Session> {
+export async function startPortServe(mappings: PortMapping[], keyName = ""): Promise<Session> {
   if (hasWailsBindings()) {
-    return asSession(await bindStartPortServe(mappings.map(toMapping)));
+    return asSession(await bindStartPortServe(mappings.map(toMapping), keyName));
   }
-  return fakeStartPortServe();
+  return fakeStartPortServe(keyName);
 }
 
 export async function startForward(addr: string, mappings: PortMapping[], openBrowser = false): Promise<Session> {
@@ -957,6 +973,9 @@ async function fakeStartChatRoom(keyName: string): Promise<Session> {
   if (name && [...browserRooms.values()].some((room) => room.keyName === name)) {
     throw new Error("That key is already listening in another room.");
   }
+  if (name && [...fake.portKeys.values()].some((used) => used === name)) {
+    throw new Error("That key is already listening on a port serve.");
+  }
   const material = name ? (browserKeyJSON.get(name) ?? "") : "";
   if (name && !material) {
     throw new Error("saved key is not a Tailcat private key");
@@ -981,6 +1000,9 @@ async function fakeRestartChatRoom(roomID: string, keyName: string): Promise<Ses
   const name = keyName.trim();
   if (name && [...browserRooms.values()].some((room) => room !== current && room.keyName === name)) {
     throw new Error("That key is already listening in another room.");
+  }
+  if (name && [...fake.portKeys.values()].some((used) => used === name)) {
+    throw new Error("That key is already listening on a port serve.");
   }
   const material = name ? (browserKeyJSON.get(name) ?? "") : "";
   if (name && !material) {

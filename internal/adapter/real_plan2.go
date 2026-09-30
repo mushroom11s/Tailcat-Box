@@ -15,9 +15,14 @@ import (
 	"github.com/tailscale/tailcat"
 )
 
-func (r *Real) StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping) (<-chan Event, error) {
+func (r *Real) StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping, opts PortServeOpts) (<-chan Event, error) {
 	if len(mappings) == 0 {
 		return nil, fmt.Errorf("at least one port mapping is required")
+	}
+	if strings.TrimSpace(opts.IdentityJSON) != "" {
+		if _, err := unmarshalTailcatKey(opts.IdentityJSON); err != nil {
+			return nil, err
+		}
 	}
 	ch := make(chan Event, 16)
 	stop := make(chan struct{})
@@ -33,11 +38,11 @@ func (r *Real) StartPortServe(ctx context.Context, sessionID string, mappings []
 	r.serves[sessionID] = run
 	r.mu.Unlock()
 
-	go r.runPortServe(ctx, sessionID, run, mappings, ch)
+	go r.runPortServe(ctx, sessionID, run, mappings, opts, ch)
 	return ch, nil
 }
 
-func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun, mappings []PortMapping, ch chan Event) {
+func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun, mappings []PortMapping, opts PortServeOpts, ch chan Event) {
 	var sendMu sync.Mutex
 	closed := false
 	send := func(ev Event) {
@@ -103,6 +108,10 @@ func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun
 		},
 	}
 	r.applyServerNet(ctx, srv)
+	if err := applyRoomKey(srv, opts.IdentityJSON); err != nil {
+		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
+		return
+	}
 	if err := srv.Start(); err != nil {
 		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
 		return
