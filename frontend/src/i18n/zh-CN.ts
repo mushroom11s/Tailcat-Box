@@ -366,9 +366,12 @@ export const zhCN = {
   chatResend: "重新发送",
   chatRecord: "按住说话",
   chatRecording: "正在录音",
+  chatRecordRelease: "松开发送",
+  chatSending: "发送中",
   chatVoiceReceived: "收到语音，点一下播放",
   chatVoiceUnplayed: "未播放",
   chatVoiceUnplayable: "这条语音没法播放。",
+  chatVoicePause: "暂停",
   chatMicDenied:
     "没有麦克风权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 麦克风，允许猫砂盆后再试一次。",
   chatPlay: "播放",

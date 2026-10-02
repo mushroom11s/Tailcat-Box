@@ -689,8 +689,7 @@ func TestPathUpgradesDuringTransfer(t *testing.T) {
 	var partial, shareDirect bool
 	deadline := time.After(3 * time.Second)
 	for !partial || !shareDirect || strings.Join(got, ",") != "checking,derp,direct" {
-		select {
-		case ev := <-events.receive:
+		if ev, ok := events.receive.popFront(); ok {
 			if ev.ID != job.ID {
 				continue
 			}
@@ -706,6 +705,10 @@ func TestPathUpgradesDuringTransfer(t *testing.T) {
 			if ev.Status == receiveDownloading && ev.PeerPath == adapter.PathDirect && ev.BytesDone > 0 && ev.BytesDone < int64(len(payload)) {
 				partial = true
 			}
+			continue
+		}
+		select {
+		case <-events.receive.wait:
 		case share := <-events.share:
 			if share.ID == snap.ID && share.Status == "active" && share.PeerPath == adapter.PathDirect {
 				shareDirect = true
@@ -726,23 +729,20 @@ func TestPathUpgradesDuringTransfer(t *testing.T) {
 }
 
 type liveEvents struct {
-	receive chan ReceiveJob
+	receive *receiveFeed
 	share   chan Snapshot
 }
 
 func collectEvents(t *testing.T, svc *Service) liveEvents {
 	t.Helper()
-	out := liveEvents{receive: make(chan ReceiveJob, 64), share: make(chan Snapshot, 64)}
+	out := liveEvents{receive: newReceiveFeed(), share: make(chan Snapshot, 64)}
 	go func() {
 		for ev := range svc.Events() {
 			switch ev.Kind {
 			case "miao-receive":
 				var job ReceiveJob
 				if json.Unmarshal([]byte(ev.Data), &job) == nil {
-					select {
-					case out.receive <- job:
-					default:
-					}
+					out.receive.push(job)
 				}
 			case "miao":
 				var snap Snapshot
@@ -801,9 +801,54 @@ func hookTransfer(t *testing.T, stage string) func() {
 	}
 }
 
-func collectReceive(t *testing.T, svc *Service) <-chan ReceiveJob {
+// receiveFeed keeps unmatched receive events so waiting for one job cannot
+// discard another job's terminal status (e.g. two pulls finishing out of order).
+type receiveFeed struct {
+	mu      sync.Mutex
+	pending []ReceiveJob
+	wait    chan struct{}
+}
+
+func newReceiveFeed() *receiveFeed {
+	return &receiveFeed{wait: make(chan struct{}, 1)}
+}
+
+func (f *receiveFeed) push(job ReceiveJob) {
+	f.mu.Lock()
+	f.pending = append(f.pending, job)
+	f.mu.Unlock()
+	select {
+	case f.wait <- struct{}{}:
+	default:
+	}
+}
+
+func (f *receiveFeed) take(id, status string, check func(ReceiveJob) bool) (ReceiveJob, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for i, job := range f.pending {
+		if job.ID == id && job.Status == status && (check == nil || check(job)) {
+			f.pending = append(f.pending[:i], f.pending[i+1:]...)
+			return job, true
+		}
+	}
+	return ReceiveJob{}, false
+}
+
+func (f *receiveFeed) popFront() (ReceiveJob, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.pending) == 0 {
+		return ReceiveJob{}, false
+	}
+	job := f.pending[0]
+	f.pending = f.pending[1:]
+	return job, true
+}
+
+func collectReceive(t *testing.T, svc *Service) *receiveFeed {
 	t.Helper()
-	out := make(chan ReceiveJob, 64)
+	out := newReceiveFeed()
 	go func() {
 		for ev := range svc.Events() {
 			if ev.Kind != "miao-receive" || ev.Data == "" {
@@ -813,24 +858,21 @@ func collectReceive(t *testing.T, svc *Service) <-chan ReceiveJob {
 			if err := json.Unmarshal([]byte(ev.Data), &job); err != nil {
 				continue
 			}
-			select {
-			case out <- job:
-			default:
-			}
+			out.push(job)
 		}
 	}()
 	return out
 }
 
-func waitReceive(t *testing.T, events <-chan ReceiveJob, id, status string, check func(ReceiveJob) bool) ReceiveJob {
+func waitReceive(t *testing.T, events *receiveFeed, id, status string, check func(ReceiveJob) bool) ReceiveJob {
 	t.Helper()
 	deadline := time.After(8 * time.Second)
 	for {
+		if job, ok := events.take(id, status, check); ok {
+			return job
+		}
 		select {
-		case job := <-events:
-			if job.ID == id && job.Status == status && (check == nil || check(job)) {
-				return job
-			}
+		case <-events.wait:
 		case <-deadline:
 			t.Fatalf("timed out waiting for %s status %s", id, status)
 		}
