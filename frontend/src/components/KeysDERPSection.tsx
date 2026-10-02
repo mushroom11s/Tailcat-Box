@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ClipboardSetText } from "../../wailsjs/runtime/runtime";
 import { useI18n } from "../i18n";
+import { defaultKeyName, resolveKeyName } from "../lib/defaultKeyName";
 import type { KeyInfo } from "../lib/wails";
 
 async function copyText(text: string): Promise<void> {
@@ -41,7 +42,7 @@ export default function KeysDERPSection({
   onSaveNetwork,
 }: Props) {
   const { t } = useI18n();
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => defaultKeyName());
   const [client, setClient] = useState(false);
   const [keyRegion, setKeyRegion] = useState("");
   const [netRegion, setNetRegion] = useState(region);
@@ -54,7 +55,9 @@ export default function KeysDERPSection({
 
   async function submitCreate(e: FormEvent) {
     e.preventDefault();
-    await onCreate(name.trim(), client, keyRegion.trim());
+    const next = resolveKeyName(name);
+    await onCreate(next, client, keyRegion.trim());
+    setName(defaultKeyName());
   }
 
   return (
@@ -116,7 +119,7 @@ export default function KeysDERPSection({
           {t("clientIdentityKey")}
         </label>
         <div className="row">
-          <button className="btn" type="submit" disabled={busy || !name.trim()}>
+          <button className="btn" type="submit" disabled={busy}>
             {t("createKey")}
           </button>
         </div>

@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ClipboardSetText } from "../../wailsjs/runtime/runtime";
 import { useI18n } from "../i18n";
+import { defaultKeyName, resolveKeyName } from "../lib/defaultKeyName";
 import type { KeyInfo } from "../lib/wails";
 
 async function copyText(text: string): Promise<void> {
@@ -49,7 +50,7 @@ export default function KeysPage({
   onSaveNetwork,
 }: Props) {
   const { t } = useI18n();
-  const [name, setName] = useState("default");
+  const [name, setName] = useState(() => defaultKeyName());
   const [client, setClient] = useState(false);
   const [keyRegion, setKeyRegion] = useState("");
   const [raw, setRaw] = useState("");
@@ -63,7 +64,9 @@ export default function KeysPage({
 
   function submitCreate(e: FormEvent) {
     e.preventDefault();
-    onCreate(name.trim(), client, keyRegion.trim());
+    const next = resolveKeyName(name);
+    onCreate(next, client, keyRegion.trim());
+    setName(defaultKeyName());
   }
 
   function submitParse(e: FormEvent) {
@@ -137,7 +140,7 @@ export default function KeysPage({
           {t("clientIdentityKey")}
         </label>
         <div className="row">
-          <button className="btn" type="submit" disabled={busy || !name.trim()}>
+          <button className="btn" type="submit" disabled={busy}>
             {t("createKey")}
           </button>
         </div>

@@ -8,6 +8,7 @@ import SettingsPage from "./pages/SettingsPage";
 import type { SSHShell } from "./components/SSHDesk";
 import TunnelPage from "./pages/TunnelPage";
 import { readMappings, toPortMapping, writeMappings, type PortMappingRecord } from "./lib/portMappings";
+import { defaultKeyName, resolveKeyName } from "./lib/defaultKeyName";
 import { filterAvailableKeys, occupiedKeyNames } from "./lib/occupiedKeys";
 import { sameKeys, sameSessions } from "./lib/snapshot";
 import { translate, useI18n, type MessageKey } from "./i18n";
@@ -128,8 +129,8 @@ function AppShell() {
   const [lobbyBusy, setLobbyBusy] = useState<"" | "temp" | "permanent" | "connect">("");
   const lobbyBusyRef = useRef<"" | "temp" | "permanent" | "connect">("");
   const [lobbyKey, setLobbyKey] = useState("");
-  const [lobbyKeyDraft, setLobbyKeyDraft] = useState("");
-  const [tunnelKeyDraft, setTunnelKeyDraft] = useState("");
+  const [lobbyKeyDraft, setLobbyKeyDraft] = useState(() => defaultKeyName());
+  const [tunnelKeyDraft, setTunnelKeyDraft] = useState(() => defaultKeyName());
 
   const [closeAsk, setCloseAsk] = useState("");
   const [mappings, setMappings] = useState<PortMappingRecord[]>(() => readMappings());
@@ -728,16 +729,12 @@ function AppShell() {
   }
 
   async function saveLobbyKey(): Promise<void> {
-    const name = lobbyKeyDraft.trim();
-    if (!name) {
-      setLobbyError(t("lobbyKeyNameRequired"));
-      return;
-    }
+    const name = resolveKeyName(lobbyKeyDraft);
     setLobbyError("");
     try {
       await createKey(name, false, region);
       setLobbyKey(name);
-      setLobbyKeyDraft("");
+      setLobbyKeyDraft(defaultKeyName());
       const next = await listKeys();
       setKeys((prev) => (sameKeys(prev, next) ? prev : next));
     } catch (err) {
@@ -746,14 +743,10 @@ function AppShell() {
   }
 
   async function saveTunnelKey(): Promise<void> {
-    const name = tunnelKeyDraft.trim();
-    if (!name) {
-      pushError(t("lobbyKeyNameRequired"));
-      return;
-    }
+    const name = resolveKeyName(tunnelKeyDraft);
     try {
       await createKey(name, false, region);
-      setTunnelKeyDraft("");
+      setTunnelKeyDraft(defaultKeyName());
       const next = await listKeys();
       setKeys((prev) => (sameKeys(prev, next) ? prev : next));
     } catch (err) {

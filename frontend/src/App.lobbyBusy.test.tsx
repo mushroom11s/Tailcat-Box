@@ -119,7 +119,9 @@ describe("lobby room start loading", () => {
     vi.mocked(startChatRoom).mockReturnValue(pending.promise);
     const user = userEvent.setup();
     await renderApp();
-    await user.type(screen.getByLabelText("New key name"), "home-busy");
+    const keyField = screen.getByLabelText("New key name");
+    await user.clear(keyField);
+    await user.type(keyField, "home-busy");
     await user.click(button("Save key"));
     expect(await screen.findByRole("option", { name: "home-busy" })).toBeTruthy();
 
@@ -198,7 +200,9 @@ describe("lobby room start loading", () => {
     vi.mocked(startChatRoom).mockReturnValue(pending.promise);
     const user = userEvent.setup();
     await renderApp();
-    await user.type(screen.getByLabelText("New key name"), "home-fail");
+    const keyField = screen.getByLabelText("New key name");
+    await user.clear(keyField);
+    await user.type(keyField, "home-fail");
     await user.click(button("Save key"));
     expect(await screen.findByRole("option", { name: "home-fail" })).toBeTruthy();
 
@@ -300,7 +304,9 @@ describe("lobby room start loading", () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     const user = userEvent.setup();
     await renderApp();
-    await user.type(screen.getByLabelText("新密钥名称"), "home-zh");
+    const keyField = screen.getByLabelText("新密钥名称");
+    await user.clear(keyField);
+    await user.type(keyField, "home-zh");
     await user.click(button("保存密钥"));
     expect(await screen.findByRole("option", { name: "home-zh" })).toBeTruthy();
 
