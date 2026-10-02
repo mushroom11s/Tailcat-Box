@@ -2061,6 +2061,16 @@ textarea {
   max-width: 100%;
   position: relative;
 }
+.chat-bubble-main {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+}
+.chat-msg.out .chat-bubble-main {
+  align-items: flex-end;
+}
 .chat-msg.selecting .chat-bubble-wrap {
   max-width: min(78%, 560px);
 }
@@ -2406,26 +2416,33 @@ textarea {
   z-index: 4;
 }
 .chat-burn-count {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
-  gap: 4px;
-  margin: 8px 0 0;
-  color: #c2410c;
+  gap: 3px;
+  margin: 4px 2px 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 80%, transparent);
+  background: color-mix(in srgb, var(--glass-bg) 70%, transparent);
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
 }
-.chat-bubble.out .chat-burn-count {
-  color: #ffe0b0;
-  justify-content: flex-end;
+.chat-msg.out .chat-burn-count {
+  color: var(--muted);
 }
 .chat-burn-count-num {
-  font-size: 28px;
-  font-weight: 750;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.35;
 }
 .chat-burn-count-unit {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 500;
 }
 .chat-burn-hint {
   font-size: 12px;

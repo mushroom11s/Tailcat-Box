@@ -1426,6 +1426,7 @@ export default function ChatPage({
             ) : null}
             {msg.direction === "in" ? <img className="chat-avatar" src={iconUrl} alt="" /> : null}
             <div className="chat-bubble-wrap">
+            <div className="chat-bubble-main">
             <article
               ref={(el) => {
                 if (el) {
@@ -1451,7 +1452,6 @@ export default function ChatPage({
                 msg={msg}
                 caps={caps}
                 open={openMessage?.id === msg.id}
-                left={viewer?.id === msg.id ? viewer.left : null}
                 query={query}
                 sending={pendingIds.has(msg.id)}
                 onClose={() => finishBurn(msg.id)}
@@ -1473,6 +1473,10 @@ export default function ChatPage({
                 </div>
               ) : null}
             </article>
+            {openMessage?.id === msg.id ? (
+              <BurnCountdown left={viewer?.id === msg.id ? viewer.left : null} />
+            ) : null}
+            </div>
             {msg.type === "voice" && msg.direction === "in" && !playedVoices.has(msg.id) ? (
               <span className="chat-voice-unread" role="img" aria-label={t("chatVoiceUnplayed")} />
             ) : null}
@@ -1734,7 +1738,6 @@ function BubbleBody({
   msg,
   caps,
   open,
-  left,
   query,
   sending,
   onClose,
@@ -1745,7 +1748,6 @@ function BubbleBody({
   msg: ChatMessage;
   caps: string[];
   open: boolean;
-  left: number | null;
   query: string;
   sending?: boolean;
   onClose: () => Promise<void>;
@@ -1780,7 +1782,6 @@ function BubbleBody({
           canPlayMime={canPlayMime}
           decodeVoice={decodeVoice}
         />
-        {open ? <BurnCountdown left={left} /> : null}
         {msg.burn && msg.direction === "out" ? <BurnBadge caps={caps} /> : null}
       </>
     );
@@ -1809,7 +1810,6 @@ function BubbleBody({
             <HighlightText text={msg.name ?? ""} query={query} /> · {msg.size ?? 0}
           </p>
         ) : null}
-        <BurnCountdown left={left} />
       </div>
     );
   }
