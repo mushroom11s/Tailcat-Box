@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { LocaleProvider } from "./i18n";
 import { MAPPINGS_KEY } from "./lib/portMappings";
-import { startForward } from "./lib/wails";
+import { startForward, startPortServe } from "./lib/wails";
 import css from "./styles/glass.css?inline";
 
 vi.mock("./lib/wails", async () => {
@@ -12,6 +12,7 @@ vi.mock("./lib/wails", async () => {
   return {
     ...actual,
     startForward: vi.fn(actual.startForward),
+    startPortServe: vi.fn(actual.startPortServe),
   };
 });
 
@@ -19,6 +20,7 @@ beforeEach(() => {
   localStorage.setItem("tailcat-locale", "en");
   localStorage.removeItem(MAPPINGS_KEY);
   vi.mocked(startForward).mockClear();
+  vi.mocked(startPortServe).mockClear();
 });
 
 afterEach(() => {
@@ -147,6 +149,82 @@ describe("tunnel page", () => {
     expect(JSON.parse(localStorage.getItem(MAPPINGS_KEY) ?? "null")).toEqual([]);
   });
 
+
+  it("starts only serve mappings with autostart on launch", async () => {
+    localStorage.setItem(
+      MAPPINGS_KEY,
+      JSON.stringify([
+        {
+          id: "auto-on",
+          mode: "serve",
+          localPort: 8080,
+          remoteHost: "",
+          remotePort: 0,
+          peer: "",
+          openBrowser: false,
+          keyName: "",
+          autostart: true,
+        },
+        {
+          id: "auto-off",
+          mode: "serve",
+          localPort: 9090,
+          remoteHost: "",
+          remotePort: 0,
+          peer: "",
+          openBrowser: false,
+          keyName: "",
+          autostart: false,
+        },
+        {
+          id: "fwd",
+          mode: "forward",
+          localPort: 18080,
+          remoteHost: "",
+          remotePort: 8080,
+          peer: "tc:peer",
+          openBrowser: false,
+          keyName: "",
+          autostart: true,
+        },
+      ]),
+    );
+    const user = userEvent.setup();
+    renderApp();
+    await waitFor(() => {
+      expect(startPortServe).toHaveBeenCalledTimes(1);
+      expect(startPortServe).toHaveBeenCalledWith(
+        [{ LocalPort: 8080, RemoteHost: "", RemotePort: 0 }],
+        "",
+      );
+    });
+    expect(startForward).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Tunnel" }));
+    expect(await screen.findByRole("button", { name: "Stop 8080" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start 9090" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Start 18080 → :8080" })).toBeTruthy();
+  });
+
+  it("persists per-port serve autostart from the create form", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole("button", { name: "Tunnel" }));
+    await user.click(screen.getByRole("button", { name: "+ New mapping" }));
+    expect(screen.getByRole("checkbox", { name: "Start automatically when the app launches" })).toBeTruthy();
+    await user.click(screen.getByRole("checkbox", { name: "Start automatically when the app launches" }));
+    await user.click(screen.getByRole("button", { name: "Save mapping" }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(MAPPINGS_KEY) ?? "[]") as Array<{
+        mode: string;
+        localPort: number;
+        autostart: boolean;
+      }>;
+      expect(stored).toEqual([expect.objectContaining({ mode: "serve", localPort: 8080, autostart: true })]);
+    });
+    // Creating alone must not start until next launch.
+    expect(startPortServe).not.toHaveBeenCalled();
+  });
+
   it("keeps a saved mapping after remount and leaves it stopped", async () => {
     const user = userEvent.setup();
     const first = renderApp();
@@ -177,6 +255,7 @@ describe("tunnel page", () => {
     await user.click(screen.getByRole("button", { name: "+ 新映射" }));
     expect(screen.getByRole("radio", { name: "端口监听" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "本地转发" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "随软件启动自动开始" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "保存映射" })).toBeTruthy();
     await user.click(screen.getByRole("radio", { name: "本地转发" }));
     expect(screen.getByRole("checkbox", { name: "用浏览器打开" })).toBeTruthy();

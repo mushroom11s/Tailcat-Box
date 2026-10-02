@@ -14,6 +14,8 @@ export type PortMappingRecord = {
   openBrowser: boolean;
   /** Saved key for serve mode; empty means ephemeral address each start. */
   keyName: string;
+  /** Serve only: start this mapping when the app launches. */
+  autostart: boolean;
 };
 
 export function newMappingId(): string {
@@ -29,6 +31,7 @@ export function draftMapping(input: {
   peer: string;
   openBrowser: boolean;
   keyName?: string;
+  autostart?: boolean;
 }): PortMappingRecord {
   if (input.mode === "forward" && !input.peer.trim()) {
     throw new Error("peer-required");
@@ -46,6 +49,7 @@ export function draftMapping(input: {
     peer: input.peer,
     openBrowser: input.openBrowser,
     keyName: input.keyName,
+    autostart: input.autostart,
   });
 }
 
@@ -56,6 +60,7 @@ export function mappingRecord(input: {
   peer?: string;
   openBrowser?: boolean;
   keyName?: string;
+  autostart?: boolean;
 }): PortMappingRecord {
   return {
     id: input.id ?? newMappingId(),
@@ -66,6 +71,7 @@ export function mappingRecord(input: {
     peer: input.mode === "forward" ? (input.peer ?? "").trim() : "",
     openBrowser: input.mode === "forward" && Boolean(input.openBrowser),
     keyName: input.mode === "serve" ? (input.keyName ?? "").trim() : "",
+    autostart: input.mode === "serve" && Boolean(input.autostart),
   };
 }
 
@@ -116,6 +122,9 @@ function isRecord(value: unknown): value is PortMappingRecord {
   if (item.keyName !== undefined && typeof item.keyName !== "string") {
     return false;
   }
+  if (item.autostart !== undefined && typeof item.autostart !== "boolean") {
+    return false;
+  }
   if (item.mode === "serve") {
     return item.localPort > 0;
   }
@@ -141,6 +150,7 @@ export function readMappings(): PortMappingRecord[] {
       peer: item.mode === "forward" ? item.peer.trim() : "",
       openBrowser: item.mode === "forward" && item.openBrowser,
       keyName: item.mode === "serve" && typeof item.keyName === "string" ? item.keyName.trim() : "",
+      autostart: item.mode === "serve" && Boolean(item.autostart),
     }));
   } catch {
     return [];
