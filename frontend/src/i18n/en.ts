@@ -89,6 +89,7 @@ export const en = {
   tunnelServeKeyHelp: "Reuse a saved key so the tc… address stays the same after restart. Keys already used by a chat room are hidden.",
   tunnelKeyInUseRoom: "That key is already listening in a chat room.",
   tunnelKeyInUsePort: "That key is already listening on a port serve.",
+  tunnelServeAutostart: "Start automatically when the app launches",
   openInBrowser: "Open in browser",
 
   settingsTitle: "Settings",

@@ -15,6 +15,7 @@ describe("port mapping drafts", () => {
     expect(record.peer).toBe("");
     expect(record.openBrowser).toBe(false);
     expect(record.keyName).toBe("");
+    expect(record.autostart).toBe(false);
     expect(record.id).toBeTruthy();
   });
 
@@ -27,6 +28,36 @@ describe("port mapping drafts", () => {
       keyName: " home ",
     });
     expect(record.keyName).toBe("home");
+  });
+
+  it("saves serve autostart independently", () => {
+    const on = draftMapping({
+      mode: "serve",
+      spec: "8080",
+      peer: "",
+      openBrowser: false,
+      autostart: true,
+    });
+    const off = draftMapping({
+      mode: "serve",
+      spec: "9090",
+      peer: "",
+      openBrowser: false,
+      autostart: false,
+    });
+    expect(on.autostart).toBe(true);
+    expect(off.autostart).toBe(false);
+  });
+
+  it("ignores autostart on forward mappings", () => {
+    const record = draftMapping({
+      mode: "forward",
+      spec: "18080:8080",
+      peer: "tc:peer",
+      openBrowser: false,
+      autostart: true,
+    });
+    expect(record.autostart).toBe(false);
   });
 
   it("saves a serve mapping with a remote host", () => {
@@ -44,6 +75,7 @@ describe("port mapping drafts", () => {
       peer: "",
       openBrowser: false,
       keyName: "",
+      autostart: false,
     });
   });
 
@@ -58,6 +90,7 @@ describe("port mapping drafts", () => {
       peer: "tc:peer",
       openBrowser: false,
       keyName: "",
+      autostart: false,
     });
     expect(
       draftMapping({ mode: "forward", spec: "80", peer: "tc:peer", openBrowser: true }),
@@ -66,6 +99,7 @@ describe("port mapping drafts", () => {
       remotePort: 80,
       openBrowser: true,
       keyName: "",
+      autostart: false,
     });
   });
 
@@ -81,7 +115,7 @@ describe("port mapping drafts", () => {
 
 describe("port mapping persistence", () => {
   it("round-trips saved mappings and drops invalid entries", () => {
-    const serve = draftMapping({ mode: "serve", spec: "8080", peer: "", openBrowser: false });
+    const serve = draftMapping({ mode: "serve", spec: "8080", peer: "", openBrowser: false, autostart: true });
     const forward = draftMapping({ mode: "forward", spec: "18080:8080", peer: "tc:peer", openBrowser: false });
     writeMappings([serve, forward]);
     expect(readMappings()).toEqual([serve, forward]);
@@ -98,5 +132,36 @@ describe("port mapping persistence", () => {
     expect(readMappings()).toEqual([serve]);
     localStorage.setItem(MAPPINGS_KEY, "{");
     expect(readMappings()).toEqual([]);
+  });
+
+  it("defaults missing autostart to false for legacy serve rows", () => {
+    localStorage.setItem(
+      MAPPINGS_KEY,
+      JSON.stringify([
+        {
+          id: "legacy",
+          mode: "serve",
+          localPort: 8080,
+          remoteHost: "",
+          remotePort: 0,
+          peer: "",
+          openBrowser: false,
+          keyName: "home",
+        },
+      ]),
+    );
+    expect(readMappings()).toEqual([
+      {
+        id: "legacy",
+        mode: "serve",
+        localPort: 8080,
+        remoteHost: "",
+        remotePort: 0,
+        peer: "",
+        openBrowser: false,
+        keyName: "home",
+        autostart: false,
+      },
+    ]);
   });
 });

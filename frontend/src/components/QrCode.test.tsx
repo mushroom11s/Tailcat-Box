@@ -176,6 +176,7 @@ describe("qr share and scan", () => {
               peer: "",
               openBrowser: false,
               keyName: "",
+              autostart: false,
             },
             {
               id: "fwd",
@@ -186,6 +187,7 @@ describe("qr share and scan", () => {
               peer: "tc:peer",
               openBrowser: false,
               keyName: "",
+              autostart: false,
             },
           ]}
           sessions={[
@@ -223,6 +225,7 @@ describe("qr share and scan", () => {
           onStart={vi.fn()}
           onStop={vi.fn()}
           onDelete={vi.fn()}
+          onAutostart={vi.fn()}
         />
       </LocaleProvider>,
     );

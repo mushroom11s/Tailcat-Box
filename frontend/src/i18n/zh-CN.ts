@@ -91,6 +91,7 @@ export const zhCN = {
   tunnelServeKeyHelp: "选用已保存密钥，重启后 tc… 地址保持不变。聊天室已占用的密钥不会出现在列表中。",
   tunnelKeyInUseRoom: "这把密钥已在聊天室中监听。",
   tunnelKeyInUsePort: "这把密钥已在端口监听中使用。",
+  tunnelServeAutostart: "随软件启动自动开始",
   openInBrowser: "用浏览器打开",
 
   settingsTitle: "设置",

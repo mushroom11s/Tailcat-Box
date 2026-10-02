@@ -147,6 +147,7 @@ function AppShell() {
   const mappingsRef = useRef(mappings);
   const linksRef = useRef(links);
   const tunnelBusyRef = useRef(false);
+  const autostartDidRef = useRef(false);
   const orderRef = useRef(order);
   const pinsRef = useRef(pins);
   const focusRef = useRef(focus);
@@ -478,6 +479,27 @@ function AppShell() {
   useEffect(() => {
     writeMappings(mappings);
   }, [mappings]);
+
+  useEffect(() => {
+    if (autostartDidRef.current) {
+      return;
+    }
+    autostartDidRef.current = true;
+    const targets = mappingsRef.current.filter((item) => item.mode === "serve" && item.autostart);
+    if (targets.length === 0) {
+      return;
+    }
+    void (async () => {
+      for (const mapping of targets) {
+        try {
+          await startMappingCore(mapping.id);
+          await refresh();
+        } catch (err) {
+          pushError(err instanceof Error ? err.message : String(err));
+        }
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     const occupied = occupiedKeyNames({ mappings });
@@ -845,21 +867,34 @@ function AppShell() {
     setMappings(next);
   }
 
-  async function startMapping(id: string): Promise<void> {
+  function setMappingAutostart(id: string, enabled: boolean): void {
+    const next = mappingsRef.current.map((item) =>
+      item.id === id && item.mode === "serve" ? { ...item, autostart: enabled } : item,
+    );
+    mappingsRef.current = next;
+    setMappings(next);
+  }
+
+  async function startMappingCore(id: string): Promise<void> {
     const mapping = mappingsRef.current.find((item) => item.id === id);
     if (!mapping) {
       return;
     }
-    await runTunnel(async () => {
-      const port = toPortMapping(mapping);
-      const started =
-        mapping.mode === "serve"
-          ? await startPortServe([port], mapping.keyName)
-          : await startForward(mapping.peer, [port], mapping.openBrowser);
-      const next = { ...linksRef.current, [id]: started.ID };
-      linksRef.current = next;
-      setLinks(next);
-    });
+    if (linksRef.current[id]) {
+      return;
+    }
+    const port = toPortMapping(mapping);
+    const started =
+      mapping.mode === "serve"
+        ? await startPortServe([port], mapping.keyName)
+        : await startForward(mapping.peer, [port], mapping.openBrowser);
+    const next = { ...linksRef.current, [id]: started.ID };
+    linksRef.current = next;
+    setLinks(next);
+  }
+
+  async function startMapping(id: string): Promise<void> {
+    await runTunnel(() => startMappingCore(id));
   }
 
   async function stopMapping(id: string): Promise<void> {
@@ -1215,6 +1250,7 @@ function AppShell() {
             onStart={(id) => void startMapping(id)}
             onStop={(id) => void stopMapping(id)}
             onDelete={(id) => void deleteMapping(id)}
+            onAutostart={setMappingAutostart}
           />
         ) : (
           <SettingsPage

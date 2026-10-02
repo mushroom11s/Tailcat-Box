@@ -43,6 +43,7 @@ type Props = {
   onStart: (id: string) => void;
   onStop: (id: string) => void;
   onDelete: (id: string) => void;
+  onAutostart: (id: string, enabled: boolean) => void;
 };
 
 async function copyText(text: string): Promise<void> {
@@ -75,6 +76,7 @@ export default function TunnelPage({
   onStart,
   onStop,
   onDelete,
+  onAutostart,
 }: Props) {
   const { t } = useI18n();
   const [creating, setCreating] = useState(false);
@@ -85,6 +87,7 @@ export default function TunnelPage({
   const [peer, setPeer] = useState("");
   const [openBrowser, setOpenBrowser] = useState(false);
   const [serveKey, setServeKey] = useState("");
+  const [serveAutostart, setServeAutostart] = useState(false);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -108,6 +111,7 @@ export default function TunnelPage({
     setPeer("");
     setOpenBrowser(false);
     setServeKey("");
+    setServeAutostart(false);
     setFormError("");
   }
 
@@ -128,6 +132,7 @@ export default function TunnelPage({
         peer,
         openBrowser,
         keyName: mode === "serve" ? serveKey : "",
+        autostart: mode === "serve" ? serveAutostart : false,
       });
       onAdd(record);
       setCreating(false);
@@ -320,6 +325,15 @@ export default function TunnelPage({
                   {t("lobbySaveKey")}
                 </button>
               </div>
+              <label className="check">
+                <input
+                  id="tunnel-serve-autostart"
+                  type="checkbox"
+                  checked={serveAutostart}
+                  onChange={(ev) => setServeAutostart(ev.target.checked)}
+                />
+                {t("tunnelServeAutostart")}
+              </label>
             </>
           ) : null}
           {mode === "forward" ? (
@@ -345,7 +359,12 @@ export default function TunnelPage({
           </div>
         </form>
       ) : current ? (
-        <MappingDetail mapping={current} session={sessionFor(current.id, links, sessions)} onCopy={(text) => void copyText(text)} />
+        <MappingDetail
+          mapping={current}
+          session={sessionFor(current.id, links, sessions)}
+          onCopy={(text) => void copyText(text)}
+          onAutostart={onAutostart}
+        />
       ) : null}
     </section>
   );
@@ -355,10 +374,12 @@ function MappingDetail({
   mapping,
   session,
   onCopy,
+  onAutostart,
 }: {
   mapping: PortMappingRecord;
   session: Session | undefined;
   onCopy: (text: string) => void;
+  onAutostart: (id: string, enabled: boolean) => void;
 }) {
   const { t } = useI18n();
   const primary = mappingPrimary(mapping, t("tunnelEphemeral"));
@@ -379,6 +400,16 @@ function MappingDetail({
         <span className={`pill ${session?.Status || "stopped"}`}>{statusKey ? t(statusKey) : session?.Status}</span>
         {mapping.openBrowser ? <span>{t("openInBrowser")}</span> : null}
       </p>
+      {mapping.mode === "serve" ? (
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={mapping.autostart}
+            onChange={(ev) => onAutostart(mapping.id, ev.target.checked)}
+          />
+          {t("tunnelServeAutostart")}
+        </label>
+      ) : null}
       {peerText ? <KeyLine value={peerText} copyLabel={t("tunnelCopyAddress")} onCopy={onCopy} /> : null}
       {session?.Address ? (
         <>
