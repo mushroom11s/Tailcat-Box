@@ -367,9 +367,12 @@ export const en = {
   chatResend: "Resend",
   chatRecord: "Record voice note",
   chatRecording: "Recording",
+  chatRecordRelease: "Release to send",
+  chatSending: "Sending…",
   chatVoiceReceived: "Voice received — tap play",
   chatVoiceUnplayed: "Unplayed",
   chatVoiceUnplayable: "Cannot play this voice message.",
+  chatVoicePause: "Pause",
   chatMicDenied:
     "Microphone access was denied. Allow Tailcat Box in System Settings → Privacy & Security → Microphone, then try again.",
   chatPlay: "Play",

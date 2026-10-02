@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { opusMIME, startVoiceCapture } from "./voiceCapture";
+import { opusMIME, rmsLevelFromTimeDomain, startVoiceCapture } from "./voiceCapture";
 
 const tracks = { getTracks: () => [{ stop: vi.fn() }] };
 
@@ -32,6 +32,8 @@ describe("voice capture", () => {
       mediaDevices: { getUserMedia: vi.fn(async () => tracks) },
     });
     const capture = await startVoiceCapture();
+    expect(typeof capture.getLevel).toBe("function");
+    expect(capture.getLevel?.() ?? -1).toBeGreaterThanOrEqual(0);
     const take = await capture.stop();
     expect(take.mime).toBe(opusMIME);
     expect(take.durationSec).toBeGreaterThanOrEqual(1);
@@ -61,6 +63,17 @@ describe("voice capture", () => {
         });
         return node;
       }
+      createAnalyser() {
+        return {
+          fftSize: 0,
+          smoothingTimeConstant: 0,
+          frequencyBinCount: 4,
+          getByteTimeDomainData(out: Uint8Array) {
+            out.set([128, 140, 116, 128]);
+          },
+          disconnect() {},
+        };
+      }
       close() {
         return Promise.resolve();
       }
@@ -72,6 +85,7 @@ describe("voice capture", () => {
     });
     const capture = await startVoiceCapture();
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(capture.getLevel?.() ?? 0).toBeGreaterThan(0);
     const take = await capture.stop();
     expect(take.mime).toBe("audio/pcm;rate=16000;channels=1");
     expect(take.audio.length).toBe(4);
@@ -86,5 +100,16 @@ describe("voice capture", () => {
       },
     });
     await expect(startVoiceCapture()).rejects.toThrow("Microphone access was denied.");
+  });
+});
+
+describe("rmsLevelFromTimeDomain", () => {
+  it("returns 0 for silence and empty", () => {
+    expect(rmsLevelFromTimeDomain(new Uint8Array())).toBe(0);
+    expect(rmsLevelFromTimeDomain(new Uint8Array([128, 128, 128, 128]))).toBe(0);
+  });
+
+  it("returns a positive level for loud samples", () => {
+    expect(rmsLevelFromTimeDomain(new Uint8Array([0, 255, 0, 255]))).toBeGreaterThan(0.5);
   });
 });

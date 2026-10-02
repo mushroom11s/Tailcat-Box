@@ -64,6 +64,44 @@ describe("phase 3 voice notes", () => {
     expect(onSendVoice).toHaveBeenCalledWith(opusMIME, 2, expect.any(Uint8Array), false, 0);
   });
 
+  it("shows an optimistic outgoing voice bubble while send is in flight", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const onSendVoice = vi.fn().mockImplementation(async () => {
+      await gate;
+    });
+    const startCapture = vi.fn(async () => ({
+      stop: async () => ({ mime: opusMIME, durationSec: 2, audio: Uint8Array.from([9, 8, 7]) }),
+      getLevel: () => 0.4,
+    }));
+    render(
+      <LocaleProvider>
+        <ChatPage
+          address="tcabc"
+          peer="tc:fake-echo"
+          messages={[]}
+          roomError=""
+          onConnect={async () => {}}
+          onSend={async () => {}}
+          onSendVoice={onSendVoice}
+          startCapture={startCapture}
+          canPlayMime={() => true}
+          onRetry={async () => {}}
+        />
+      </LocaleProvider>,
+    );
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Record voice note" }));
+    await screen.findByRole("button", { name: "Recording" });
+    fireEvent.pointerUp(screen.getByRole("button", { name: "Recording" }));
+    expect(await screen.findByText("Sending…")).toBeTruthy();
+    expect(document.querySelector(".chat-voice.out .chat-voice-dur")?.textContent).toBe('2"');
+    expect(document.querySelector(".chat-voice.sending")).toBeTruthy();
+    release();
+    await vi.waitFor(() => expect(onSendVoice).toHaveBeenCalledTimes(1));
+  });
+
   it("starts recording from a mouse hold when pointer events are not used", async () => {
     const { onSendVoice } = renderChat();
     const button = screen.getByRole("button", { name: "Record voice note" });

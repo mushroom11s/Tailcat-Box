@@ -12,6 +12,7 @@ import { highlightParts, matchesQuery } from "../lib/chatSearch";
 import { localizeChatError, systemText } from "../lib/chatText";
 import { purgeDiscardIds } from "../lib/chatPurge";
 import { createLiveCall, type CallMode, type CallView, type LiveCall, type LiveDevices } from "../lib/liveCall";
+import { audioBytesToBase64, formatRecordElapsed } from "../lib/voiceBubble";
 import { startVoiceCapture, type VoiceCapture } from "../lib/voiceCapture";
 import { readPlayedVoices, rememberPlayedVoice } from "../lib/voicePlayed";
 import { displayNickname } from "../lib/nickname";
@@ -150,14 +151,26 @@ type PendingOut = {
 
 function pendingLanded(item: PendingOut, list: readonly ChatMessage[]): boolean {
   const baseline = new Set(item.baseline);
-  return list.some(
-    (msg) =>
-      !baseline.has(msg.id) &&
-      msg.direction === "out" &&
-      msg.type === "text" &&
-      msg.body === item.msg.body &&
-      Boolean(msg.burn) === Boolean(item.msg.burn),
-  );
+  return list.some((msg) => {
+    if (baseline.has(msg.id) || msg.direction !== "out") {
+      return false;
+    }
+    if (Boolean(msg.burn) !== Boolean(item.msg.burn)) {
+      return false;
+    }
+    if (item.msg.type === "text") {
+      return msg.type === "text" && msg.body === item.msg.body;
+    }
+    if (item.msg.type === "voice") {
+      return (
+        msg.type === "voice" &&
+        msg.mime === item.msg.mime &&
+        msg.duration === item.msg.duration &&
+        msg.audio === item.msg.audio
+      );
+    }
+    return false;
+  });
 }
 
 export default function ChatPage({
@@ -258,6 +271,9 @@ export default function ChatPage({
   }, [draftPeer, draft, burnOn]);
   const [viewer, setViewer] = useState<{ id: string; left: number | null } | null>(null);
   const [recording, setRecording] = useState(false);
+  const [recordLevel, setRecordLevel] = useState(0);
+  const [recordElapsed, setRecordElapsed] = useState(0);
+  const [recordTick, setRecordTick] = useState(0);
   const [playedVoices, setPlayedVoices] = useState<Set<string>>(() => new Set(readPlayedVoices()));
   const markVoicePlayed = (id: string) => {
     setPlayedVoices((prev) => {
@@ -285,6 +301,22 @@ export default function ChatPage({
   const pendingRef = useRef(false);
   const stopEarlyRef = useRef(false);
   const recordSource = useRef<"button" | "enter" | null>(null);
+
+  useEffect(() => {
+    if (!recording) {
+      setRecordLevel(0);
+      setRecordElapsed(0);
+      setRecordTick(0);
+      return;
+    }
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      setRecordElapsed(Math.floor((Date.now() - started) / 1000));
+      setRecordTick((n) => n + 1);
+      setRecordLevel(captureRef.current?.getLevel?.() ?? 0);
+    }, 80);
+    return () => window.clearInterval(id);
+  }, [recording]);
   const liveMediaRef = useRef(liveMedia);
   const peerCtorRef = useRef(peerConnection);
   const sendSignalRef = useRef(onSendSignal);
@@ -871,14 +903,42 @@ export default function ChatPage({
     if (!capture) {
       return;
     }
+    let item: PendingOut | null = null;
     try {
       const take = await capture.stop();
       if (take.audio.length === 0) {
         return;
       }
       const choice = burnChoice(burnRef.current);
-      await onSendVoice?.(take.mime, take.durationSec, take.audio, choice.burn, choice.ttl);
+      const encoded = audioBytesToBase64(take.audio);
+      item = {
+        baseline: messages.map((msg) => msg.id),
+        msg: {
+          id: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+          direction: "out",
+          type: "voice",
+          mime: take.mime,
+          duration: take.durationSec,
+          audio: encoded,
+          at: new Date().toISOString(),
+          burn: choice.burn,
+          ttlSec: choice.ttl,
+        },
+      };
+      forceScrollRef.current = true;
+      stickBottomRef.current = true;
+      setPending((prev) => [...prev, item!]);
+      try {
+        await onSendVoice?.(take.mime, take.durationSec, take.audio, choice.burn, choice.ttl);
+      } catch (err) {
+        setPending((prev) => prev.filter((entry) => entry.msg.id !== item!.msg.id));
+        const message = err instanceof Error ? err.message : String(err);
+        setInline(localizeChatError(message, t) || message);
+      }
     } catch (err) {
+      if (item) {
+        setPending((prev) => prev.filter((entry) => entry.msg.id !== item!.msg.id));
+      }
       const message = err instanceof Error ? err.message : String(err);
       setInline(localizeChatError(message, t) || message);
     }
@@ -1013,10 +1073,9 @@ export default function ChatPage({
   }
 
   const openMessage = viewer ? messages.find((msg) => msg.id === viewer.id) : undefined;
-  const transcript = [
-    ...messages,
-    ...pending.filter((item) => !pendingLanded(item, messages)).map((item) => item.msg),
-  ];
+  const pendingVisible = pending.filter((item) => !pendingLanded(item, messages));
+  const pendingIds = new Set(pendingVisible.map((item) => item.msg.id));
+  const transcript = [...messages, ...pendingVisible.map((item) => item.msg)];
   const query = chatQuery.trim();
   function searchableText(msg: ChatMessage): string {
     if (msg.direction === "system") {
@@ -1394,6 +1453,7 @@ export default function ChatPage({
                 open={openMessage?.id === msg.id}
                 left={viewer?.id === msg.id ? viewer.left : null}
                 query={query}
+                sending={pendingIds.has(msg.id)}
                 onClose={() => finishBurn(msg.id)}
                 onVoicePlay={() => markVoicePlayed(msg.id)}
                 canPlayMime={canPlayMime}
@@ -1443,6 +1503,19 @@ export default function ChatPage({
         <p className="chat-quiet" role="status">
           {notifyNote}
         </p>
+      ) : null}
+      {recording ? (
+        <div className="glass voice-record-overlay" role="status" aria-live="polite">
+          <div className="voice-record-wave" aria-hidden="true">
+            {Array.from({ length: 9 }, (_, i) => {
+              const phase = Math.abs(Math.sin((recordTick + i) * 0.65));
+              const h = 6 + Math.max(recordLevel, 0.08) * 26 * (0.35 + 0.65 * phase);
+              return <span key={i} className="voice-record-bar" style={{ height: `${h}px` }} />;
+            })}
+          </div>
+          <span className="voice-record-timer">{formatRecordElapsed(recordElapsed)}</span>
+          <span className="voice-record-hint">{t("chatRecordRelease")}</span>
+        </div>
       ) : null}
       <div className="glass composer-bar">
         <label className="sr-only" htmlFor="chat-composer">{t("chatMessageLabel")}</label>
@@ -1663,6 +1736,7 @@ function BubbleBody({
   open,
   left,
   query,
+  sending,
   onClose,
   onVoicePlay,
   canPlayMime,
@@ -1673,6 +1747,7 @@ function BubbleBody({
   open: boolean;
   left: number | null;
   query: string;
+  sending?: boolean;
   onClose: () => Promise<void>;
   onVoicePlay?: () => void;
   canPlayMime?: (mime: string) => boolean;
@@ -1693,6 +1768,9 @@ function BubbleBody({
         <VoiceNote
           mime={msg.mime ?? ""}
           audio={msg.audio ?? ""}
+          duration={msg.duration}
+          direction={msg.direction === "out" ? "out" : "in"}
+          sending={sending}
           onPlay={onVoicePlay}
           onEnded={() => {
             if (inboundBurn) {
