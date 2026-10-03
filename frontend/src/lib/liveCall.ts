@@ -18,13 +18,15 @@ export type SignalMeta = {
 };
 
 export type CallView = {
-  phase: "idle" | "building" | "live";
+  phase: "idle" | "building" | "ringing" | "live";
   mode: CallMode | null;
   role: "caller" | "answerer" | null;
   expanded: boolean;
   error: string;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  linked: boolean;
+  muted: boolean;
 };
 
 export type LiveDevices = {
@@ -34,7 +36,10 @@ export type LiveDevices = {
 
 export type LiveCall = {
   start: (mode: CallMode) => Promise<void>;
+  accept: () => Promise<void>;
+  decline: () => Promise<void>;
   hangup: () => Promise<void>;
+  toggleMute: () => void;
   receive: (raw: string) => Promise<void>;
   toggleExpanded: () => void;
   snapshot: () => CallView;
@@ -62,11 +67,14 @@ export function createLiveCall(options: Options): LiveCall {
   let error = "";
   let localStream: MediaStream | null = null;
   let remoteStream: MediaStream | null = null;
+  let linked = false;
+  let muted = false;
+  let pending: { gen: number; mode: CallMode; description: { type: RTCSdpType; sdp: string } } | null = null;
   let pc: RTCPeerConnection | null = null;
   const retired = new WeakSet<RTCPeerConnection>();
 
   function snapshot(): CallView {
-    return { phase, mode, role, expanded, error, localStream, remoteStream };
+    return { phase, mode, role, expanded, error, localStream, remoteStream, linked, muted };
   }
 
   function publish(): void {
@@ -180,12 +188,19 @@ export function createLiveCall(options: Options): LiveCall {
     stream.getTracks().forEach((track) => next.addTrack(track, stream));
   }
 
+  function clearLink(): void {
+    pending = null;
+    linked = false;
+    muted = false;
+  }
+
   function failLive(): void {
     const notify = signaled;
     generation += 1;
     buildingOffer = false;
     signaled = false;
     resetMedia();
+    clearLink();
     phase = "idle";
     mode = null;
     role = null;
@@ -208,12 +223,79 @@ export function createLiveCall(options: Options): LiveCall {
     return { type: desc.type, sdp: desc.sdp };
   }
 
+  async function answerOffer(gen: number, offerMode: CallMode, description: { type: RTCSdpType; sdp: string }): Promise<void> {
+    try {
+      if (offerMode !== "screen") {
+        const stream = await capture(offerMode);
+        if (gen !== generation) {
+          stopStream(stream);
+          return;
+        }
+        localStream = stream;
+        if (muted) {
+          stream.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+        }
+        publish();
+      }
+      if (gen !== generation) {
+        return;
+      }
+      const next = openPeer(gen);
+      if (localStream) {
+        addLocal(next, localStream);
+      }
+      await next.setRemoteDescription(description);
+      if (gen !== generation) {
+        return;
+      }
+      const answer = await next.createAnswer();
+      if (gen !== generation) {
+        return;
+      }
+      await next.setLocalDescription(answer);
+      if (gen !== generation) {
+        return;
+      }
+      const local = await describeLocal(next, gen);
+      if (gen !== generation || !local?.sdp) {
+        return;
+      }
+      await options.send({ v: 1, type: "rtc-answer", description: local });
+      if (gen !== generation) {
+        return;
+      }
+      phase = "live";
+      linked = true;
+      publish();
+    } catch (err) {
+      if (gen !== generation) {
+        return;
+      }
+      const notify = signaled;
+      signaled = false;
+      buildingOffer = false;
+      resetMedia();
+      clearLink();
+      phase = "idle";
+      mode = null;
+      role = null;
+      error = failureText(err);
+      publish();
+      if (notify) {
+        await options.send({ v: 1, type: "rtc-hangup" }).catch(() => undefined);
+      }
+    }
+  }
+
   const api: LiveCall = {
     async start(nextMode) {
       const gen = ++generation;
       buildingOffer = true;
       signaled = false;
       resetMedia();
+      clearLink();
       phase = "building";
       mode = nextMode;
       role = "caller";
@@ -226,6 +308,11 @@ export function createLiveCall(options: Options): LiveCall {
           return;
         }
         localStream = stream;
+        if (muted) {
+          stream.getAudioTracks().forEach((track) => {
+            track.enabled = false;
+          });
+        }
         if (nextMode === "screen") {
           stream.getVideoTracks().forEach((track) => watchEnded(track, gen));
         }
@@ -259,6 +346,7 @@ export function createLiveCall(options: Options): LiveCall {
         buildingOffer = false;
         signaled = false;
         resetMedia();
+        clearLink();
         phase = "idle";
         mode = null;
         role = null;
@@ -266,12 +354,42 @@ export function createLiveCall(options: Options): LiveCall {
         publish();
       }
     },
+    async accept() {
+      const held = pending;
+      if (!held || phase !== "ringing" || held.gen !== generation) {
+        return;
+      }
+      pending = null;
+      const gen = held.gen;
+      signaled = true;
+      buildingOffer = false;
+      phase = "building";
+      mode = held.mode;
+      role = "answerer";
+      error = "";
+      publish();
+      await answerOffer(gen, held.mode, held.description);
+    },
+    async decline() {
+      if (phase !== "ringing") {
+        return;
+      }
+      await api.hangup();
+    },
+    toggleMute() {
+      muted = !muted;
+      localStream?.getAudioTracks().forEach((track) => {
+        track.enabled = !muted;
+      });
+      publish();
+    },
     async hangup() {
       generation += 1;
       buildingOffer = false;
-      const notify = signaled;
+      const notify = signaled || phase === "ringing";
       signaled = false;
       resetMedia();
+      clearLink();
       phase = "idle";
       mode = null;
       role = null;
@@ -297,6 +415,7 @@ export function createLiveCall(options: Options): LiveCall {
         buildingOffer = false;
         signaled = false;
         resetMedia();
+        clearLink();
         phase = "idle";
         mode = null;
         role = null;
@@ -312,6 +431,7 @@ export function createLiveCall(options: Options): LiveCall {
           await current.setRemoteDescription(meta.description);
           if (pc === current) {
             phase = "live";
+            linked = true;
             publish();
           }
         } catch {
@@ -335,69 +455,21 @@ export function createLiveCall(options: Options): LiveCall {
       const description = meta.description;
       signaled = false;
       resetMedia();
-      signaled = true;
+      clearLink();
       buildingOffer = false;
-      phase = "building";
       mode = offerMode;
       role = "answerer";
       error = "";
-      publish();
-      try {
-        if (offerMode !== "screen") {
-          const stream = await capture(offerMode);
-          if (gen !== generation) {
-            stopStream(stream);
-            return;
-          }
-          localStream = stream;
-          publish();
-        }
-        if (gen !== generation) {
-          return;
-        }
-        const next = openPeer(gen);
-        if (localStream) {
-          addLocal(next, localStream);
-        }
-        await next.setRemoteDescription(description);
-        if (gen !== generation) {
-          return;
-        }
-        const answer = await next.createAnswer();
-        if (gen !== generation) {
-          return;
-        }
-        await next.setLocalDescription(answer);
-        if (gen !== generation) {
-          return;
-        }
-        const local = await describeLocal(next, gen);
-        if (gen !== generation || !local?.sdp) {
-          return;
-        }
-        await options.send({ v: 1, type: "rtc-answer", description: local });
-        if (gen !== generation) {
-          return;
-        }
-        phase = "live";
+      if (offerMode !== "screen") {
+        pending = { gen, mode: offerMode, description };
+        phase = "ringing";
         publish();
-      } catch (err) {
-        if (gen !== generation) {
-          return;
-        }
-        const notify = signaled;
-        signaled = false;
-        buildingOffer = false;
-        resetMedia();
-        phase = "idle";
-        mode = null;
-        role = null;
-        error = failureText(err);
-        publish();
-        if (notify) {
-          await options.send({ v: 1, type: "rtc-hangup" }).catch(() => undefined);
-        }
+        return;
       }
+      signaled = true;
+      phase = "building";
+      publish();
+      await answerOffer(gen, offerMode, description);
     },
     toggleExpanded() {
       expanded = !expanded;

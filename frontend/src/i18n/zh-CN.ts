@@ -387,6 +387,14 @@ export const zhCN = {
   chatMediaDock: "实时媒体",
   chatCallPanel: "通话",
   chatCallIdle: "从这里发起语音通话、视频通话或屏幕共享。",
+  chatCallCard: "通话",
+  chatCallAnswer: "接听",
+  chatCallDecline: "拒绝",
+  chatCallEnd: "结束通话",
+  chatCallMute: "静音",
+  chatCallUnmute: "取消静音",
+  chatCallCalling: "正在呼叫",
+  chatCallRinging: "来电",
   chatCamDenied:
     "没有摄像头权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 摄像头，允许猫砂盆后再试一次。",
   chatScreenDenied:

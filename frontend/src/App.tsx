@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import CallFloat from "./components/CallFloat";
 import Onboarding from "./components/Onboarding";
 import { ToastProvider, useToasts } from "./components/toasts";
 import ChatPage, { type ChatMessage } from "./pages/ChatPage";
@@ -15,6 +16,7 @@ import { translate, useI18n, type MessageKey } from "./i18n";
 import iconUrl from "./assets/icon.png";
 import { abbrevPeerLabel, inboundAlertBody, inboundAlertTitle, isInboundAlert, readingOpenTranscript } from "./lib/chatNotify";
 import { localizeChatError } from "./lib/chatText";
+import { createLiveCall, type CallView, type LiveCall } from "./lib/liveCall";
 import {
   MIAO_NOTIFY_WINDOW_MS,
   appInBackground,
@@ -26,9 +28,9 @@ import { parseReceiveJob } from "./lib/miao";
 import { NICKNAME_KEY, readNickname } from "./lib/nickname";
 import { shouldAutoShowOnboarding, writeOnboardingSeen } from "./lib/onboarding";
 import { ensureOsNotifications, focusAppWindow, sendOsNotification, type NotifyData } from "./lib/osNotify";
-import { applyRemark, readRemarks, writeRemarks, type RemarkMap } from "./lib/remark";
+import { applyRemark, readRemarks, remarkFor, writeRemarks, type RemarkMap } from "./lib/remark";
 import { forgetRoomPin, orderWithPins, readRoomPins, renameRoomPin, toggleRoomPin, writeRoomPins } from "./lib/roomPins";
-import { remarkIsShared, roomPrimaryLabel, roomTooltip } from "./lib/roomLabel";
+import { abbreviateAddress, remarkIsShared, roomPrimaryLabel, roomTooltip } from "./lib/roomLabel";
 import { applyRoomEvent, emptyRoom, type RoomSlice } from "./lib/roomState";
 import {
   connectChatPeer,
@@ -144,6 +146,35 @@ function AppShell() {
   shellRef.current = shell;
   const shellBuf = useRef<Record<string, string>>({});
   const [liveSignal, setLiveSignal] = useState<{ seq: number; data: string } | null>(null);
+  const callRoomRef = useRef("");
+  const callRef = useRef<LiveCall | null>(null);
+  const [callView, setCallView] = useState<CallView>({
+    phase: "idle",
+    mode: null,
+    role: null,
+    expanded: false,
+    error: "",
+    localStream: null,
+    remoteStream: null,
+    linked: false,
+    muted: false,
+  });
+  const callViewRef = useRef(callView);
+  if (!callRef.current) {
+    callRef.current = createLiveCall({
+      send: (meta) => {
+        const id = callRoomRef.current;
+        if (!id) {
+          throw new Error("no peer");
+        }
+        return sendChatSignal(id, JSON.stringify(meta));
+      },
+      onChange: (view) => {
+        callViewRef.current = view;
+        setCallView(view);
+      },
+    });
+  }
   const roomsRef = useRef(rooms);
   const mappingsRef = useRef(mappings);
   const linksRef = useRef(links);
@@ -590,9 +621,16 @@ function AppShell() {
         }
       }
       if (ev.Kind === "signal") {
-        if (pageRef.current === "chat" && !lobbyRef.current && focusRef.current === id && ev.Data) {
-          const data = ev.Data;
-          setLiveSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, data }));
+        if (ev.Data && id) {
+          const viewing = pageRef.current === "chat" && !lobbyRef.current && focusRef.current === id;
+          const owned = callRoomRef.current === id && callViewRef.current.phase !== "idle";
+          if (viewing || owned) {
+            if (viewing) {
+              callRoomRef.current = id;
+            }
+            const data = ev.Data;
+            setLiveSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, data }));
+          }
         }
         void refresh();
         return;
@@ -1013,8 +1051,31 @@ function AppShell() {
     });
   }
 
+  useEffect(() => {
+    if (!liveSignal) {
+      return;
+    }
+    void callRef.current?.receive(liveSignal.data);
+  }, [liveSignal]);
+
+  useEffect(() => {
+    if (callView.phase === "idle" || !focus || page !== "chat" || lobby) {
+      return;
+    }
+    if (focus !== callRoomRef.current) {
+      void callRef.current?.hangup();
+    }
+  }, [callView.phase, focus, page, lobby]);
+
   const chatRoom = !lobby && focus && rooms[focus] ? rooms[focus] : undefined;
   const showLobby = page === "chat" && !chatRoom;
+  const hostingChat = page === "chat" && Boolean(chatRoom);
+  useEffect(() => {
+    if (hostingChat || callView.mode !== "screen" || callView.phase === "idle") {
+      return;
+    }
+    void callRef.current?.hangup();
+  }, [hostingChat, callView.mode, callView.phase]);
 
   return (
     <div className="shell">
@@ -1191,7 +1252,14 @@ function AppShell() {
                 sendChatVoice(chatRoom.id, mime, duration, audio, burn, ttl)
               }
               onSendSignal={(meta) => sendChatSignal(chatRoom.id, meta)}
-              incomingSignal={liveSignal}
+              shellCall={callRef.current ?? undefined}
+              shellView={callView}
+              onBindCall={async () => {
+                if (callViewRef.current.phase !== "idle" && callRoomRef.current && callRoomRef.current !== chatRoom.id) {
+                  await callRef.current?.hangup();
+                }
+                callRoomRef.current = chatRoom.id;
+              }}
               onSendPath={(path, burn, ttl) => sendChatFile(chatRoom.id, path, burn, ttl)}
               onSendBrowserFile={(file, burn, ttl) => sendChatFileBytes(chatRoom.id, file, burn, ttl)}
               onDiscard={(messageID) => discardChatMessage(chatRoom.id, messageID)}
@@ -1289,6 +1357,14 @@ function AppShell() {
           </div>
         </div>
       ) : null}
+      <CallFloat
+        view={callView}
+        title={remarkFor(remarks, rooms[callRoomRef.current]?.peer ?? "") || abbreviateAddress(rooms[callRoomRef.current]?.peer ?? "")}
+        onAccept={() => void callRef.current?.accept()}
+        onDecline={() => void callRef.current?.decline()}
+        onHangup={() => void callRef.current?.hangup()}
+        onMute={() => callRef.current?.toggleMute()}
+      />
       <Onboarding
         open={guideOpen}
         onStep={onGuideStep}

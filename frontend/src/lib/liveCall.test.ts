@@ -241,9 +241,25 @@ describe("live WebRTC signaling", () => {
   });
 
   it("captures only audio when answering a voice offer", async () => {
-    const { call, getUserMedia } = setup();
+    const { call, sent, getUserMedia } = setup();
     await call.receive(offer("voice"));
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
+    expect(call.snapshot()).toMatchObject({ phase: "ringing", mode: "voice", role: "answerer" });
+    await call.accept();
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true });
+    expect(sent.map((meta) => meta.type)).toEqual(["rtc-answer"]);
+    expect(call.snapshot()).toMatchObject({ phase: "live", role: "answerer", linked: true });
+  });
+
+  it("declines a video offer with hangup and does not capture", async () => {
+    const { call, sent, getUserMedia } = setup();
+    await call.receive(offer("video"));
+    expect(call.snapshot()).toMatchObject({ phase: "ringing", mode: "video" });
+    await call.decline();
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(sent).toEqual([{ v: 1, type: "rtc-hangup" }]);
+    expect(call.snapshot().phase).toBe("idle");
   });
 
   it("ends a failed link with the relay error and leaves another call possible", async () => {
