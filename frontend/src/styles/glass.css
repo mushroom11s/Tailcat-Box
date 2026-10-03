@@ -2010,6 +2010,82 @@ textarea {
   font-size: 12px;
   opacity: 0.75;
 }
+
+.screen-popout {
+  position: fixed;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(12, 16, 34, 0.94);
+}
+.screen-popout-title {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.screen-popout-title:active {
+  cursor: grabbing;
+}
+.screen-popout-title > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 650;
+}
+.screen-popout-title .btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+.screen-popout-body {
+  flex: 1;
+  min-height: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.screen-popout-body.scroll {
+  display: block;
+  overflow: auto;
+}
+.screen-popout-body.scale video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+.screen-popout-body.native video {
+  display: block;
+  max-width: none;
+  max-height: none;
+}
+.screen-popout-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0 0 16px 0;
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.88) 50%);
+  cursor: nwse-resize;
+  touch-action: none;
+}
 .chat-msg {
   display: flex;
   align-items: flex-end;

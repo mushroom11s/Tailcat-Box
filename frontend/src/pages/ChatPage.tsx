@@ -4,6 +4,7 @@ import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runti
 import CallFloat from "../components/CallFloat";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
+import ScreenSharePopout from "../components/ScreenSharePopout";
 import VoiceNote from "../components/VoiceNote";
 import iconUrl from "../assets/icon.png";
 import roomQrMark from "../assets/room-qr-cat.png?inline";
@@ -357,6 +358,11 @@ export default function ChatPage({
     linked: false,
     muted: false,
   });
+  const [screenPopout, setScreenPopout] = useState(false);
+  const [screenDismissed, setScreenDismissed] = useState(false);
+  const screenSource = shellView ?? callView;
+  const remoteScreen = screenSource.mode === "screen" && hasVideoTrack(screenSource.remoteStream);
+  const showScreenPopout = remoteScreen && !screenPopout;
   if (!shellCall && !callRef.current) {
     callRef.current = createLiveCall({
       send: (meta) => {
@@ -372,6 +378,17 @@ export default function ChatPage({
     });
   }
   burnRef.current = burnOn;
+
+  useEffect(() => {
+    if (screenSource.mode !== "screen" || screenSource.phase === "idle") {
+      setScreenPopout(false);
+      setScreenDismissed(false);
+      return;
+    }
+    if (remoteScreen && !screenDismissed) {
+      setScreenPopout(true);
+    }
+  }, [screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -1598,11 +1615,16 @@ export default function ChatPage({
         error={view.error ? localizeChatError(view.error, t) || view.error : ""}
         localStream={view.localStream}
         remoteStream={view.remoteStream}
+        showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
         onScreen={() => void placeCall("screen")}
         onHangup={() => void activeCall?.hangup()}
         onToggleExpanded={() => activeCall?.toggleExpanded()}
+        onScreenPopout={() => {
+          setScreenDismissed(false);
+          setScreenPopout(true);
+        }}
       />
       {!shellCall
         ? createPortal(
@@ -1617,6 +1639,15 @@ export default function ChatPage({
             document.body,
           )
         : null}
+      {screenPopout && view.remoteStream ? (
+        <ScreenSharePopout
+          stream={view.remoteStream}
+          onClose={() => {
+            setScreenPopout(false);
+            setScreenDismissed(true);
+          }}
+        />
+      ) : null}
       </div>
       {confirmOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setConfirmOpen(false)}>
@@ -1647,28 +1678,36 @@ export default function ChatPage({
   );
 }
 
+function hasVideoTrack(stream: MediaStream | null): boolean {
+  return Boolean(stream && stream.getVideoTracks().length > 0);
+}
+
 function CallPanel({
   phase,
   expanded,
   error,
   localStream,
   remoteStream,
+  showScreenPopout,
   onVoice,
   onVideo,
   onScreen,
   onHangup,
   onToggleExpanded,
+  onScreenPopout,
 }: {
   phase: CallView["phase"];
   expanded: boolean;
   error: string;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  showScreenPopout: boolean;
   onVoice: () => void;
   onVideo: () => void;
   onScreen: () => void;
   onHangup: () => void;
   onToggleExpanded: () => void;
+  onScreenPopout: () => void;
 }) {
   const { t } = useI18n();
   const live = phase === "building" || phase === "live";
@@ -1701,6 +1740,11 @@ function CallPanel({
             <button className="btn" type="button" aria-expanded={expanded} onClick={onToggleExpanded}>
               {expanded ? t("chatCollapse") : t("chatExpand")}
             </button>
+            {showScreenPopout ? (
+              <button className="btn" type="button" onClick={onScreenPopout}>
+                {t("chatScreenPopout")}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (

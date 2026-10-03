@@ -402,6 +402,11 @@ export const en = {
   chatScreenDenied:
     "Screen sharing was denied. Allow Tailcat Box in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.",
   chatScreenUnavailable: "Screen sharing is unavailable on this system.",
+  chatScreenPopout: "Pop out",
+  chatScreenEnlarge: "Enlarge",
+  chatScreenClose: "Close",
+  chatScreenResize: "Resize",
+  chatScreenPopoutTitle: "Shared screen",
   chatLiveFailed:
     "Live media failed. Restrictive networks have no relay for calls, so voice and video can fail while chat still works.",
   chatNotifyFile: "Sent a file",
