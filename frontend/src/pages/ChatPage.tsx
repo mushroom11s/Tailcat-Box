@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type Ke
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
+import ScreenSharePopout from "../components/ScreenSharePopout";
 import VoiceNote from "../components/VoiceNote";
 import iconUrl from "../assets/icon.png";
 import roomQrMark from "../assets/room-qr-cat.png?inline";
@@ -347,6 +348,10 @@ export default function ChatPage({
     localStream: null,
     remoteStream: null,
   });
+  const [screenPopout, setScreenPopout] = useState(false);
+  const [screenDismissed, setScreenDismissed] = useState(false);
+  const remoteScreen = callView.mode === "screen" && hasVideoTrack(callView.remoteStream);
+  const showScreenPopout = remoteScreen && !screenPopout;
   if (!callRef.current) {
     callRef.current = createLiveCall({
       send: (meta) => {
@@ -362,6 +367,17 @@ export default function ChatPage({
     });
   }
   burnRef.current = burnOn;
+
+  useEffect(() => {
+    if (callView.mode !== "screen" || callView.phase === "idle") {
+      setScreenPopout(false);
+      setScreenDismissed(false);
+      return;
+    }
+    if (remoteScreen && !screenDismissed) {
+      setScreenPopout(true);
+    }
+  }, [callView.mode, callView.phase, remoteScreen, screenDismissed]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -1578,12 +1594,26 @@ export default function ChatPage({
         error={callView.error ? localizeChatError(callView.error, t) || callView.error : ""}
         localStream={callView.localStream}
         remoteStream={callView.remoteStream}
+        showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
         onScreen={() => void placeCall("screen")}
         onHangup={() => void callRef.current?.hangup()}
         onToggleExpanded={() => callRef.current?.toggleExpanded()}
+        onScreenPopout={() => {
+          setScreenDismissed(false);
+          setScreenPopout(true);
+        }}
       />
+      {screenPopout && callView.remoteStream ? (
+        <ScreenSharePopout
+          stream={callView.remoteStream}
+          onClose={() => {
+            setScreenPopout(false);
+            setScreenDismissed(true);
+          }}
+        />
+      ) : null}
       </div>
       {confirmOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setConfirmOpen(false)}>
@@ -1614,28 +1644,36 @@ export default function ChatPage({
   );
 }
 
+function hasVideoTrack(stream: MediaStream | null): boolean {
+  return Boolean(stream && stream.getVideoTracks().length > 0);
+}
+
 function CallPanel({
   phase,
   expanded,
   error,
   localStream,
   remoteStream,
+  showScreenPopout,
   onVoice,
   onVideo,
   onScreen,
   onHangup,
   onToggleExpanded,
+  onScreenPopout,
 }: {
   phase: CallView["phase"];
   expanded: boolean;
   error: string;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  showScreenPopout: boolean;
   onVoice: () => void;
   onVideo: () => void;
   onScreen: () => void;
   onHangup: () => void;
   onToggleExpanded: () => void;
+  onScreenPopout: () => void;
 }) {
   const { t } = useI18n();
   const live = phase !== "idle";
@@ -1668,6 +1706,11 @@ function CallPanel({
             <button className="btn" type="button" aria-expanded={expanded} onClick={onToggleExpanded}>
               {expanded ? t("chatCollapse") : t("chatExpand")}
             </button>
+            {showScreenPopout ? (
+              <button className="btn" type="button" onClick={onScreenPopout}>
+                {t("chatScreenPopout")}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : (
