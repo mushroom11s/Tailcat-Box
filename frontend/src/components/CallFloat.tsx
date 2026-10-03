@@ -45,6 +45,7 @@ const phonePath =
 export default function CallFloat({ view, title, onAccept, onDecline, onHangup, onMute }: Props) {
   const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const drag = useRef<{ id: number; dx: number; dy: number } | null>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const [elapsed, setElapsed] = useState(0);
@@ -77,6 +78,19 @@ export default function CallFloat({ view, title, onAccept, onDecline, onHangup, 
       // Test doubles are not DOM media streams.
     }
   }, [remoteVideo, showVideo]);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) {
+      return;
+    }
+    try {
+      // Video element already plays remote audio. Voice has no video element.
+      el.srcObject = showVideo ? null : view.remoteStream;
+    } catch {
+      // Test doubles are not DOM media streams.
+    }
+  }, [view.remoteStream, showVideo, visible]);
 
   if (!visible) {
     return null;
@@ -172,6 +186,7 @@ export default function CallFloat({ view, title, onAccept, onDecline, onHangup, 
           </div>
         </div>
       </div>
+      <audio ref={audioRef} autoPlay />
       {showVideo ? <video ref={videoRef} autoPlay playsInline /> : null}
     </section>
   );
