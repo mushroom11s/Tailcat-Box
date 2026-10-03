@@ -213,6 +213,15 @@ func (a *App) SetUILocale(locale string) {
 	a.syncApplicationMenu(title)
 }
 
+// SetTrayUnread paints a red mark on the tray cat while the user has unread
+// chat messages, and clears it when there are none.
+func (a *App) SetTrayUnread(unread bool) {
+	if a == nil || a.tray == nil {
+		return
+	}
+	a.tray.SetUnread(unread)
+}
+
 // NewApp creates a new App application struct.
 // The default adapter is the embedded Tailcat library; set TAILCAT_ADAPTER=fake
 // for offline UI demos and tests.

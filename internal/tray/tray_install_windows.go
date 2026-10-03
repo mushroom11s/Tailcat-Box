@@ -7,17 +7,13 @@ import (
 )
 
 func (c *Controller) install(icon []byte) {
-	if len(icon) == 0 {
-		icon = DefaultIcon
-	}
-	if len(icon) > 0 {
-		systray.SetIcon(icon)
-	}
+	c.bindIcon(icon, systray.SetIcon)
 	c.bindProduct(func(title, tooltip string) {
 		systray.SetTitle(title)
 		systray.SetTooltip(tooltip)
 	})
 	systray.SetOnClick(func(systray.IMenu) {
+		c.Scoop()
 		c.Open()
 	})
 
