@@ -64,6 +64,7 @@ import {
   JoinMiaoShare as bindJoinMiaoShare,
   MiaoShareStatus as bindMiaoShareStatus,
   SetLaunchAtLogin as bindSetLaunchAtLogin,
+  SetTrayUnread as bindSetTrayUnread,
   SetUILocale as bindSetUILocale,
 } from "../../wailsjs/go/main/App";
 import { BrowserOpenURL, EventsOn } from "../../wailsjs/runtime/runtime";
@@ -1646,6 +1647,24 @@ export async function setUILocale(locale: string): Promise<void> {
   if (hasWailsBindings()) {
     await bindSetUILocale(locale);
   }
+}
+
+let trayUnread = false;
+
+// setTrayUnread tells the native tray cat to show or hide the red mark.
+export async function setTrayUnread(unread: boolean): Promise<void> {
+  trayUnread = unread;
+  if (hasWailsBindings()) {
+    await bindSetTrayUnread(unread);
+  }
+}
+
+export function trayUnreadForTests(): boolean {
+  return trayUnread;
+}
+
+export function resetTrayUnreadForTests(): void {
+  trayUnread = false;
 }
 
 export async function setLaunchAtLogin(enabled: boolean): Promise<SystemInfo> {

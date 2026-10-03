@@ -20,12 +20,7 @@ func runAction(fn func()) {
 }
 
 func (c *Controller) install(icon []byte) {
-	if len(icon) == 0 {
-		icon = DefaultIcon
-	}
-	if len(icon) > 0 {
-		systray.SetIcon(icon)
-	}
+	c.bindIcon(icon, systray.SetIcon)
 	c.bindProduct(func(title, tooltip string) {
 		// Icon-only menu bar: tooltip only, no SetTitle text beside the icon.
 		systray.SetTooltip(tooltip)
@@ -92,5 +87,6 @@ func (c *Controller) install(icon []byte) {
 		})
 	})
 	systray.CreateMenu()
+	watchTrayClicks(c.Scoop)
 	c.Refresh()
 }

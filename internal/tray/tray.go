@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -84,6 +85,11 @@ type Controller struct {
 	labels       MenuLabels
 	applyProduct func(title, tooltip string)
 	applyLabels  func(MenuLabels)
+	baseIcon     []byte
+	setIcon      func([]byte)
+	unread       bool
+	playing      bool
+	scoopGen     int
 }
 
 // skipTray reports whether Start should return before touching the OS tray.
@@ -275,4 +281,109 @@ func (c *Controller) Refresh() {
 		n = c.count()
 	}
 	c.setCount(SessionCountLabel(n))
+}
+
+// bindIcon remembers the idle icon and the native setter. Later unread and
+// scoop updates go through the same setter.
+func (c *Controller) bindIcon(icon []byte, fn func([]byte)) {
+	if c == nil || fn == nil {
+		return
+	}
+	if len(icon) == 0 {
+		icon = DefaultIcon
+	}
+	c.mu.Lock()
+	c.baseIcon = append([]byte(nil), icon...)
+	c.setIcon = fn
+	unread := c.unread
+	base := c.baseIcon
+	c.mu.Unlock()
+	fn(shownIcon(base, unread))
+	go warmScoop()
+}
+
+// SetUnread shows a red mark on the tray cat while unread is true.
+// A scoop already on screen keeps the mark on its own frames.
+func (c *Controller) SetUnread(unread bool) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.unread = unread
+	playing := c.playing
+	fn := c.setIcon
+	base := c.baseIcon
+	c.mu.Unlock()
+	if playing || fn == nil || len(base) == 0 {
+		return
+	}
+	fn(shownIcon(base, unread))
+}
+
+func shownIcon(base []byte, unread bool) []byte {
+	if !unread {
+		return base
+	}
+	marked, err := BadgeIcon(base)
+	if err != nil || len(marked) == 0 {
+		return base
+	}
+	return marked
+}
+
+// Scoop plays the packaged litter-box cat once. A second click restarts it.
+func (c *Controller) Scoop() {
+	if c == nil {
+		return
+	}
+	go c.playScoop()
+}
+
+func (c *Controller) playScoop() {
+	frames := scoopFrames()
+	if len(frames) == 0 {
+		return
+	}
+	c.mu.Lock()
+	if c.setIcon == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.scoopGen++
+	gen := c.scoopGen
+	c.playing = true
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		if c.scoopGen != gen {
+			c.mu.Unlock()
+			return
+		}
+		c.playing = false
+		fn := c.setIcon
+		base := append([]byte(nil), c.baseIcon...)
+		unread := c.unread
+		c.mu.Unlock()
+		if fn != nil && len(base) > 0 {
+			fn(shownIcon(base, unread))
+		}
+	}()
+	for _, frame := range frames {
+		c.mu.Lock()
+		if c.scoopGen != gen {
+			c.mu.Unlock()
+			return
+		}
+		fn := c.setIcon
+		unread := c.unread
+		c.mu.Unlock()
+		icon := frame.plain
+		if unread {
+			icon = frame.marked
+		}
+		if fn != nil && len(icon) > 0 {
+			fn(icon)
+		}
+		time.Sleep(frame.delay)
+	}
 }

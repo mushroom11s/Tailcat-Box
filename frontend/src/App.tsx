@@ -62,6 +62,7 @@ import {
   setNetworkSettings,
   setSSHAllowAny,
   setSSHEnabled,
+  setTrayUnread,
   startChatRoom,
   startForward,
   startPortServe,
@@ -188,6 +189,7 @@ function AppShell() {
   const pendingRef = useRef<TailcatEvent[]>([]);
   const localeRef = useRef(locale);
   const notifiedIds = useRef(new Set<string>());
+  const unreadByRoom = useRef(new Map<string, Set<string>>());
   const appliedChatErr = useRef<Record<string, string>>({});
   const appliedTunnelErr = useRef<Record<string, string>>({});
   const [notifyDenied, setNotifyDenied] = useState(false);
@@ -345,6 +347,26 @@ function AppShell() {
     });
   }
 
+  function syncTrayUnread(): void {
+    let n = 0;
+    for (const ids of unreadByRoom.current.values()) {
+      n += ids.size;
+    }
+    void setTrayUnread(n > 0);
+  }
+
+  function clearVisibleUnread(): void {
+    const id = focusRef.current;
+    const viewing = pageRef.current === "chat" && !lobbyRef.current && focusRef.current === id;
+    if (!id || !readingOpenTranscript(document, viewing)) {
+      return;
+    }
+    if (!unreadByRoom.current.delete(id)) {
+      return;
+    }
+    syncTrayUnread();
+  }
+
   function noteInbound(room: RoomSlice, ev: TailcatEvent): void {
     if (ev.Kind !== "message" || !ev.Data) {
       return;
@@ -364,6 +386,10 @@ function AppShell() {
     if (readingOpenTranscript(document, viewingThisRoom)) {
       return;
     }
+    const ids = unreadByRoom.current.get(room.id) ?? new Set<string>();
+    ids.add(msg.id);
+    unreadByRoom.current.set(room.id, ids);
+    syncTrayUnread();
     deliverNotification({
       id: msg.id,
       title: inboundAlertTitle(room.peer, tr("productName")),
@@ -586,6 +612,17 @@ function AppShell() {
       void ensureOsNotifications();
     }
   }, []);
+
+  useEffect(() => {
+    clearVisibleUnread();
+    const onFocus = () => clearVisibleUnread();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [page, focus, lobby]);
 
   useEffect(() => {
     return onNotifyOpen((target) => {
