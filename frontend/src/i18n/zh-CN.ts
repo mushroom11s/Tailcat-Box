@@ -394,6 +394,7 @@ export const zhCN = {
   chatCallMute: "静音",
   chatCallUnmute: "取消静音",
   chatCallCalling: "正在呼叫",
+  chatCallInProgress: "通话中",
   chatCallRinging: "来电",
   chatCamDenied:
     "没有摄像头权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 摄像头，允许猫砂盆后再试一次。",

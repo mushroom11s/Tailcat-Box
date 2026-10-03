@@ -395,6 +395,7 @@ export const en = {
   chatCallMute: "Mute",
   chatCallUnmute: "Unmute",
   chatCallCalling: "Calling",
+  chatCallInProgress: "Call in progress",
   chatCallRinging: "Incoming",
   chatCamDenied:
     "Camera access was denied. Allow Tailcat Box in System Settings → Privacy & Security → Camera, then try again.",
