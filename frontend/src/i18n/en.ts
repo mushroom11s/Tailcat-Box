@@ -388,6 +388,15 @@ export const en = {
   chatMediaDock: "Live media",
   chatCallPanel: "Calls",
   chatCallIdle: "Start a voice call, video call, or screen share.",
+  chatCallCard: "Call",
+  chatCallAnswer: "Answer",
+  chatCallDecline: "Decline",
+  chatCallEnd: "End call",
+  chatCallMute: "Mute",
+  chatCallUnmute: "Unmute",
+  chatCallCalling: "Calling",
+  chatCallInProgress: "Call in progress",
+  chatCallRinging: "Incoming",
   chatCamDenied:
     "Camera access was denied. Allow Tailcat Box in System Settings → Privacy & Security → Camera, then try again.",
   chatScreenDenied:

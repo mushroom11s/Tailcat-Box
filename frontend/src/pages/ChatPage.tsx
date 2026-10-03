@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import CallFloat from "../components/CallFloat";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
 import ScreenSharePopout from "../components/ScreenSharePopout";
@@ -77,6 +79,9 @@ type Props = {
   incomingSignal?: { seq: number; data: string } | null;
   liveMedia?: LiveDevices;
   peerConnection?: new (config?: RTCConfiguration) => RTCPeerConnection;
+  shellCall?: LiveCall;
+  shellView?: CallView;
+  onBindCall?: () => void | Promise<void>;
   nickname?: string;
   notifyNote?: string;
   remarks?: RemarkMap;
@@ -201,6 +206,9 @@ export default function ChatPage({
   incomingSignal,
   liveMedia,
   peerConnection,
+  shellCall,
+  shellView,
+  onBindCall,
   nickname = "",
   notifyNote = "",
   remarks = noRemarks,
@@ -347,12 +355,15 @@ export default function ChatPage({
     error: "",
     localStream: null,
     remoteStream: null,
+    linked: false,
+    muted: false,
   });
   const [screenPopout, setScreenPopout] = useState(false);
   const [screenDismissed, setScreenDismissed] = useState(false);
-  const remoteScreen = callView.mode === "screen" && hasVideoTrack(callView.remoteStream);
+  const screenSource = shellView ?? callView;
+  const remoteScreen = screenSource.mode === "screen" && hasVideoTrack(screenSource.remoteStream);
   const showScreenPopout = remoteScreen && !screenPopout;
-  if (!callRef.current) {
+  if (!shellCall && !callRef.current) {
     callRef.current = createLiveCall({
       send: (meta) => {
         const send = sendSignalRef.current;
@@ -369,7 +380,7 @@ export default function ChatPage({
   burnRef.current = burnOn;
 
   useEffect(() => {
-    if (callView.mode !== "screen" || callView.phase === "idle") {
+    if (screenSource.mode !== "screen" || screenSource.phase === "idle") {
       setScreenPopout(false);
       setScreenDismissed(false);
       return;
@@ -377,7 +388,7 @@ export default function ChatPage({
     if (remoteScreen && !screenDismissed) {
       setScreenPopout(true);
     }
-  }, [callView.mode, callView.phase, remoteScreen, screenDismissed]);
+  }, [screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -860,26 +871,36 @@ export default function ChatPage({
   }, []);
 
   useEffect(() => {
-    if (!incomingSignal || incomingSignal.seq === signalSeq.current) {
+    if (shellCall || !incomingSignal || incomingSignal.seq === signalSeq.current) {
       return;
     }
     signalSeq.current = incomingSignal.seq;
     void callRef.current?.receive(incomingSignal.data);
-  }, [incomingSignal]);
+  }, [incomingSignal, shellCall]);
 
   useEffect(() => {
+    if (shellCall) {
+      return;
+    }
     const call = callRef.current;
     return () => {
       void call?.hangup();
     };
-  }, []);
+  }, [shellCall]);
+
+  const activeCall = shellCall ?? callRef.current;
+  const view = shellView ?? callView;
 
   async function placeCall(mode: CallMode): Promise<void> {
     if (!peer) {
       focusPeer();
       return;
     }
-    await callRef.current?.start(mode);
+    await onBindCall?.();
+    if (activeCall?.snapshot().phase === "ringing") {
+      await activeCall.decline();
+    }
+    await activeCall?.start(mode);
   }
 
   async function beginRecording(source: "button" | "enter"): Promise<void> {
@@ -1589,25 +1610,38 @@ export default function ChatPage({
       />
       </div>
       <CallPanel
-        phase={callView.phase}
-        expanded={callView.expanded}
-        error={callView.error ? localizeChatError(callView.error, t) || callView.error : ""}
-        localStream={callView.localStream}
-        remoteStream={callView.remoteStream}
+        phase={view.phase}
+        expanded={view.expanded}
+        error={view.error ? localizeChatError(view.error, t) || view.error : ""}
+        localStream={view.localStream}
+        remoteStream={view.remoteStream}
         showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
         onScreen={() => void placeCall("screen")}
-        onHangup={() => void callRef.current?.hangup()}
-        onToggleExpanded={() => callRef.current?.toggleExpanded()}
+        onHangup={() => void activeCall?.hangup()}
+        onToggleExpanded={() => activeCall?.toggleExpanded()}
         onScreenPopout={() => {
           setScreenDismissed(false);
           setScreenPopout(true);
         }}
       />
-      {screenPopout && callView.remoteStream ? (
+      {!shellCall
+        ? createPortal(
+            <CallFloat
+              view={view}
+              title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
+              onAccept={() => void activeCall?.accept()}
+              onDecline={() => void activeCall?.decline()}
+              onHangup={() => void activeCall?.hangup()}
+              onMute={() => activeCall?.toggleMute()}
+            />,
+            document.body,
+          )
+        : null}
+      {screenPopout && view.remoteStream ? (
         <ScreenSharePopout
-          stream={callView.remoteStream}
+          stream={view.remoteStream}
           onClose={() => {
             setScreenPopout(false);
             setScreenDismissed(true);
@@ -1676,7 +1710,7 @@ function CallPanel({
   onScreenPopout: () => void;
 }) {
   const { t } = useI18n();
-  const live = phase !== "idle";
+  const live = phase === "building" || phase === "live";
   return (
     <aside
       className={`glass call-panel media-dock${expanded ? " expanded" : ""}`}
