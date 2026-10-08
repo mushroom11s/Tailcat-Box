@@ -28,15 +28,15 @@ func main() {
 	app := NewApp()
 
 	// Create application with options.
-	// Height 980 fits one in-progress Mew Share card (chrome, file name,
-	// code, expiry, packing cat, and actions) under the share controls
-	// and the chunk-streams setting row. 860 clips that card after the
-	// row was added. Windows includes the title bar in this height;
-	// macOS and Linux use it as the content height.
+	// 1152x720 is 16:10 and smaller in area than the old 1100x980, so the
+	// window reads as a wide rectangle and still fits a 1366x768 laptop
+	// above the taskbar. Taller pages such as Mew Share scroll. Windows
+	// includes the title bar in this height; macOS and Linux use it as
+	// the content height.
 	err := wails.Run(&options.App{
 		Title:             windowTitle,
-		Width:             1100,
-		Height:            980,
+		Width:             1152,
+		Height:            720,
 		HideWindowOnClose: true,
 		// macOS draws this in the system menu bar. Windows and Linux would
 		// draw it as a second bar under the native title, so it stays unset.
