@@ -23,6 +23,10 @@ Linux jobs publish a tarball and a Debian package from the bare binary:
 
     tailcat-box-linux-amd64-v0.4.0.tar.gz   tailcat-box, .desktop, icon, install.sh
     tailcat-box-linux-amd64-v0.4.0.deb      /usr/bin, applications, pixmaps
+    tailcat-box-linux-amd64-v0.4.0-full.tar.gz
+        the tarball plus webkit/, a private WebKitGTK built with WebRTC so
+        calls work. Made only when third_party/webkitgtk has an archive for
+        the arch (webkitgtk-webrtc-<ver>-linux-<arch>.tar.zst, Git LFS).
 
 ``version`` keeps the leading ``v`` from the git tag.
 """
@@ -30,6 +34,7 @@ Linux jobs publish a tarball and a Debian package from the bare binary:
 from __future__ import annotations
 
 import argparse
+import glob
 import io
 import os
 import re
@@ -78,6 +83,27 @@ def artifact_name(os_slug: str, arch: str, version: str) -> str:
     if os_slug == "linux":
         return f"tailcat-box-linux-{arch}-{version}.tar.gz"
     raise SystemExit(f"unsupported os slug: {os_slug}")
+
+
+def full_artifact_name(arch: str, version: str) -> str:
+    return f"tailcat-box-linux-{_require_arch(arch)}-{version}-full.tar.gz"
+
+
+def find_webkit_archive(webkit_dir: Path, arch: str) -> Path | None:
+    """The prebuilt WebKitGTK for arch, or None when it is not committed yet."""
+    arch = _require_arch(arch)
+    matches = sorted(Path(p) for p in glob.glob(str(webkit_dir / f"webkitgtk-webrtc-*-linux-{arch}.tar.zst")))
+    if not matches:
+        return None
+    if len(matches) > 1:
+        names = ", ".join(p.name for p in matches)
+        raise SystemExit(f"expected one WebKitGTK archive for {arch} in {webkit_dir}, found: {names}")
+    archive = matches[0]
+    with archive.open("rb") as fh:
+        head = fh.read(64)
+    if head.startswith(b"version https://git-lfs"):
+        raise SystemExit(f"{archive} is a Git LFS pointer. Check out with LFS (actions/checkout lfs: true).")
+    return archive
 
 
 def deb_name(arch: str, version: str) -> str:
@@ -262,6 +288,35 @@ def package_linux_tarball(binary: Path, linux_dir: Path, icon: Path, dest: Path)
         _add_file(tar, f"{top}/tailcat-box.png", icon.read_bytes(), 0o644)
 
 
+def package_linux_full(binary: Path, linux_dir: Path, icon: Path, archive: Path, dest: Path) -> None:
+    """Small tarball layout plus webkit/. The binary's RPATH points there."""
+    if shutil.which("patchelf") is None:
+        raise SystemExit("patchelf is required to build the full Linux package")
+    top = dest.name[: -len(".tar.gz")]
+    work = Path(tempfile.mkdtemp(prefix="tailcat-full-"))
+    try:
+        root = work / top
+        root.mkdir()
+        app = root / LINUX_BINARY
+        shutil.copyfile(binary, app)
+        app.chmod(0o755)
+        # DT_RPATH (not RUNPATH) also covers libwebkit's own dependencies.
+        subprocess.run(["patchelf", "--force-rpath", "--set-rpath", "$ORIGIN/webkit/lib", str(app)], check=True)
+        subprocess.run(["tar", "--zstd", "-xf", str(archive.resolve()), "-C", str(root)], check=True)
+        if not (root / "webkit" / "libexec" / "WebKitWebProcess").is_file():
+            raise SystemExit(f"{archive} has no webkit/libexec/WebKitWebProcess")
+        for name, mode in (("install.sh", 0o755), ("tailcat-box.desktop", 0o644)):
+            shutil.copyfile(linux_dir / name, root / name)
+            (root / name).chmod(mode)
+        shutil.copyfile(icon, root / "tailcat-box.png")
+        if dest.exists():
+            dest.unlink()
+        with tarfile.open(dest, "w:gz") as tar:
+            tar.add(root, arcname=top)
+    finally:
+        shutil.rmtree(work)
+
+
 def deb_control(version: str, arch: str, installed_kb: int) -> str:
     return (
         "Package: tailcat-box\n"
@@ -317,6 +372,7 @@ def main() -> int:
     parser.add_argument("--volume-name", default=VOLUME_NAME)
     parser.add_argument("--linux-dir", default="build/linux")
     parser.add_argument("--icon", default="build/appicon.png")
+    parser.add_argument("--webkit-dir", default="third_party/webkitgtk")
     args = parser.parse_args()
 
     bin_dir = Path(args.bin_dir)
@@ -344,6 +400,13 @@ def main() -> int:
         package_linux_deb(binary, linux_dir, icon, deb, args.version, arch)
         print(tarball)
         print(deb)
+        archive = find_webkit_archive(Path(args.webkit_dir), arch)
+        if archive is None:
+            print(f"no WebKitGTK archive for {arch} in {args.webkit_dir}; skipping the full package")
+        else:
+            full = out_dir / full_artifact_name(arch, args.version)
+            package_linux_full(binary, linux_dir, icon, archive, full)
+            print(full)
     else:
         dest = out_dir / artifact_name(args.os_slug, arch, args.version)
         package_macos_dmg(find_macos_app(bin_dir), dest, args.volume_name)

@@ -104,6 +104,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.meta.outputs.checkout_ref }}
+          # third_party/webkitgtk (Git LFS) feeds the full Linux package.
+          lfs: ${{ matrix.slug == 'linux' }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -126,7 +128,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev patchelf zstd
 
       - name: Install MinGW (Windows amd64)
         if: matrix.arch == 'amd64' && runner.os == 'Windows'
@@ -272,6 +274,9 @@ jobs:
           elif [ "${OS_SLUG}" = "linux" ]; then
             test -f "dist-upload/tailcat-box-linux-${ARCH}-${VERSION}.tar.gz"
             test -f "dist-upload/tailcat-box-linux-${ARCH}-${VERSION}.deb"
+            if ls third_party/webkitgtk/webkitgtk-webrtc-*-linux-"${ARCH}".tar.zst >/dev/null 2>&1; then
+              test -f "dist-upload/tailcat-box-linux-${ARCH}-${VERSION}-full.tar.gz"
+            fi
           else
             test -f "dist-upload/tailcat-box-macos-${ARCH}-${VERSION}.dmg"
           fi
@@ -384,7 +389,7 @@ jobs:
           name: ${{ needs.meta.outputs.version }}
           body_path: release-notes.md
           # Windows portable is a bare .exe (no zip). macOS ships .dmg only.
-          # Linux ships .tar.gz and .deb.
+          # Linux ships .tar.gz, .deb, and -full.tar.gz (bundled WebKitGTK with WebRTC).
           # collected/*.zip would be unmatched and fail this step.
           files: |
             collected/*.exe

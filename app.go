@@ -1170,6 +1170,15 @@ func (a *App) RevealPath(path string) error {
 	return update.Reveal(path)
 }
 
+// updateGOOS is the release flavor to download. The full Linux package
+// updates to the full tarball so it keeps its WebRTC WebKitGTK.
+func updateGOOS() string {
+	if linuxwebview.Bundled() {
+		return update.LinuxFull
+	}
+	return goruntime.GOOS
+}
+
 func (a *App) checkerLocked() *update.Checker {
 	if a.updates != nil {
 		return a.updates
@@ -1178,7 +1187,7 @@ func (a *App) checkerLocked() *update.Checker {
 		CurrentVersion: appinfo.ClientVersion(),
 		LatestURL:      os.Getenv("TAILCAT_UPDATE_URL"),
 		DownloadsDir:   os.Getenv("TAILCAT_DOWNLOADS_DIR"),
-		GOOS:           goruntime.GOOS,
+		GOOS:           updateGOOS(),
 		GOARCH:         goruntime.GOARCH,
 		UserAgent:      update.UserAgent(appinfo.ClientVersion()),
 	})

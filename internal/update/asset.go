@@ -20,6 +20,11 @@ type Asset struct {
 	Size int64
 }
 
+// LinuxFull is the goos value for the full Linux package, which bundles
+// WebKitGTK with WebRTC. Its updates are the -full.tar.gz asset, so calls keep
+// working after an update.
+const LinuxFull = "linux-full"
+
 // PlatformSlug maps Go's OS/arch names onto the Release workflow slugs.
 func PlatformSlug(goos, goarch string) (slug, arch string, err error) {
 	switch goos {
@@ -27,7 +32,7 @@ func PlatformSlug(goos, goarch string) (slug, arch string, err error) {
 		slug = "macos"
 	case "windows":
 		slug = "windows"
-	case "linux":
+	case "linux", LinuxFull:
 		slug = "linux"
 	default:
 		return "", "", ErrUnsupportedPlatform
@@ -79,6 +84,8 @@ func platformExts(goos string) []string {
 	case "linux":
 		// The tarball runs on any distro; the .deb is the Debian/Ubuntu fallback.
 		return []string{".tar.gz", ".deb"}
+	case LinuxFull:
+		return []string{"-full.tar.gz"}
 	default:
 		return []string{".zip"}
 	}

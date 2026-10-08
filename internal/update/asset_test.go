@@ -79,6 +79,22 @@ func TestSelectAsset(t *testing.T) {
 			goos:   "linux", goarch: "arm64", tag: "v0.4.0",
 			want: "tailcat-box-linux-arm64-extra.deb",
 		},
+		{
+			name: "linux full picks the full tarball",
+			assets: assetsFor(
+				"tailcat-box-linux-amd64-v0.4.0.tar.gz",
+				"tailcat-box-linux-amd64-v0.4.0-full.tar.gz",
+				"tailcat-box-linux-amd64-v0.4.0.deb",
+			),
+			goos: LinuxFull, goarch: "amd64", tag: "v0.4.0",
+			want: "tailcat-box-linux-amd64-v0.4.0-full.tar.gz",
+		},
+		{
+			name:   "linux full without full asset",
+			assets: assetsFor("tailcat-box-linux-amd64-v0.4.0.tar.gz"),
+			goos:   LinuxFull, goarch: "amd64", tag: "v0.4.0",
+			wantErr: ErrNoAsset,
+		},
 		{name: "freebsd", assets: published, goos: "freebsd", goarch: "amd64", tag: "v0.1.0", wantErr: ErrUnsupportedPlatform},
 		{name: "386", assets: published, goos: "windows", goarch: "386", tag: "v0.1.0", wantErr: ErrUnsupportedPlatform},
 		{

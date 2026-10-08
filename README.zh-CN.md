@@ -169,6 +169,7 @@ go test -tags=integration ./internal/adapter/ -v -count=1
 | `tailcat-box-windows-arm64-vX.Y.Z.exe` | Windows ARM64 便携版。直接运行这个 exe，不用安装。 |
 | `tailcat-box-linux-amd64-vX.Y.Z.deb` / `-arm64-` | Debian / Ubuntu。`sudo apt install ./tailcat-box-linux-amd64-vX.Y.Z.deb` |
 | `tailcat-box-linux-amd64-vX.Y.Z.tar.gz` / `-arm64-` | 任意发行版。解压后运行 `./install.sh`（装到 `~/.local`，不用 sudo），或者直接运行 `./tailcat-box`。 |
+| `tailcat-box-linux-amd64-vX.Y.Z-full.tar.gz` / `-arm64-` | 完整版：同上，另外带了一份编入 WebRTC 的 WebKitGTK，可以语音、视频通话和共享屏幕。包更大。 |
 
 文件名里的版本就是 git 标签，带前导 `v`。这些构建没有签名，所以 Gatekeeper 和 SmartScreen 会提示。macOS：系统设置 → 隐私与安全性 → 仍要打开，或右键 → 打开。Windows：更多信息 → 仍要运行。该标签的说明写在 `docs/releases/`。
 
@@ -186,7 +187,7 @@ sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-b
 ```
 
 - **托盘** — 走 D-Bus 上的 StatusNotifierItem（AppIndicator）协议。KDE、Xfce、Cinnamon 和 Ubuntu 自带的 GNOME 都能显示。原版 GNOME 要装 *AppIndicator and KStatusNotifierItem Support* 扩展。没有托盘时，关掉窗口就是退出，不会藏起来。
-- **语音、视频通话和共享屏幕需要 WebRTC。** Debian、Ubuntu、Fedora 自带的 WebKitGTK 没有编入 WebRTC，所以这些系统上不能通话，应用里会提示。语音消息、聊天、文件、喵传、穿透和 SSH 都能用。
+- **语音、视频通话和共享屏幕需要 WebRTC。** Debian、Ubuntu、Fedora 自带的 WebKitGTK 没有编入 WebRTC，所以小包不能通话，应用里会提示。语音消息、聊天、文件、喵传、穿透和 SSH 都能用。要通话请下 `-full.tar.gz` 完整版，它自带编入 WebRTC 的 WebKitGTK（见 [third_party/webkitgtk](third_party/webkitgtk/README.md)），还需要装 `gstreamer1.0-plugins-bad gstreamer1.0-nice gstreamer1.0-plugins-good`。完整版在应用内更新时还是会下完整版。
 - **在终端中打开** — 依次找 `x-terminal-emulator`、`gnome-terminal`、`ptyxis`、`konsole`、`xfce4-terminal`、`kitty`、`alacritty`、`foot`，最后是 `xterm`。
 - **开机启动** 会写 `~/.config/autostart/tailcat-box.desktop`。
 - **更新** — 应用内检查更新会下载新的 `.tar.gz` 并打开所在文件夹，按原来的方式装上就行。

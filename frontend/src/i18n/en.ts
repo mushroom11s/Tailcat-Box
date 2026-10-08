@@ -411,7 +411,8 @@ export const en = {
   chatScreenClose: "Close",
   chatScreenResize: "Resize",
   chatScreenPopoutTitle: "Shared screen",
-  chatCallUnsupported: "Calls are unavailable here: this system's WebKitGTK is built without WebRTC. Voice messages still work.",
+  chatCallUnsupported:
+    "Calls are unavailable here: this system's WebKitGTK is built without WebRTC. Install the full Linux package (-full.tar.gz) to make calls. Voice messages still work.",
   chatLiveFailed:
     "Live media failed. Restrictive networks have no relay for calls, so voice and video can fail while chat still works.",
   chatNotifyFile: "Sent a file",

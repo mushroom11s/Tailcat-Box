@@ -6,6 +6,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
+	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
 	"github.com/mushroom11s/tailcat-box/internal/sshterm"
 	"github.com/mushroom11s/tailcat-box/internal/tray"
 	"github.com/wailsapp/wails/v2"
@@ -30,6 +31,8 @@ func main() {
 	if sshterm.HandleArgs(os.Args[1:]) {
 		return
 	}
+	// The full Linux package ships WebKitGTK with WebRTC beside the binary.
+	linuxwebview.UseBundledWebKit()
 	// Create an instance of the app structure
 	app := NewApp()
 

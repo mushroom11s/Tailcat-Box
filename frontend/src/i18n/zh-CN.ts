@@ -410,7 +410,7 @@ export const zhCN = {
   chatScreenClose: "关闭",
   chatScreenResize: "调整大小",
   chatScreenPopoutTitle: "共享屏幕",
-  chatCallUnsupported: "这台电脑上无法通话：系统自带的 WebKitGTK 没有编入 WebRTC。语音消息仍然可以用。",
+  chatCallUnsupported: "这台电脑上无法通话：系统自带的 WebKitGTK 没有编入 WebRTC。装 Linux 完整版（-full.tar.gz）就能通话。语音消息仍然可以用。",
   chatLiveFailed: "实时媒体失败。受限网络没有通话中继，所以语音和视频可能失败，但聊天仍然可用。",
   chatNotifyFile: "发来一个文件",
   chatNotifyVoice: "发来一条语音",

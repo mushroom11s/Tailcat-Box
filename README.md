@@ -169,6 +169,7 @@ Pushing a `v*` tag builds unsigned installers, plus a Windows portable exe and L
 | `tailcat-box-windows-arm64-vX.Y.Z.exe` | Windows ARM64 portable build. Run this exe. No setup program. |
 | `tailcat-box-linux-amd64-vX.Y.Z.deb` / `-arm64-` | Debian / Ubuntu. `sudo apt install ./tailcat-box-linux-amd64-vX.Y.Z.deb` |
 | `tailcat-box-linux-amd64-vX.Y.Z.tar.gz` / `-arm64-` | Any distro. Extract it and run `./install.sh` (installs to `~/.local`, no sudo), or just run `./tailcat-box`. |
+| `tailcat-box-linux-amd64-vX.Y.Z-full.tar.gz` / `-arm64-` | Full package: the same, plus a bundled WebKitGTK with WebRTC so voice/video calls and screen share work. Larger download. |
 
 The version in the filename is the git tag, including the leading `v`. These builds are unsigned, so Gatekeeper and SmartScreen warnings are expected. macOS: System Settings → Privacy & Security → Open Anyway, or right-click → Open. Windows: More info → Run anyway. Notes for that tag live under `docs/releases/`.
 
@@ -186,7 +187,7 @@ sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-b
 ```
 
 - **Tray** — uses the StatusNotifierItem (AppIndicator) protocol over D-Bus. KDE, Xfce, Cinnamon, and Ubuntu's GNOME show it. Stock GNOME needs the *AppIndicator and KStatusNotifierItem Support* extension. Without a tray, closing the window quits the app instead of hiding it.
-- **Voice and video calls, and screen sharing, need WebRTC.** Debian, Ubuntu, and Fedora build WebKitGTK without it, so calls are unavailable there and the app says so. Voice notes, chat, files, Mew Share, tunnels, and SSH work.
+- **Voice and video calls, and screen sharing, need WebRTC.** Debian, Ubuntu, and Fedora build WebKitGTK without it, so the small packages cannot make calls and the app says so. Voice notes, chat, files, Mew Share, tunnels, and SSH work. The `-full.tar.gz` package bundles WebKitGTK built with WebRTC (see [third_party/webkitgtk](third_party/webkitgtk/README.md)); it also needs `gstreamer1.0-plugins-bad gstreamer1.0-nice gstreamer1.0-plugins-good`. In-app updates keep a full install on the full package.
 - **Open in Terminal** — tries `x-terminal-emulator`, `gnome-terminal`, `ptyxis`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `foot`, then `xterm`.
 - **Launch at login** writes `~/.config/autostart/tailcat-box.desktop`.
 - **Updates** — the in-app checker downloads the new `.tar.gz` and shows it in its folder. Install it the same way as before.
