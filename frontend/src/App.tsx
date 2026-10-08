@@ -17,6 +17,7 @@ import iconUrl from "./assets/icon.png";
 import { abbrevPeerLabel, inboundAlertBody, inboundAlertTitle, isInboundAlert, readingOpenTranscript } from "./lib/chatNotify";
 import { localizeChatError } from "./lib/chatText";
 import { createLiveCall, type CallView, type LiveCall } from "./lib/liveCall";
+import { openScreenWindow, type ScreenWindow } from "./lib/screenWindow";
 import {
   MIAO_NOTIFY_WINDOW_MS,
   appInBackground,
@@ -148,6 +149,9 @@ function AppShell() {
   const shellBuf = useRef<Record<string, string>>({});
   const [liveSignal, setLiveSignal] = useState<{ seq: number; data: string } | null>(null);
   const [screenPopout, setScreenPopout] = useState(false);
+  // Shared screen in a separate OS window (window.open). Falls back to the in-app popout.
+  const [screenWin, setScreenWin] = useState(false);
+  const screenWinRef = useRef<ScreenWindow | null>(null);
   const callRoomRef = useRef("");
   const callRef = useRef<LiveCall | null>(null);
   const [callView, setCallView] = useState<CallView>({
@@ -1114,7 +1118,37 @@ function AppShell() {
     if (!screenRemote) {
       setScreenPopout(false);
     }
-  }, [screenRemote]);
+    const open = screenWinRef.current;
+    if (open && (!screenRemote || open.stream !== callView.remoteStream)) {
+      open.close();
+      screenWinRef.current = null;
+      setScreenWin(false);
+    }
+  }, [screenRemote, callView.remoteStream]);
+
+  useEffect(() => () => screenWinRef.current?.close(), []);
+
+  function openSharedScreen(): void {
+    const stream = callViewRef.current.remoteStream;
+    if (screenWinRef.current) {
+      return;
+    }
+    const opened = stream
+      ? openScreenWindow(stream, {
+          title: `Tailcat Box · ${t("chatScreenPopoutTitle")}`,
+          onClosed: () => {
+            screenWinRef.current = null;
+            setScreenWin(false);
+          },
+        })
+      : null;
+    if (opened) {
+      screenWinRef.current = opened;
+      setScreenWin(true);
+      return;
+    }
+    setScreenPopout(true);
+  }
 
   return (
     <div className="shell">
@@ -1293,8 +1327,8 @@ function AppShell() {
               onSendSignal={(meta) => sendChatSignal(chatRoom.id, meta)}
               shellCall={callRef.current ?? undefined}
               shellView={callView}
-              shellScreenOpen={screenPopout}
-              onShellScreenPopout={() => setScreenPopout(true)}
+              shellScreenOpen={screenPopout || screenWin}
+              onShellScreenPopout={openSharedScreen}
               onBindCall={async () => {
                 if (callViewRef.current.phase !== "idle" && callRoomRef.current && callRoomRef.current !== chatRoom.id) {
                   await callRef.current?.hangup();
@@ -1404,7 +1438,7 @@ function AppShell() {
           onClose={() => setScreenPopout(false)}
         />
       ) : null}
-      <ShellCallAudio stream={shellAudioStream(callView, hostingChat, screenPopout)} />
+      <ShellCallAudio stream={shellAudioStream(callView, hostingChat, screenPopout, screenWin)} />
       <Onboarding
         open={guideOpen}
         onStep={onGuideStep}
@@ -1431,12 +1465,18 @@ function hasVideoTrack(stream: MediaStream | null): boolean {
 }
 
 // Voice and video audio always plays here so it keeps going on any page; the chat preview stays muted.
-// Screen share audio plays here only when neither the chat preview nor the popout is showing it.
-function shellAudioStream(view: CallView, hostingChat: boolean, screenPopout: boolean): MediaStream | null {
+// Screen share audio plays here only when neither the chat preview nor the in-app popout plays it.
+// The OS window's video is muted and the chat preview mutes while it is open, so audio stays here.
+function shellAudioStream(
+  view: CallView,
+  hostingChat: boolean,
+  screenPopout: boolean,
+  screenWin: boolean,
+): MediaStream | null {
   if (view.mode === "voice" || view.mode === "video") {
     return view.remoteStream;
   }
-  if (view.mode === "screen" && !hostingChat && !screenPopout) {
+  if (view.mode === "screen" && !screenPopout && (!hostingChat || screenWin)) {
     return view.remoteStream;
   }
   return null;
