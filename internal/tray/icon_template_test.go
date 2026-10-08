@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -57,6 +58,82 @@ func TestMenuTemplateIsGrayAlphaNotColorCat(t *testing.T) {
 		t.Fatal("darwin status item must be a template image")
 	}
 	if strings.Contains(darwin, "SetIcon(") {
-		t.Fatal("darwin must not SetIcon with the color PNG")
+		t.Fatal("darwin must not rest on the color PNG; only scoop frames are color")
+	}
+	if !strings.Contains(darwin, "bindIcons(icon, setTemplate, systray.SetIcon, BadgeTemplate)") {
+		t.Fatal("darwin must rest on the template, mark unread on the template, and play scoop frames in color")
+	}
+}
+
+func TestBadgeTemplateStaysTemplate(t *testing.T) {
+	data, err := os.ReadFile("icons/menu_template.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked, err := BadgeTemplate(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, err := png.Decode(bytes.NewReader(marked))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if img.Bounds().Dx() != 22 || img.Bounds().Dy() != 22 {
+		t.Fatalf("badge changed template size: %v", img.Bounds())
+	}
+	plain, _ := png.Decode(bytes.NewReader(data))
+	changed := 0
+	for y := 0; y < 22; y++ {
+		for x := 0; x < 22; x++ {
+			r, g, b, a := img.At(x, y).RGBA()
+			if (r != 0 || g != 0 || b != 0) && a != 0 {
+				t.Fatalf("color pixel at %d,%d; unread template must stay black + alpha", x, y)
+			}
+			_, _, _, pa := plain.At(x, y).RGBA()
+			if pa != a {
+				changed++
+			}
+		}
+	}
+	if changed == 0 {
+		t.Fatal("unread template has no mark")
+	}
+	// Dot centre is solid; bottom-left of the head is untouched.
+	if _, _, _, a := img.At(18, 3).RGBA(); a != 0xffff {
+		t.Fatalf("dot centre alpha=%d", a)
+	}
+}
+
+func TestTemplateIconsRestAndColorScoop(t *testing.T) {
+	tpl, err := os.ReadFile("icons/menu_template.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var idle, frames [][]byte
+	c := New(nil, nil, nil)
+	c.bindIcons(tpl,
+		func(b []byte) { mu.Lock(); idle = append(idle, b); mu.Unlock() },
+		func(b []byte) { mu.Lock(); frames = append(frames, b); mu.Unlock() },
+		BadgeTemplate)
+	if len(idle) != 1 || !bytes.Equal(idle[0], tpl) {
+		t.Fatal("idle icon is not the template")
+	}
+	c.SetUnread(true)
+	if len(idle) != 2 || bytes.Equal(idle[1], tpl) || redPixels(t, idle[1]) != 0 {
+		t.Fatal("unread must be the template with a template dot, not red")
+	}
+	c.playScoop()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(frames) < 100 {
+		t.Fatalf("scoop frames on the frame setter = %d", len(frames))
+	}
+	if redPixels(t, frames[0]) == 0 {
+		t.Fatal("color scoop frames keep the red unread mark")
+	}
+	last := idle[len(idle)-1]
+	if bytes.Equal(last, tpl) || redPixels(t, last) != 0 {
+		t.Fatal("after the scoop the template with unread dot must come back")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -84,6 +85,13 @@ type Controller struct {
 	labels       MenuLabels
 	applyProduct func(title, tooltip string)
 	applyLabels  func(MenuLabels)
+	baseIcon     []byte
+	setIcon      func([]byte)
+	setFrame     func([]byte)
+	markIcon     func([]byte) ([]byte, error)
+	unread       bool
+	playing      bool
+	scoopGen     int
 }
 
 // skipTray reports whether Start should return before touching the OS tray.
@@ -275,4 +283,133 @@ func (c *Controller) Refresh() {
 		n = c.count()
 	}
 	c.setCount(SessionCountLabel(n))
+}
+
+// bindIcon remembers the idle icon and the native setter. Later unread and
+// scoop updates go through the same setter.
+func (c *Controller) bindIcon(icon []byte, fn func([]byte)) {
+	c.bindIcons(icon, fn, fn, BadgeIcon)
+}
+
+// bindIcons is bindIcon with separate setters. idle shows the resting icon
+// (with or without the unread mark made by mark); frame shows the color
+// scoop frames. macOS rests on a template image but plays the packaged gif
+// in color, so the two setters differ there.
+func (c *Controller) bindIcons(icon []byte, idle, frame func([]byte), mark func([]byte) ([]byte, error)) {
+	if c == nil || idle == nil {
+		return
+	}
+	if len(icon) == 0 {
+		icon = DefaultIcon
+	}
+	if frame == nil {
+		frame = idle
+	}
+	if mark == nil {
+		mark = BadgeIcon
+	}
+	c.mu.Lock()
+	c.baseIcon = append([]byte(nil), icon...)
+	c.setIcon = idle
+	c.setFrame = frame
+	c.markIcon = mark
+	unread := c.unread
+	base := c.baseIcon
+	c.mu.Unlock()
+	idle(shownIcon(base, unread, mark))
+	go warmScoop()
+}
+
+// SetUnread shows a red mark on the tray cat while unread is true.
+// A scoop already on screen keeps the mark on its own frames.
+func (c *Controller) SetUnread(unread bool) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.unread = unread
+	playing := c.playing
+	fn := c.setIcon
+	mark := c.markIcon
+	base := c.baseIcon
+	c.mu.Unlock()
+	if playing || fn == nil || len(base) == 0 {
+		return
+	}
+	fn(shownIcon(base, unread, mark))
+}
+
+func shownIcon(base []byte, unread bool, mark func([]byte) ([]byte, error)) []byte {
+	if !unread {
+		return base
+	}
+	if mark == nil {
+		mark = BadgeIcon
+	}
+	marked, err := mark(base)
+	if err != nil || len(marked) == 0 {
+		return base
+	}
+	return marked
+}
+
+// Scoop plays the packaged litter-box cat once. A second click restarts it.
+func (c *Controller) Scoop() {
+	if c == nil {
+		return
+	}
+	go c.playScoop()
+}
+
+func (c *Controller) playScoop() {
+	frames := scoopFrames()
+	if len(frames) == 0 {
+		return
+	}
+	c.mu.Lock()
+	if c.setIcon == nil {
+		c.mu.Unlock()
+		return
+	}
+	c.scoopGen++
+	gen := c.scoopGen
+	c.playing = true
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		if c.scoopGen != gen {
+			c.mu.Unlock()
+			return
+		}
+		c.playing = false
+		fn := c.setIcon
+		mark := c.markIcon
+		base := append([]byte(nil), c.baseIcon...)
+		unread := c.unread
+		c.mu.Unlock()
+		if fn != nil && len(base) > 0 {
+			fn(shownIcon(base, unread, mark))
+		}
+	}()
+	for _, frame := range frames {
+		c.mu.Lock()
+		if c.scoopGen != gen {
+			c.mu.Unlock()
+			return
+		}
+		fn := c.setFrame
+		if fn == nil {
+			fn = c.setIcon
+		}
+		unread := c.unread
+		c.mu.Unlock()
+		icon := frame.plain
+		if unread {
+			icon = frame.marked
+		}
+		if fn != nil && len(icon) > 0 {
+			fn(icon)
+		}
+		time.Sleep(frame.delay)
+	}
 }

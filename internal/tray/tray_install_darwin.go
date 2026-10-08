@@ -19,14 +19,16 @@ func runAction(fn func()) {
 	go fn()
 }
 
+func setTemplate(icon []byte) {
+	systray.SetTemplateIcon(icon, icon)
+}
+
 func (c *Controller) install(icon []byte) {
-	if len(icon) == 0 {
-		icon = DefaultIcon
-	}
-	if len(icon) > 0 {
-		// Template, not the color PNG. SetOnClick stays off: it crashes the menu.
-		systray.SetTemplateIcon(icon, icon)
-	}
+	// Rest on the template cat head so AppKit tints it for light and dark
+	// menu bars. Unread adds a template dot (a template cannot be red). The
+	// scoop plays the packaged gif frames in color, then returns here.
+	// SetOnClick stays off: it crashes the menu.
+	c.bindIcons(icon, setTemplate, systray.SetIcon, BadgeTemplate)
 	c.bindProduct(func(title, tooltip string) {
 		// Icon-only menu bar: tooltip only, no SetTitle text beside the icon.
 		systray.SetTooltip(tooltip)
@@ -93,5 +95,6 @@ func (c *Controller) install(icon []byte) {
 		})
 	})
 	systray.CreateMenu()
+	watchTrayClicks(c.Scoop)
 	c.Refresh()
 }

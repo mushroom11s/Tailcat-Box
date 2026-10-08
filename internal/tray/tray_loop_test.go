@@ -49,6 +49,9 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 	if !strings.Contains(windows, "SetOnClick") {
 		t.Fatal("windows tray must open on left-click")
 	}
+	if !strings.Contains(windows, "c.Scoop()") {
+		t.Fatal("windows tray click must play the litter scoop")
+	}
 	darwin := nonCommentCode(t, "tray_install_darwin.go")
 	// Permanently attach NSMenu via CreateMenu. SetOnClick/SetOnRClick enable
 	// the show_menu attach/performClick/setMenu:nil path that errors on use.
@@ -57,6 +60,9 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 	}
 	if !strings.Contains(darwin, "CreateMenu()") {
 		t.Fatal("darwin must CreateMenu so the status item has a permanent NSMenu")
+	}
+	if !strings.Contains(darwin, "watchTrayClicks(c.Scoop)") {
+		t.Fatal("darwin tray click (menu open) must play the litter scoop")
 	}
 	// Click handlers already run on the AppKit main thread. Wrapping Wails
 	// Open/Navigate/Quit in invokeMenu runs them inline during menu tracking
