@@ -371,4 +371,7 @@ jobs:
             collected/*.dmg
           fail_on_unmatched_files: true
           draft: false
-          make_latest: true
+          # Tags with a hyphen (v1.2.7-beta.1) ship as prereleases and never
+          # become "latest", so the in-app updater keeps offering stable builds.
+          prerelease: ${{ contains(needs.meta.outputs.version, '-') }}
+          make_latest: ${{ !contains(needs.meta.outputs.version, '-') }}
