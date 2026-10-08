@@ -144,13 +144,27 @@ describe("phase 4 live media dock", () => {
     expect(composer.value).toBe("");
   });
 
-  it("focuses the peer field when a call starts with no peer", async () => {
+  it("keeps the room details collapsed when a call starts with no peer", async () => {
     const user = userEvent.setup();
     const { onSendSignal } = renderChat({ peer: "" });
     expect(screen.queryByLabelText("Peer")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Voice" }));
-    expect(document.activeElement).toBe(screen.getByLabelText("Peer"));
+    expect(screen.queryByLabelText("Peer")).toBeNull();
+    expect(document.querySelector(".chat-identity.is-compact")).toBeTruthy();
+    expect(screen.getByText(en.chatCallNeedPeer)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Video" }));
+    expect(screen.queryByLabelText("Peer")).toBeNull();
     expect(onSendSignal).not.toHaveBeenCalled();
+  });
+
+  it("keeps the room details collapsed when a call starts with a peer", async () => {
+    const user = userEvent.setup();
+    renderChat();
+    expect(document.querySelector(".chat-identity.is-compact")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Video" }));
+    expect(await screen.findByRole("region", { name: "Call" })).toBeTruthy();
+    expect(document.querySelector(".chat-identity.is-compact")).toBeTruthy();
+    expect(screen.queryByLabelText("Peer")).toBeNull();
   });
 
   it("shows the relay error and still sends chat after the link fails", async () => {
