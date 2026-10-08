@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { createPortal } from "react-dom";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
-import CallFloat from "../components/CallFloat";
+import CallStatus from "../components/CallStatus";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
 import ScreenSharePopout from "../components/ScreenSharePopout";
@@ -355,7 +354,6 @@ export default function ChatPage({
     phase: "idle",
     mode: null,
     role: null,
-    expanded: false,
     error: "",
     localStream: null,
     remoteStream: null,
@@ -1618,18 +1616,18 @@ export default function ChatPage({
       />
       </div>
       <CallPanel
-        phase={view.phase}
-        expanded={view.expanded}
+        view={view}
+        title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
         error={view.error ? localizeChatError(view.error, t) || view.error : ""}
-        localStream={view.localStream}
-        remoteStream={view.remoteStream}
         remoteMuted={Boolean(shellCall) && (view.mode === "voice" || view.mode === "video" || popoutOpen)}
         showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
         onScreen={() => void placeCall("screen")}
+        onAccept={() => void activeCall?.accept()}
+        onDecline={() => void activeCall?.decline()}
         onHangup={() => void activeCall?.hangup()}
-        onToggleExpanded={() => activeCall?.toggleExpanded()}
+        onMute={() => activeCall?.toggleMute()}
         onScreenPopout={() => {
           if (onShellScreenPopout) {
             onShellScreenPopout();
@@ -1639,19 +1637,6 @@ export default function ChatPage({
           setScreenPopout(true);
         }}
       />
-      {!shellCall
-        ? createPortal(
-            <CallFloat
-              view={view}
-              title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
-              onAccept={() => void activeCall?.accept()}
-              onDecline={() => void activeCall?.decline()}
-              onHangup={() => void activeCall?.hangup()}
-              onMute={() => activeCall?.toggleMute()}
-            />,
-            document.body,
-          )
-        : null}
       {!shellCall && screenPopout && view.remoteStream ? (
         <ScreenSharePopout
           stream={view.remoteStream}
@@ -1696,42 +1681,38 @@ function hasVideoTrack(stream: MediaStream | null): boolean {
 }
 
 function CallPanel({
-  phase,
-  expanded,
+  view,
+  title,
   error,
-  localStream,
-  remoteStream,
   remoteMuted = false,
   showScreenPopout,
   onVoice,
   onVideo,
   onScreen,
+  onAccept,
+  onDecline,
   onHangup,
-  onToggleExpanded,
+  onMute,
   onScreenPopout,
 }: {
-  phase: CallView["phase"];
-  expanded: boolean;
+  view: CallView;
+  title: string;
   error: string;
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
   remoteMuted?: boolean;
   showScreenPopout: boolean;
   onVoice: () => void;
   onVideo: () => void;
   onScreen: () => void;
+  onAccept: () => void;
+  onDecline: () => void;
   onHangup: () => void;
-  onToggleExpanded: () => void;
+  onMute: () => void;
   onScreenPopout: () => void;
 }) {
   const { t } = useI18n();
-  const live = phase === "building" || phase === "live";
+  const live = view.phase === "building" || view.phase === "live";
   return (
-    <aside
-      className={`glass call-panel media-dock${expanded ? " expanded" : ""}`}
-      role="complementary"
-      aria-label={t("chatCallPanel")}
-    >
+    <aside className="glass call-panel media-dock" role="complementary" aria-label={t("chatCallPanel")}>
       <h2 className="call-panel-title">{t("chatCallPanel")}</h2>
       <div className="call-panel-actions">
         <CallStartButton label={t("chatCallVoice")} onClick={onVoice}>
@@ -1744,23 +1725,27 @@ function CallPanel({
           <ScreenIcon />
         </CallStartButton>
       </div>
-      {live ? (
+      {view.phase !== "idle" ? (
         <div className="call-panel-live" role="group" aria-label={t("chatMediaDock")}>
-          <MediaPreview label={t("chatLocalPreview")} stream={localStream} muted />
-          <MediaPreview label={t("chatRemoteMedia")} stream={remoteStream} muted={remoteMuted} />
-          <div className="row">
-            <button className="btn" type="button" onClick={onHangup}>
-              {t("chatHangUp")}
+          {live ? (
+            <>
+              <MediaPreview label={t("chatLocalPreview")} stream={view.localStream} muted />
+              <MediaPreview label={t("chatRemoteMedia")} stream={view.remoteStream} muted={remoteMuted} />
+            </>
+          ) : null}
+          <CallStatus
+            view={view}
+            title={title}
+            onAccept={onAccept}
+            onDecline={onDecline}
+            onHangup={onHangup}
+            onMute={onMute}
+          />
+          {showScreenPopout ? (
+            <button className="btn" type="button" onClick={onScreenPopout}>
+              {t("chatScreenPopout")}
             </button>
-            <button className="btn" type="button" aria-expanded={expanded} onClick={onToggleExpanded}>
-              {expanded ? t("chatCollapse") : t("chatExpand")}
-            </button>
-            {showScreenPopout ? (
-              <button className="btn" type="button" onClick={onScreenPopout}>
-                {t("chatScreenPopout")}
-              </button>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       ) : (
         <p className="chat-quiet call-panel-idle">{t("chatCallIdle")}</p>

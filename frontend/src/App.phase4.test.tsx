@@ -104,7 +104,7 @@ function renderChat(extra: Partial<ComponentProps<typeof ChatPage>> = {}) {
 }
 
 describe("phase 4 live media dock", () => {
-  it("keeps the composer usable and can expand and hang up", async () => {
+  it("keeps the composer usable and hangs up from the inline call status", async () => {
     const user = userEvent.setup();
     const { onSend, onSendSignal } = renderChat();
     const panel = screen.getByRole("complementary", { name: "Calls" });
@@ -128,12 +128,16 @@ describe("phase 4 live media dock", () => {
     await user.type(composer, "during");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(onSend).toHaveBeenCalledWith("during", false, 0);
-    await user.click(screen.getByRole("button", { name: "Expand" }));
-    expect(screen.getByRole("button", { name: "Collapse" }).getAttribute("aria-expanded")).toBe("true");
-    expect(document.querySelector(".media-dock.expanded")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "Hang up" }));
-    expect(screen.getByRole("complementary", { name: "Calls" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Hang up" })).toBeNull();
+    const status = screen.getByRole("region", { name: "Call" });
+    expect(panel.contains(status)).toBe(true);
+    expect(status.textContent).toContain("Calling");
+    await user.click(screen.getByRole("button", { name: "Mute" }));
+    expect(screen.getByRole("button", { name: "Unmute" }).getAttribute("aria-pressed")).toBe("true");
+    await user.click(screen.getByRole("button", { name: "End call" }));
+    expect(screen.getByRole("complementary", { name: "Calls" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Call" })).toBeNull();
     expect(screen.getByText(en.chatCallIdle)).toBeTruthy();
     const sent = onSendSignal.mock.calls.map((call) => JSON.parse(call[0] as string) as SignalMeta);
     expect(sent.map((meta) => meta.type)).toEqual(["rtc-offer", "rtc-hangup"]);
@@ -153,7 +157,7 @@ describe("phase 4 live media dock", () => {
     const user = userEvent.setup();
     const { onSend } = renderChat();
     await user.click(screen.getByRole("button", { name: "Voice" }));
-    await screen.findByRole("button", { name: "Hang up" });
+    await screen.findByRole("button", { name: "End call" });
     FakePC.instances.at(-1)?.fail();
     expect(await screen.findByText(liveMediaError)).toBeTruthy();
     expect(screen.getByRole("complementary", { name: "Calls" })).toBeTruthy();

@@ -79,6 +79,7 @@ function mediaStream(kinds: Array<"audio" | "video">): MediaStream {
 }
 
 const sent: string[] = [];
+const realSrcObject = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "srcObject");
 
 async function renderChat() {
   render(
@@ -117,10 +118,25 @@ beforeEach(() => {
     },
   });
   vi.stubGlobal("RTCPeerConnection", FakePC);
+  // jsdom rejects fake streams; keep whatever is assigned so tests can see where audio plays.
+  Object.defineProperty(HTMLMediaElement.prototype, "srcObject", {
+    configurable: true,
+    get(this: { fakeSrc?: unknown }) {
+      return this.fakeSrc ?? null;
+    },
+    set(this: { fakeSrc?: unknown }, value: unknown) {
+      this.fakeSrc = value;
+    },
+  });
 });
 
 afterEach(() => {
   cleanup();
+  if (realSrcObject) {
+    Object.defineProperty(HTMLMediaElement.prototype, "srcObject", realSrcObject);
+  } else {
+    delete (HTMLMediaElement.prototype as { srcObject?: unknown }).srcObject;
+  }
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   wails.resetBrowserRooms();
@@ -130,20 +146,31 @@ describe("calls survive page navigation", () => {
   it("keeps a voice call up across tunnel and settings until the user hangs up", async () => {
     const user = await renderChat();
     await user.click(screen.getByRole("button", { name: "Voice" }));
-    expect(await screen.findByRole("region", { name: "Call" })).toBeTruthy();
+    const status = await screen.findByRole("region", { name: "Call" });
+    expect(status.closest(".call-panel")).toBeTruthy();
+    expect(document.querySelector(".call-float")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hang up" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
     await waitFor(() => expect(sent.some((meta) => meta.includes("rtc-offer"))).toBe(true));
+    FakePC.instances.at(-1)?.emitRemoteVideo();
+    const audio = document.querySelector(".shell-call-audio") as HTMLAudioElement & { srcObject: unknown };
+    await waitFor(() => expect(audio.srcObject).toBeTruthy());
 
     await user.click(screen.getByRole("button", { name: "Tunnel" }));
     expect(screen.getByRole("heading", { name: "Tunnel" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Call" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Call" })).toBeNull();
+    expect(audio.srcObject).toBeTruthy();
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(false);
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Call" })).toBeTruthy();
+    expect(audio.srcObject).toBeTruthy();
 
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    expect(await screen.findByRole("region", { name: "Call" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "End call" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Call" })).toBeNull());
+    expect(audio.srcObject).toBeFalsy();
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(true);
   });
 
@@ -158,7 +185,9 @@ describe("calls survive page navigation", () => {
       SessionID: id,
       Data: JSON.stringify({ v: 1, type: "rtc-hangup" }),
     });
-    await waitFor(() => expect(screen.queryByRole("region", { name: "Call" })).toBeNull());
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    expect(await screen.findByText("Start a voice call, video call, or screen share.")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Call" })).toBeNull();
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(false);
   });
 
@@ -175,11 +204,13 @@ describe("calls survive page navigation", () => {
         description: { type: "offer", sdp: "v=0" },
       }),
     });
-    expect(await screen.findByRole("button", { name: "Decline" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Answer" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Call" }).closest(".call-panel")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Tunnel" }));
-    expect(screen.getByRole("button", { name: "Decline" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Decline" })).toBeNull();
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(false);
-    await user.click(screen.getByRole("button", { name: "Decline" }));
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    await user.click(await screen.findByRole("button", { name: "Decline" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Call" })).toBeNull());
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(true);
   });
@@ -187,7 +218,8 @@ describe("calls survive page navigation", () => {
   it("keeps a screen share and its popout across tunnel until hang up", async () => {
     const user = await renderChat();
     await user.click(screen.getByRole("button", { name: "Screen share" }));
-    expect(await screen.findByRole("button", { name: "Hang up" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "End call" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Mute" })).toBeNull();
     FakePC.instances.at(-1)?.emitRemoteVideo();
     expect(await screen.findByRole("region", { name: "Shared screen" })).toBeTruthy();
 
@@ -197,7 +229,7 @@ describe("calls survive page navigation", () => {
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(false);
 
     await user.click(screen.getByRole("button", { name: "Chat" }));
-    await user.click(await screen.findByRole("button", { name: "Hang up" }));
+    await user.click(await screen.findByRole("button", { name: "End call" }));
     await waitFor(() => expect(screen.queryByRole("region", { name: "Shared screen" })).toBeNull());
     expect(screen.getByText("Start a voice call, video call, or screen share.")).toBeTruthy();
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(true);
