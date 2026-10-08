@@ -81,6 +81,8 @@ type Props = {
   peerConnection?: new (config?: RTCConfiguration) => RTCPeerConnection;
   shellCall?: LiveCall;
   shellView?: CallView;
+  shellScreenOpen?: boolean;
+  onShellScreenPopout?: () => void;
   onBindCall?: () => void | Promise<void>;
   nickname?: string;
   notifyNote?: string;
@@ -208,6 +210,8 @@ export default function ChatPage({
   peerConnection,
   shellCall,
   shellView,
+  shellScreenOpen = false,
+  onShellScreenPopout,
   onBindCall,
   nickname = "",
   notifyNote = "",
@@ -362,7 +366,8 @@ export default function ChatPage({
   const [screenDismissed, setScreenDismissed] = useState(false);
   const screenSource = shellView ?? callView;
   const remoteScreen = screenSource.mode === "screen" && hasVideoTrack(screenSource.remoteStream);
-  const showScreenPopout = remoteScreen && !screenPopout;
+  const popoutOpen = shellCall ? shellScreenOpen : screenPopout;
+  const showScreenPopout = remoteScreen && !popoutOpen;
   if (!shellCall && !callRef.current) {
     callRef.current = createLiveCall({
       send: (meta) => {
@@ -380,6 +385,9 @@ export default function ChatPage({
   burnRef.current = burnOn;
 
   useEffect(() => {
+    if (shellCall) {
+      return;
+    }
     if (screenSource.mode !== "screen" || screenSource.phase === "idle") {
       setScreenPopout(false);
       setScreenDismissed(false);
@@ -388,7 +396,7 @@ export default function ChatPage({
     if (remoteScreen && !screenDismissed) {
       setScreenPopout(true);
     }
-  }, [screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
+  }, [shellCall, screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -1615,6 +1623,7 @@ export default function ChatPage({
         error={view.error ? localizeChatError(view.error, t) || view.error : ""}
         localStream={view.localStream}
         remoteStream={view.remoteStream}
+        remoteMuted={Boolean(shellCall) && (view.mode === "voice" || view.mode === "video" || popoutOpen)}
         showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
@@ -1622,6 +1631,10 @@ export default function ChatPage({
         onHangup={() => void activeCall?.hangup()}
         onToggleExpanded={() => activeCall?.toggleExpanded()}
         onScreenPopout={() => {
+          if (onShellScreenPopout) {
+            onShellScreenPopout();
+            return;
+          }
           setScreenDismissed(false);
           setScreenPopout(true);
         }}
@@ -1639,7 +1652,7 @@ export default function ChatPage({
             document.body,
           )
         : null}
-      {screenPopout && view.remoteStream ? (
+      {!shellCall && screenPopout && view.remoteStream ? (
         <ScreenSharePopout
           stream={view.remoteStream}
           onClose={() => {
@@ -1688,6 +1701,7 @@ function CallPanel({
   error,
   localStream,
   remoteStream,
+  remoteMuted = false,
   showScreenPopout,
   onVoice,
   onVideo,
@@ -1701,6 +1715,7 @@ function CallPanel({
   error: string;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
+  remoteMuted?: boolean;
   showScreenPopout: boolean;
   onVoice: () => void;
   onVideo: () => void;
@@ -1732,7 +1747,7 @@ function CallPanel({
       {live ? (
         <div className="call-panel-live" role="group" aria-label={t("chatMediaDock")}>
           <MediaPreview label={t("chatLocalPreview")} stream={localStream} muted />
-          <MediaPreview label={t("chatRemoteMedia")} stream={remoteStream} />
+          <MediaPreview label={t("chatRemoteMedia")} stream={remoteStream} muted={remoteMuted} />
           <div className="row">
             <button className="btn" type="button" onClick={onHangup}>
               {t("chatHangUp")}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import CallFloat from "./components/CallFloat";
+import ScreenSharePopout from "./components/ScreenSharePopout";
 import Onboarding from "./components/Onboarding";
 import { ToastProvider, useToasts } from "./components/toasts";
 import ChatPage, { type ChatMessage } from "./pages/ChatPage";
@@ -147,6 +148,8 @@ function AppShell() {
   shellRef.current = shell;
   const shellBuf = useRef<Record<string, string>>({});
   const [liveSignal, setLiveSignal] = useState<{ seq: number; data: string } | null>(null);
+  const [screenPopout, setScreenPopout] = useState(false);
+  const [screenDismissed, setScreenDismissed] = useState(false);
   const callRoomRef = useRef("");
   const callRef = useRef<LiveCall | null>(null);
   const [callView, setCallView] = useState<CallView>({
@@ -1096,6 +1099,7 @@ function AppShell() {
   }, [liveSignal]);
 
   useEffect(() => {
+    // Leaving chat (tunnel, settings, lobby) must not hang up. A different room still does.
     if (callView.phase === "idle" || !focus || page !== "chat" || lobby) {
       return;
     }
@@ -1107,12 +1111,17 @@ function AppShell() {
   const chatRoom = !lobby && focus && rooms[focus] ? rooms[focus] : undefined;
   const showLobby = page === "chat" && !chatRoom;
   const hostingChat = page === "chat" && Boolean(chatRoom);
+  const screenRemote = callView.mode === "screen" && hasVideoTrack(callView.remoteStream);
   useEffect(() => {
-    if (hostingChat || callView.mode !== "screen" || callView.phase === "idle") {
+    if (callView.mode !== "screen" || callView.phase === "idle") {
+      setScreenPopout(false);
+      setScreenDismissed(false);
       return;
     }
-    void callRef.current?.hangup();
-  }, [hostingChat, callView.mode, callView.phase]);
+    if (screenRemote && !screenDismissed) {
+      setScreenPopout(true);
+    }
+  }, [callView.mode, callView.phase, screenRemote, screenDismissed]);
 
   return (
     <div className="shell">
@@ -1291,6 +1300,11 @@ function AppShell() {
               onSendSignal={(meta) => sendChatSignal(chatRoom.id, meta)}
               shellCall={callRef.current ?? undefined}
               shellView={callView}
+              shellScreenOpen={screenPopout}
+              onShellScreenPopout={() => {
+                setScreenDismissed(false);
+                setScreenPopout(true);
+              }}
               onBindCall={async () => {
                 if (callViewRef.current.phase !== "idle" && callRoomRef.current && callRoomRef.current !== chatRoom.id) {
                   await callRef.current?.hangup();
@@ -1402,6 +1416,16 @@ function AppShell() {
         onHangup={() => void callRef.current?.hangup()}
         onMute={() => callRef.current?.toggleMute()}
       />
+      {screenPopout && callView.remoteStream ? (
+        <ScreenSharePopout
+          stream={callView.remoteStream}
+          onClose={() => {
+            setScreenPopout(false);
+            setScreenDismissed(true);
+          }}
+        />
+      ) : null}
+      <ShellCallAudio stream={!hostingChat && callView.mode === "screen" && !screenPopout ? callView.remoteStream : null} />
       <Onboarding
         open={guideOpen}
         onStep={onGuideStep}
@@ -1421,6 +1445,26 @@ export default function App() {
       <AppShell />
     </ToastProvider>
   );
+}
+
+function hasVideoTrack(stream: MediaStream | null): boolean {
+  return Boolean(stream && stream.getVideoTracks().length > 0);
+}
+
+function ShellCallAudio({ stream }: { stream: MediaStream | null }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) {
+      return;
+    }
+    try {
+      el.srcObject = stream;
+    } catch {
+      // Test doubles are not DOM media streams.
+    }
+  }, [stream]);
+  return <audio ref={ref} autoPlay />;
 }
 
 function RoomPinIcon() {
