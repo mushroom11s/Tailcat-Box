@@ -52,6 +52,10 @@ jobs:
           # Honor WEBKIT_EXEC_PATH outside developer builds, so the helper
           # processes can live beside the app instead of the build prefix.
           patch -p1 -d "webkitgtk-${{ inputs.version }}" < third_party/webkitgtk/exec-path.patch
+          # Ubuntu 24.04 has GStreamer 1.24, whose webrtcbin does not reuse the
+          # negotiated transceiver for an unnamed sink pad; without this no RTP
+          # is sent. No-op on GStreamer >= 1.26.
+          patch -p1 -d "webkitgtk-${{ inputs.version }}" < third_party/webkitgtk/gst124-request-pad.patch
 
       - name: Configure
         working-directory: webkitgtk-${{ inputs.version }}

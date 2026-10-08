@@ -18,6 +18,10 @@ Each archive holds one `webkit/` folder:
 The app sets `WEBKIT_EXEC_PATH` and `WEBKIT_INJECTED_BUNDLE_PATH` to these
 folders at startup. Release WebKit ignores `WEBKIT_EXEC_PATH`, so the build
 applies `exec-path.patch` (one moved `#if`) to honor it.
+`gst124-request-pad.patch` works around GStreamer 1.24 (Ubuntu 24.04)
+webrtcbin: name sink pads after the SDP m-line, paper over the inverted
+codec-preferences match, and ignore unassociated transceivers when
+counting expected incoming tracks so media can start.
 
 The release workflow checks this folder out with LFS. When an archive exists
 for the job's arch, `scripts/package-wails-artifact.py` adds the full
