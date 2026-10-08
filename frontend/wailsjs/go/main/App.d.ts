@@ -100,6 +100,8 @@ export function SetSSHAllowAny(arg1:boolean,arg2:boolean):Promise<main.SSHDeskSt
 
 export function SetSSHEnabled(arg1:boolean):Promise<main.SSHDeskStatus>;
 
+export function SetTrayUnread(arg1:boolean):Promise<void>;
+
 export function SetUILocale(arg1:string):Promise<void>;
 
 export function StartBrowse(arg1:string):Promise<session.Session>;

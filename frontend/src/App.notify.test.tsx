@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { LocaleProvider } from "./i18n";
 import { DESKTOP_NOTIFY_KEY, resetDesktopNotifyCoalesceForTests } from "./lib/desktopNotify";
-import { emitBrowserEvent, emitNotifyOpen, listSessions, resetBrowserRooms, sendChatText } from "./lib/wails";
+import { emitBrowserEvent, emitNotifyOpen, listSessions, resetBrowserRooms, resetTrayUnreadForTests, sendChatText, trayUnreadForTests } from "./lib/wails";
 import { resetOsNotificationsForTests } from "./lib/osNotify";
 
 type RuntimeMocks = {
@@ -48,6 +48,7 @@ beforeEach(() => {
   hidden = false;
   resetOsNotificationsForTests();
   resetDesktopNotifyCoalesceForTests();
+  resetTrayUnreadForTests();
   vi.spyOn(document, "hasFocus").mockImplementation(() => focused);
   Object.defineProperty(document, "visibilityState", {
     configurable: true,
@@ -320,5 +321,36 @@ describe("inbound OS notifications", () => {
     });
     expect(await screen.findByText("while reading")).toBeTruthy();
     expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts a tray mark on an unread message and clears it when that room is in front", async () => {
+    installRuntime();
+    focused = false;
+    const user = userEvent.setup();
+    await renderApp();
+    await connectEcho(user);
+    expect(trayUnreadForTests()).toBe(false);
+    await user.type(screen.getByLabelText("Message"), "hi");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("echo");
+    await waitFor(() => {
+      expect(trayUnreadForTests()).toBe(true);
+    });
+    focused = true;
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => {
+      expect(trayUnreadForTests()).toBe(false);
+    });
+  });
+
+  it("does not mark the tray while the open transcript is focused", async () => {
+    installRuntime();
+    const user = userEvent.setup();
+    await renderApp();
+    await connectEcho(user);
+    await user.type(screen.getByLabelText("Message"), "hi");
+    await user.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("echo");
+    expect(trayUnreadForTests()).toBe(false);
   });
 });

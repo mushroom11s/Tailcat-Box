@@ -194,6 +194,10 @@ export function SetSSHEnabled(arg1) {
   return window['go']['main']['App']['SetSSHEnabled'](arg1);
 }
 
+export function SetTrayUnread(arg1) {
+  return window['go']['main']['App']['SetTrayUnread'](arg1);
+}
+
 export function SetUILocale(arg1) {
   return window['go']['main']['App']['SetUILocale'](arg1);
 }
