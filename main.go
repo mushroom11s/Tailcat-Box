@@ -6,6 +6,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
+	"github.com/mushroom11s/tailcat-box/internal/screenwin"
 	"github.com/mushroom11s/tailcat-box/internal/sshterm"
 	"github.com/mushroom11s/tailcat-box/internal/tray"
 	"github.com/wailsapp/wails/v2"
@@ -33,6 +34,9 @@ func main() {
 	// and the chunk-streams setting row. 860 clips that card after the
 	// row was added. Windows includes the title bar in this height;
 	// macOS and Linux use it as the content height.
+	// Lets window.open (shared-screen window) create a real window on macOS.
+	// Must run before wails.Run sets the WKWebView UI delegate.
+	screenwin.Install()
 	err := wails.Run(&options.App{
 		Title:             windowTitle,
 		Width:             1100,
