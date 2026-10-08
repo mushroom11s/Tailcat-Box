@@ -385,6 +385,7 @@ export const en = {
   chatMediaDock: "Live media",
   chatCallPanel: "Calls",
   chatCallIdle: "Start a voice call, video call, or screen share.",
+  chatCallNeedPeer: "Connect a peer first, then start the call.",
   chatCallCard: "Call",
   chatCallAnswer: "Answer",
   chatCallDecline: "Decline",

@@ -384,6 +384,7 @@ export const zhCN = {
   chatMediaDock: "实时媒体",
   chatCallPanel: "通话",
   chatCallIdle: "从这里发起语音通话、视频通话或屏幕共享。",
+  chatCallNeedPeer: "先连接对方，再发起通话。",
   chatCallCard: "通话",
   chatCallAnswer: "接听",
   chatCallDecline: "拒绝",

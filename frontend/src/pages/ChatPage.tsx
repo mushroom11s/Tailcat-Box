@@ -888,12 +888,20 @@ export default function ChatPage({
 
   const activeCall = shellCall ?? callRef.current;
   const view = shellView ?? callView;
+  const [callNeedsPeer, setCallNeedsPeer] = useState(false);
+  useEffect(() => {
+    if (peer) {
+      setCallNeedsPeer(false);
+    }
+  }, [peer]);
 
   async function placeCall(mode: CallMode): Promise<void> {
+    // Never open the room details from a call button; say why in the call panel instead.
     if (!peer) {
-      focusPeer();
+      setCallNeedsPeer(true);
       return;
     }
+    setCallNeedsPeer(false);
     await onBindCall?.();
     if (activeCall?.snapshot().phase === "ringing") {
       await activeCall.decline();
@@ -1610,7 +1618,13 @@ export default function ChatPage({
       <CallPanel
         view={view}
         title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
-        error={view.error ? localizeChatError(view.error, t) || view.error : ""}
+        error={
+          callNeedsPeer && !peer
+            ? t("chatCallNeedPeer")
+            : view.error
+              ? localizeChatError(view.error, t) || view.error
+              : ""
+        }
         remoteMuted={Boolean(shellCall) && (view.mode === "voice" || view.mode === "video" || popoutOpen)}
         showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
