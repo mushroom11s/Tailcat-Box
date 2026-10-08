@@ -1,6 +1,7 @@
 import type { MessageKey } from "../i18n/en";
 import {
   cameraDeniedError,
+  callUnsupportedError,
   liveMediaError,
   micDeniedError,
   screenDeniedError,
@@ -53,6 +54,8 @@ export function localizeChatError(message: string, t: (key: MessageKey) => strin
       return t("chatScreenUnavailable");
     case liveMediaError:
       return t("chatLiveFailed");
+    case callUnsupportedError:
+      return t("chatCallUnsupported");
     case "room is starting":
       return "";
     default:

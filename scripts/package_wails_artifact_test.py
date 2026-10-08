@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -216,6 +218,54 @@ class MacStageTest(unittest.TestCase):
             link = staging / "Applications"
             self.assertTrue(link.is_symlink())
             self.assertEqual(os_readlink(link), "/Applications")
+
+
+class LinuxPackageTest(unittest.TestCase):
+    def test_names_and_debian_version(self) -> None:
+        self.assertEqual(
+            pkg.artifact_name("linux", "x86_64", "v1.2.7"),
+            "tailcat-box-linux-amd64-v1.2.7.tar.gz",
+        )
+        self.assertEqual(pkg.deb_name("aarch64", "v1.2.7"), "tailcat-box-linux-arm64-v1.2.7.deb")
+        self.assertEqual(pkg.debian_version("v1.2.7"), "1.2.7")
+        self.assertEqual(pkg.debian_version("v1.2.7-beta.1"), "1.2.7~beta.1")
+        self.assertEqual(pkg.debian_version("dev-abc1234"), "0.0.0~dev~abc1234")
+
+    def _fixture(self, root: Path) -> tuple[Path, Path, Path]:
+        bin_dir = root / "bin"
+        bin_dir.mkdir()
+        (bin_dir / "tailcat-box").write_bytes(b"ELF")
+        repo = Path(__file__).resolve().parent.parent
+        return bin_dir, repo / "build" / "linux", repo / "build" / "appicon.png"
+
+    def test_tarball_has_one_folder_with_executable_files(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            bin_dir, linux_dir, icon = self._fixture(root)
+            dest = root / pkg.artifact_name("linux", "amd64", "v1.2.7")
+            pkg.package_linux_tarball(pkg.find_linux_binary(bin_dir), linux_dir, icon, dest)
+            with tarfile.open(dest) as tar:
+                members = {m.name: m for m in tar.getmembers()}
+            top = "tailcat-box-linux-amd64-v1.2.7"
+            self.assertEqual(
+                sorted(members),
+                sorted(f"{top}/{n}" for n in ["tailcat-box", "install.sh", "tailcat-box.desktop", "tailcat-box.png"]),
+            )
+            self.assertEqual(members[f"{top}/tailcat-box"].mode, 0o755)
+            self.assertEqual(members[f"{top}/install.sh"].mode, 0o755)
+
+    @unittest.skipIf(shutil.which("dpkg-deb") is None, "dpkg-deb not installed")
+    def test_deb_installs_binary_desktop_entry_and_icon(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            bin_dir, linux_dir, icon = self._fixture(root)
+            dest = root / pkg.deb_name("amd64", "v1.2.7-beta.1")
+            pkg.package_linux_deb(pkg.find_linux_binary(bin_dir), linux_dir, icon, dest, "v1.2.7-beta.1", "amd64")
+            listing = subprocess.run(["dpkg-deb", "-c", str(dest)], capture_output=True, text=True, check=True).stdout
+            for path in ["./usr/bin/tailcat-box", "./usr/share/applications/tailcat-box.desktop", "./usr/share/pixmaps/tailcat-box.png"]:
+                self.assertIn(path, listing)
+            version = subprocess.run(["dpkg-deb", "-f", str(dest), "Version"], capture_output=True, text=True, check=True).stdout
+            self.assertEqual(version.strip(), "1.2.7~beta.1")
 
 
 def os_readlink(path: Path) -> str:

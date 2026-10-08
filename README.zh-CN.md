@@ -2,9 +2,9 @@
 
 [English](README.md)
 
-macOS 和 Windows 上的 [Tailscale Tailcat](https://github.com/tailscale/tailcat) 桌面客户端，用 [Wails](https://wails.io) v2 写的（Go + React + TypeScript）。
+macOS、Windows 和 Linux 上的 [Tailscale Tailcat](https://github.com/tailscale/tailcat) 桌面客户端，用 [Wails](https://wails.io) v2 写的（Go + React + TypeScript）。
 
-[![CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg)](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/mushroom11s/tailcat-box)](https://github.com/mushroom11s/tailcat-box/releases) [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey) [![Telegram](https://img.shields.io/badge/Telegram-群聊-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+YCUAoqBJ_ZIyZGVh)
+[![CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg)](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/mushroom11s/tailcat-box)](https://github.com/mushroom11s/tailcat-box/releases) [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) [![Telegram](https://img.shields.io/badge/Telegram-群聊-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+YCUAoqBJ_ZIyZGVh)
 
 <p align="center">
   <img src="docs/assets/icon.png" alt="猫砂盆" width="160" />
@@ -46,7 +46,7 @@ macOS 和 Windows 上的 [Tailscale Tailcat](https://github.com/tailscale/tailca
 - **穿透** — 把 TCP 端口挂到 Tailcat 地址上，再转到这台电脑，也可以打开对方的网页端口
 - **SSH** — 默认关闭，打开「允许 SSH」后才会监听。用的是 Tailcat 自带 shell，不是系统的 sshd。认的是 Tailcat 地址，以及已保存设备和已打开聊天房间组成的允许名单，不是系统密码，也不是 SSH 密钥。「允许任意对方」要单独确认。可以在应用里开 shell，也可以打开系统终端
 - **设置** — 跟随系统 / 浅色 / 深色，中英文，密钥和 DERP，本机信息，开机启动
-- **托盘** — macOS 和 Windows 上可以打开、隐藏，或跳到聊天、穿透、设置，也可以退出。左键点图标会显示窗口。macOS 应用菜单里也有这些操作。托盘图标和应用图标是同一只像素猫。关掉窗口只是藏起来，会话还在跑
+- **托盘** — macOS、Windows 和 Linux 上可以打开、隐藏（Linux 需要支持 StatusNotifierItem 的托盘，见 [Linux](#linux)），或跳到聊天、穿透、设置，也可以退出。左键点图标会显示窗口。macOS 应用菜单里也有这些操作。托盘图标和应用图标是同一只像素猫。关掉窗口只是藏起来，会话还在跑
 - **macOS 窗口** — 窗口化时保留系统标题栏，标题是 Tailcat Box。绿色按钮，以及「视图 → 进入全屏 / 退出全屏」（⌃⌘F），走系统全屏。Windows 和 Linux 不变
 
 前端不直接连 Tailcat，都走 Go。只有 `internal/adapter` 引入 `github.com/tailscale/tailcat`（固定 **v0.7.0**）。
@@ -99,9 +99,9 @@ TAILCAT_ADAPTER=fake wails dev -tags webkit2_41
 wails build
 ```
 
-文件在 `build/bin/tailcat-box`（macOS 是 `.app`，Windows 是 `.exe`）。平时发布的是 macOS 和 Windows。
+文件在 `build/bin/tailcat-box`（macOS 是 `.app`，Windows 是 `.exe`）。
 
-Linux 不随版本发布。Ubuntu 24.04 装好 `libgtk-3-dev` 和 `libwebkit2gtk-4.1-dev` 之后，可以自己 `wails build -tags webkit2_41`。
+Linux 上先装 `libgtk-3-dev` 和 `libwebkit2gtk-4.1-dev`，再运行 `wails build -tags webkit2_41`。
 
 只构建前端：
 
@@ -157,7 +157,7 @@ go test -tags=integration ./internal/adapter/ -v -count=1
 
 ## 发布
 
-推送 `v*` 标签后，GitHub Actions 会构建未签名的安装包，以及 Windows 便携 exe，并附到 GitHub Release 上。下载后直接打开：
+推送 `v*` 标签后，GitHub Actions 会构建未签名的安装包、Windows 便携 exe 和 Linux 包，并附到 GitHub Release 上。下载后直接打开：
 
 | 文件 | 怎么安装 |
 | --- | --- |
@@ -167,10 +167,29 @@ go test -tags=integration ./internal/adapter/ -v -count=1
 | `tailcat-box-windows-arm64-installer-vX.Y.Z.exe` | Windows ARM64 的 NSIS 安装程序。运行它。文件名里有 `installer`。 |
 | `tailcat-box-windows-amd64-vX.Y.Z.exe` | Windows x64 便携版。直接运行这个 exe，不用安装。 |
 | `tailcat-box-windows-arm64-vX.Y.Z.exe` | Windows ARM64 便携版。直接运行这个 exe，不用安装。 |
+| `tailcat-box-linux-amd64-vX.Y.Z.deb` / `-arm64-` | Debian / Ubuntu。`sudo apt install ./tailcat-box-linux-amd64-vX.Y.Z.deb` |
+| `tailcat-box-linux-amd64-vX.Y.Z.tar.gz` / `-arm64-` | 任意发行版。解压后运行 `./install.sh`（装到 `~/.local`，不用 sudo），或者直接运行 `./tailcat-box`。 |
 
 文件名里的版本就是 git 标签，带前导 `v`。这些构建没有签名，所以 Gatekeeper 和 SmartScreen 会提示。macOS：系统设置 → 隐私与安全性 → 仍要打开，或右键 → 打开。Windows：更多信息 → 仍要运行。该标签的说明写在 `docs/releases/`。
 
 怎么打标签、怎么先试构建，见 [docs/releases/README.md](docs/releases/README.md)。
+
+## Linux
+
+Linux 包在 Ubuntu 24.04 上构建，需要 glibc 2.39 或更新（Ubuntu 24.04+、Debian 13+、Fedora 40+）。运行时要这些库：
+
+```bash
+# Debian / Ubuntu（装 .deb 时会自动带上）
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+# Fedora
+sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-bad-free
+```
+
+- **托盘** — 走 D-Bus 上的 StatusNotifierItem（AppIndicator）协议。KDE、Xfce、Cinnamon 和 Ubuntu 自带的 GNOME 都能显示。原版 GNOME 要装 *AppIndicator and KStatusNotifierItem Support* 扩展。没有托盘时，关掉窗口就是退出，不会藏起来。
+- **语音、视频通话和共享屏幕需要 WebRTC。** Debian、Ubuntu、Fedora 自带的 WebKitGTK 没有编入 WebRTC，所以这些系统上不能通话，应用里会提示。语音消息、聊天、文件、喵传、穿透和 SSH 都能用。
+- **在终端中打开** — 依次找 `x-terminal-emulator`、`gnome-terminal`、`ptyxis`、`konsole`、`xfce4-terminal`、`kitty`、`alacritty`、`foot`，最后是 `xterm`。
+- **开机启动** 会写 `~/.config/autostart/tailcat-box.desktop`。
+- **更新** — 应用内检查更新会下载新的 `.tar.gz` 并打开所在文件夹，按原来的方式装上就行。
 
 ## macOS 麦克风、摄像头和屏幕共享
 

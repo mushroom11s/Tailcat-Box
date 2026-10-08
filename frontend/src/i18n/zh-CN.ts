@@ -133,8 +133,12 @@ export const zhCN = {
     "1. 退出猫砂盆。\n2. 运行「下载」里的安装程序。它会安装猫砂盆，也可以换掉原来的那一份。\n3. 程序没有签名，Windows 可能会弹出 SmartScreen。选「更多信息」，再选「仍要运行」。",
   updateInstallWinZip:
     "1. 退出猫砂盆。\n2. 打开「下载」里的压缩包，用里面的新程序替换原来的 tailcat-box.exe。\n3. 程序没有签名，Windows 可能会弹出 SmartScreen 提示。",
+  updateInstallLinux:
+    "1. 退出猫砂盆。\n2. 解压「下载」里的 .tar.gz，在解压出来的文件夹里运行 ./install.sh，它会替换 ~/.local 里原来的那份。\n3. 语音和视频通话需要带 WebRTC 的 WebKitGTK，大多数发行版自带的没有。",
+  updateInstallLinuxDeb:
+    "1. 退出猫砂盆。\n2. 用 sudo apt install ./<文件名>.deb 安装「下载」里的 .deb，或者用系统的软件中心打开它。\n3. 语音和视频通话需要带 WebRTC 的 WebKitGTK，大多数发行版自带的没有。",
   updateInstallOther:
-    "1. 退出猫砂盆。\n2. 用压缩包里的程序替换正在用的这份。\n3. 目前没有 Linux 安装包，这份构建也没有签名。",
+    "1. 退出猫砂盆。\n2. 用下载的新程序替换正在用的这份。\n3. 这份构建没有签名。",
   updateErrNetwork: "连不上 GitHub。检查一下网络，再试一次。",
   updateErrRateLimit: "GitHub 的访问次数到上限了，过一会儿再试。",
   updateErrParse: "没能读懂 GitHub 返回的版本信息。",
@@ -406,6 +410,7 @@ export const zhCN = {
   chatScreenClose: "关闭",
   chatScreenResize: "调整大小",
   chatScreenPopoutTitle: "共享屏幕",
+  chatCallUnsupported: "这台电脑上无法通话：系统自带的 WebKitGTK 没有编入 WebRTC。语音消息仍然可以用。",
   chatLiveFailed: "实时媒体失败。受限网络没有通话中继，所以语音和视频可能失败，但聊天仍然可用。",
   chatNotifyFile: "发来一个文件",
   chatNotifyVoice: "发来一条语音",

@@ -88,6 +88,14 @@ jobs:
           - os: windows-11-arm
             slug: windows
             arch: arm64
+          # Ubuntu 24.04 ships only WebKitGTK 4.1 (wails -tags webkit2_41).
+          # Binaries need glibc 2.39+ (Ubuntu 24.04, Debian 13, Fedora 40).
+          - os: ubuntu-24.04
+            slug: linux
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            slug: linux
+            arch: arm64
     defaults:
       run:
         shell: bash
@@ -113,6 +121,12 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      - name: Install GTK and WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Install MinGW (Windows amd64)
         if: matrix.arch == 'amd64' && runner.os == 'Windows'
@@ -231,6 +245,8 @@ jobs:
             # makensis, so the setup exe is single-arch (amd64 or arm64).
             # -nsis also leaves the runnable tailcat-box.exe in build/bin.
             wails build -trimpath -ldflags "${extra_ldflags}" -nsis
+          elif [ "${OS_SLUG}" = "linux" ]; then
+            wails build -trimpath -ldflags "${extra_ldflags}" -tags webkit2_41
           else
             wails build -trimpath -ldflags "${extra_ldflags}"
           fi
@@ -253,6 +269,9 @@ jobs:
               echo "refusing a Windows portable zip; ship the bare portable exe and the installer" >&2
               exit 1
             fi
+          elif [ "${OS_SLUG}" = "linux" ]; then
+            test -f "dist-upload/tailcat-box-linux-${ARCH}-${VERSION}.tar.gz"
+            test -f "dist-upload/tailcat-box-linux-${ARCH}-${VERSION}.deb"
           else
             test -f "dist-upload/tailcat-box-macos-${ARCH}-${VERSION}.dmg"
           fi
@@ -350,7 +369,7 @@ jobs:
             {
               echo "## ${VERSION}"
               echo
-              echo "Automated build of Tailcat Box for macOS and Windows."
+              echo "Automated build of Tailcat Box for macOS, Windows, and Linux."
               echo "Installers are unsigned. See README for install warnings and adapter notes."
             } > release-notes.md
           fi
@@ -365,10 +384,13 @@ jobs:
           name: ${{ needs.meta.outputs.version }}
           body_path: release-notes.md
           # Windows portable is a bare .exe (no zip). macOS ships .dmg only.
+          # Linux ships .tar.gz and .deb.
           # collected/*.zip would be unmatched and fail this step.
           files: |
             collected/*.exe
             collected/*.dmg
+            collected/*.tar.gz
+            collected/*.deb
           fail_on_unmatched_files: true
           draft: false
           # Tags with a hyphen (v1.2.7-beta.1) ship as prereleases and never

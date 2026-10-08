@@ -18,6 +18,7 @@ import (
 	"github.com/mushroom11s/tailcat-box/internal/appinfo"
 	"github.com/mushroom11s/tailcat-box/internal/autostart"
 	"github.com/mushroom11s/tailcat-box/internal/chat"
+	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
 	"github.com/mushroom11s/tailcat-box/internal/miao"
 	"github.com/mushroom11s/tailcat-box/internal/notify"
 	"github.com/mushroom11s/tailcat-box/internal/service"
@@ -291,6 +292,7 @@ func miaoDataDir() string {
 // so we can call the runtime methods.
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	linuxwebview.EnableMedia()
 	runtime.OnNotificationResponse(ctx, a.onNotification)
 	a.tray = tray.New(a.showWindow, a.quitApp, a.activeSessionCount)
 	a.tray.SetHide(a.hideWindow)

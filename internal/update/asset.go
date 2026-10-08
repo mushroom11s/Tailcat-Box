@@ -27,6 +27,8 @@ func PlatformSlug(goos, goarch string) (slug, arch string, err error) {
 		slug = "macos"
 	case "windows":
 		slug = "windows"
+	case "linux":
+		slug = "linux"
 	default:
 		return "", "", ErrUnsupportedPlatform
 	}
@@ -74,6 +76,9 @@ func platformExts(goos string) []string {
 		return []string{".dmg", ".zip"}
 	case "windows":
 		return []string{".exe", ".zip"}
+	case "linux":
+		// The tarball runs on any distro; the .deb is the Debian/Ubuntu fallback.
+		return []string{".tar.gz", ".deb"}
 	default:
 		return []string{".zip"}
 	}
@@ -123,8 +128,8 @@ func fallbackAsset(assets []Asset, slug, arch, tag string, exts []string) (Asset
 		if asset.URL == "" || !strings.HasPrefix(name, prefix) {
 			continue
 		}
-		ext := strings.ToLower(filepath.Ext(name))
-		if !containsExt(exts, ext) {
+		ext := assetExt(name, exts)
+		if ext == "" {
 			continue
 		}
 		byExt[ext] = append(byExt[ext], asset)
@@ -164,6 +169,17 @@ func chooseOne(matches []Asset, tag string) (Asset, bool) {
 	return Asset{}, false
 }
 
+// assetExt returns the entry of exts that name ends with. filepath.Ext would
+// see only ".gz" in a .tar.gz.
+func assetExt(name string, exts []string) string {
+	for _, ext := range exts {
+		if strings.HasSuffix(name, ext) {
+			return ext
+		}
+	}
+	return ""
+}
+
 func containsExt(exts []string, ext string) bool {
 	for _, candidate := range exts {
 		if candidate == ext {
@@ -187,8 +203,11 @@ func SafeAssetName(name string) (string, error) {
 			return "", errors.New("invalid asset name")
 		}
 	}
+	if strings.HasSuffix(strings.ToLower(name), ".tar.gz") {
+		return name, nil
+	}
 	switch strings.ToLower(filepath.Ext(name)) {
-	case ".zip", ".dmg", ".exe":
+	case ".zip", ".dmg", ".exe", ".deb":
 		return name, nil
 	default:
 		return "", errors.New("invalid asset name")
