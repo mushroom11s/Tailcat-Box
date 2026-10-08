@@ -215,12 +215,31 @@ describe("calls survive page navigation", () => {
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(true);
   });
 
-  it("keeps a screen share and its popout across tunnel until hang up", async () => {
+  it("shows the shared screen inline, expands it from the corner icon, and keeps it across tunnel until hang up", async () => {
     const user = await renderChat();
     await user.click(screen.getByRole("button", { name: "Screen share" }));
     expect(await screen.findByRole("button", { name: "End call" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Mute" })).toBeNull();
+    const status = screen.getByRole("region", { name: "Call" });
+    expect(status.className).toBe("call-status");
+    expect(status.closest(".media-frame")?.querySelector("video")).toBeTruthy();
+    expect(status.textContent).toContain("Screen share");
+    expect(screen.getByRole("button", { name: "Mute" }).className).toContain("call-status-mute");
     FakePC.instances.at(-1)?.emitRemoteVideo();
+    const expand = await screen.findByRole("button", { name: "Expand" });
+    expect(expand.closest(".media-frame")?.querySelector(".call-status")).toBeTruthy();
+    expect(screen.getAllByRole("region", { name: "Call" })).toHaveLength(1);
+    expect(expand.closest(".media-frame")?.querySelector("video")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Shared screen" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Pop out" })).toBeNull();
+    await user.click(expand);
+    expect(await screen.findByRole("region", { name: "Shared screen" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Enlarge" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hang up" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Shared screen" })).toBeNull());
+    await user.click(await screen.findByRole("button", { name: "Expand" }));
     expect(await screen.findByRole("region", { name: "Shared screen" })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Tunnel" }));

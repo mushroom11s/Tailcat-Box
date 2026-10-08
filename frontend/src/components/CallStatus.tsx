@@ -82,17 +82,15 @@ export default function CallStatus({ view, title, onAccept, onDecline, onHangup,
           </>
         ) : (
           <>
-            {view.mode !== "screen" ? (
-              <button
-                className="call-status-btn call-status-mute"
-                type="button"
-                aria-pressed={view.muted}
-                aria-label={view.muted ? t("chatCallUnmute") : t("chatCallMute")}
-                onClick={onMute}
-              >
-                <Glyph d={micPath} slash={view.muted} />
-              </button>
-            ) : null}
+            <button
+              className="call-status-btn call-status-mute"
+              type="button"
+              aria-pressed={view.muted}
+              aria-label={view.muted ? t("chatCallUnmute") : t("chatCallMute")}
+              onClick={onMute}
+            >
+              <Glyph d={micPath} slash={view.muted} />
+            </button>
             <button className="call-status-btn call-status-end" type="button" aria-label={t("chatCallEnd")} onClick={onHangup}>
               <Glyph d={phonePath} />
             </button>

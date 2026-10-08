@@ -361,7 +361,6 @@ export default function ChatPage({
     muted: false,
   });
   const [screenPopout, setScreenPopout] = useState(false);
-  const [screenDismissed, setScreenDismissed] = useState(false);
   const screenSource = shellView ?? callView;
   const remoteScreen = screenSource.mode === "screen" && hasVideoTrack(screenSource.remoteStream);
   const popoutOpen = shellCall ? shellScreenOpen : screenPopout;
@@ -383,18 +382,11 @@ export default function ChatPage({
   burnRef.current = burnOn;
 
   useEffect(() => {
-    if (shellCall) {
-      return;
-    }
-    if (screenSource.mode !== "screen" || screenSource.phase === "idle") {
+    // The popout opens only from the expand icon; close it when the share ends.
+    if (!shellCall && !remoteScreen) {
       setScreenPopout(false);
-      setScreenDismissed(false);
-      return;
     }
-    if (remoteScreen && !screenDismissed) {
-      setScreenPopout(true);
-    }
-  }, [shellCall, screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
+  }, [shellCall, remoteScreen]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -1633,17 +1625,13 @@ export default function ChatPage({
             onShellScreenPopout();
             return;
           }
-          setScreenDismissed(false);
           setScreenPopout(true);
         }}
       />
       {!shellCall && screenPopout && view.remoteStream ? (
         <ScreenSharePopout
           stream={view.remoteStream}
-          onClose={() => {
-            setScreenPopout(false);
-            setScreenDismissed(true);
-          }}
+          onClose={() => setScreenPopout(false)}
         />
       ) : null}
       </div>
@@ -1711,6 +1699,25 @@ function CallPanel({
 }) {
   const { t } = useI18n();
   const live = view.phase === "building" || view.phase === "live";
+  const status = (
+    <CallStatus
+      view={view}
+      title={title}
+      onAccept={onAccept}
+      onDecline={onDecline}
+      onHangup={onHangup}
+      onMute={onMute}
+    />
+  );
+  // Screen share: the status sits as a bar at the bottom of the shared-screen preview.
+  const screenOn =
+    live && view.mode === "screen"
+      ? hasVideoTrack(view.remoteStream)
+        ? "remote"
+        : hasVideoTrack(view.localStream)
+          ? "local"
+          : null
+      : null;
   return (
     <aside className="glass call-panel media-dock" role="complementary" aria-label={t("chatCallPanel")}>
       <h2 className="call-panel-title">{t("chatCallPanel")}</h2>
@@ -1729,23 +1736,22 @@ function CallPanel({
         <div className="call-panel-live" role="group" aria-label={t("chatMediaDock")}>
           {live ? (
             <>
-              <MediaPreview label={t("chatLocalPreview")} stream={view.localStream} muted />
-              <MediaPreview label={t("chatRemoteMedia")} stream={view.remoteStream} muted={remoteMuted} />
+              <MediaPreview
+                label={t("chatLocalPreview")}
+                stream={view.localStream}
+                muted
+                overlay={screenOn === "local" ? status : null}
+              />
+              <MediaPreview
+                label={t("chatRemoteMedia")}
+                stream={view.remoteStream}
+                muted={remoteMuted}
+                onExpand={showScreenPopout ? onScreenPopout : undefined}
+                overlay={screenOn === "remote" ? status : null}
+              />
             </>
           ) : null}
-          <CallStatus
-            view={view}
-            title={title}
-            onAccept={onAccept}
-            onDecline={onDecline}
-            onHangup={onHangup}
-            onMute={onMute}
-          />
-          {showScreenPopout ? (
-            <button className="btn" type="button" onClick={onScreenPopout}>
-              {t("chatScreenPopout")}
-            </button>
-          ) : null}
+          {screenOn ? null : status}
         </div>
       ) : (
         <p className="chat-quiet call-panel-idle">{t("chatCallIdle")}</p>
@@ -1764,7 +1770,20 @@ function CallStartButton({ label, onClick, children }: { label: string; onClick:
   );
 }
 
-function MediaPreview({ label, stream, muted }: { label: string; stream: MediaStream | null; muted?: boolean }) {
+function MediaPreview({
+  label,
+  stream,
+  muted,
+  onExpand,
+  overlay = null,
+}: {
+  label: string;
+  stream: MediaStream | null;
+  muted?: boolean;
+  onExpand?: () => void;
+  overlay?: ReactNode;
+}) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const showVideo = Boolean(stream && stream.getVideoTracks().length > 0);
@@ -1783,7 +1802,21 @@ function MediaPreview({ label, stream, muted }: { label: string; stream: MediaSt
     <div className="media-slot">
       <p>{label}</p>
       {showVideo ? (
-        <video ref={videoRef as RefObject<HTMLVideoElement>} autoPlay muted={muted} playsInline />
+        <div className="media-frame">
+          <video ref={videoRef as RefObject<HTMLVideoElement>} autoPlay muted={muted} playsInline />
+          {onExpand ? (
+            <button
+              className="media-expand"
+              type="button"
+              aria-label={t("chatScreenPopout")}
+              title={t("chatScreenPopout")}
+              onClick={onExpand}
+            >
+              <ExpandIcon />
+            </button>
+          ) : null}
+          {overlay}
+        </div>
       ) : (
         <audio ref={audioRef as RefObject<HTMLAudioElement>} autoPlay muted={muted} />
       )}
@@ -2033,6 +2066,10 @@ function TrashIcon() {
 
 function CloseIcon() {
   return <StrokeIcon d="M6 6l12 12M18 6 6 18" />;
+}
+
+function ExpandIcon() {
+  return <StrokeIcon d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" />;
 }
 
 function BurnBadge({ caps }: { caps: string[] }) {

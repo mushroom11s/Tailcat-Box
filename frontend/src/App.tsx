@@ -148,7 +148,6 @@ function AppShell() {
   const shellBuf = useRef<Record<string, string>>({});
   const [liveSignal, setLiveSignal] = useState<{ seq: number; data: string } | null>(null);
   const [screenPopout, setScreenPopout] = useState(false);
-  const [screenDismissed, setScreenDismissed] = useState(false);
   const callRoomRef = useRef("");
   const callRef = useRef<LiveCall | null>(null);
   const [callView, setCallView] = useState<CallView>({
@@ -1111,15 +1110,11 @@ function AppShell() {
   const hostingChat = page === "chat" && Boolean(chatRoom);
   const screenRemote = callView.mode === "screen" && hasVideoTrack(callView.remoteStream);
   useEffect(() => {
-    if (callView.mode !== "screen" || callView.phase === "idle") {
+    // The popout opens only from the expand icon on the shared screen; close it when the share ends.
+    if (!screenRemote) {
       setScreenPopout(false);
-      setScreenDismissed(false);
-      return;
     }
-    if (screenRemote && !screenDismissed) {
-      setScreenPopout(true);
-    }
-  }, [callView.mode, callView.phase, screenRemote, screenDismissed]);
+  }, [screenRemote]);
 
   return (
     <div className="shell">
@@ -1299,10 +1294,7 @@ function AppShell() {
               shellCall={callRef.current ?? undefined}
               shellView={callView}
               shellScreenOpen={screenPopout}
-              onShellScreenPopout={() => {
-                setScreenDismissed(false);
-                setScreenPopout(true);
-              }}
+              onShellScreenPopout={() => setScreenPopout(true)}
               onBindCall={async () => {
                 if (callViewRef.current.phase !== "idle" && callRoomRef.current && callRoomRef.current !== chatRoom.id) {
                   await callRef.current?.hangup();
@@ -1409,10 +1401,7 @@ function AppShell() {
       {screenPopout && callView.remoteStream ? (
         <ScreenSharePopout
           stream={callView.remoteStream}
-          onClose={() => {
-            setScreenPopout(false);
-            setScreenDismissed(true);
-          }}
+          onClose={() => setScreenPopout(false)}
         />
       ) : null}
       <ShellCallAudio stream={shellAudioStream(callView, hostingChat, screenPopout)} />
