@@ -87,6 +87,8 @@ type Controller struct {
 	applyLabels  func(MenuLabels)
 	baseIcon     []byte
 	setIcon      func([]byte)
+	setFrame     func([]byte)
+	markIcon     func([]byte) ([]byte, error)
 	unread       bool
 	playing      bool
 	scoopGen     int
@@ -286,19 +288,35 @@ func (c *Controller) Refresh() {
 // bindIcon remembers the idle icon and the native setter. Later unread and
 // scoop updates go through the same setter.
 func (c *Controller) bindIcon(icon []byte, fn func([]byte)) {
-	if c == nil || fn == nil {
+	c.bindIcons(icon, fn, fn, BadgeIcon)
+}
+
+// bindIcons is bindIcon with separate setters. idle shows the resting icon
+// (with or without the unread mark made by mark); frame shows the color
+// scoop frames. macOS rests on a template image but plays the packaged gif
+// in color, so the two setters differ there.
+func (c *Controller) bindIcons(icon []byte, idle, frame func([]byte), mark func([]byte) ([]byte, error)) {
+	if c == nil || idle == nil {
 		return
 	}
 	if len(icon) == 0 {
 		icon = DefaultIcon
 	}
+	if frame == nil {
+		frame = idle
+	}
+	if mark == nil {
+		mark = BadgeIcon
+	}
 	c.mu.Lock()
 	c.baseIcon = append([]byte(nil), icon...)
-	c.setIcon = fn
+	c.setIcon = idle
+	c.setFrame = frame
+	c.markIcon = mark
 	unread := c.unread
 	base := c.baseIcon
 	c.mu.Unlock()
-	fn(shownIcon(base, unread))
+	idle(shownIcon(base, unread, mark))
 	go warmScoop()
 }
 
@@ -312,19 +330,23 @@ func (c *Controller) SetUnread(unread bool) {
 	c.unread = unread
 	playing := c.playing
 	fn := c.setIcon
+	mark := c.markIcon
 	base := c.baseIcon
 	c.mu.Unlock()
 	if playing || fn == nil || len(base) == 0 {
 		return
 	}
-	fn(shownIcon(base, unread))
+	fn(shownIcon(base, unread, mark))
 }
 
-func shownIcon(base []byte, unread bool) []byte {
+func shownIcon(base []byte, unread bool, mark func([]byte) ([]byte, error)) []byte {
 	if !unread {
 		return base
 	}
-	marked, err := BadgeIcon(base)
+	if mark == nil {
+		mark = BadgeIcon
+	}
+	marked, err := mark(base)
 	if err != nil || len(marked) == 0 {
 		return base
 	}
@@ -361,11 +383,12 @@ func (c *Controller) playScoop() {
 		}
 		c.playing = false
 		fn := c.setIcon
+		mark := c.markIcon
 		base := append([]byte(nil), c.baseIcon...)
 		unread := c.unread
 		c.mu.Unlock()
 		if fn != nil && len(base) > 0 {
-			fn(shownIcon(base, unread))
+			fn(shownIcon(base, unread, mark))
 		}
 	}()
 	for _, frame := range frames {
@@ -374,7 +397,10 @@ func (c *Controller) playScoop() {
 			c.mu.Unlock()
 			return
 		}
-		fn := c.setIcon
+		fn := c.setFrame
+		if fn == nil {
+			fn = c.setIcon
+		}
 		unread := c.unread
 		c.mu.Unlock()
 		icon := frame.plain
