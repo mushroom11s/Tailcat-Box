@@ -24,7 +24,6 @@ export type CallView = {
   phase: "idle" | "building" | "ringing" | "live";
   mode: CallMode | null;
   role: "caller" | "answerer" | null;
-  expanded: boolean;
   error: string;
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
@@ -44,7 +43,6 @@ export type LiveCall = {
   hangup: () => Promise<void>;
   toggleMute: () => void;
   receive: (raw: string) => Promise<void>;
-  toggleExpanded: () => void;
   snapshot: () => CallView;
 };
 
@@ -63,7 +61,6 @@ export function createLiveCall(options: Options): LiveCall {
   let generation = 0;
   let buildingOffer = false;
   let signaled = false;
-  let expanded = false;
   let phase: CallView["phase"] = "idle";
   let mode: CallMode | null = null;
   let role: CallView["role"] = null;
@@ -77,7 +74,7 @@ export function createLiveCall(options: Options): LiveCall {
   const retired = new WeakSet<RTCPeerConnection>();
 
   function snapshot(): CallView {
-    return { phase, mode, role, expanded, error, localStream, remoteStream, linked, muted };
+    return { phase, mode, role, error, localStream, remoteStream, linked, muted };
   }
 
   function publish(): void {
@@ -508,10 +505,6 @@ export function createLiveCall(options: Options): LiveCall {
       phase = "building";
       publish();
       await answerOffer(gen, offerMode, description);
-    },
-    toggleExpanded() {
-      expanded = !expanded;
-      publish();
     },
     snapshot,
   };

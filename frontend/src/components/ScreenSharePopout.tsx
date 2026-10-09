@@ -29,7 +29,7 @@ export default function ScreenSharePopout({ stream, onClose }: { stream: MediaSt
   const videoRef = useRef<HTMLVideoElement>(null);
   const placed = useRef(false);
   const [intrinsic, setIntrinsic] = useState<Size>({ width: 0, height: 0 });
-  const [kind, setKind] = useState<ScreenPopoutKind>("default");
+  const [kind, setKind] = useState<ScreenPopoutKind>("native");
   const [custom, setCustom] = useState<Size | null>(null);
   const [viewport, setViewport] = useState<Size | null>(null);
   const [pos, setPos] = useState({ x: 16, y: 16 });
@@ -139,9 +139,6 @@ export default function ScreenSharePopout({ stream, onClose }: { stream: MediaSt
     >
       <div className="screen-popout-title" style={{ height: screenPopoutChrome.height }} onPointerDown={onDrag}>
         <span>{t("chatScreenPopoutTitle")}</span>
-        <button className="btn" type="button" onClick={() => setKind("native")}>
-          {t("chatScreenEnlarge")}
-        </button>
         <button className="btn" type="button" onClick={onClose}>
           {t("chatScreenClose")}
         </button>
