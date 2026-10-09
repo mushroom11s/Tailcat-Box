@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { createPortal } from "react-dom";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
-import CallFloat from "../components/CallFloat";
+import CallStatus from "../components/CallStatus";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
 import ScreenSharePopout from "../components/ScreenSharePopout";
@@ -355,7 +354,6 @@ export default function ChatPage({
     phase: "idle",
     mode: null,
     role: null,
-    expanded: false,
     error: "",
     localStream: null,
     remoteStream: null,
@@ -363,7 +361,6 @@ export default function ChatPage({
     muted: false,
   });
   const [screenPopout, setScreenPopout] = useState(false);
-  const [screenDismissed, setScreenDismissed] = useState(false);
   const screenSource = shellView ?? callView;
   const remoteScreen = screenSource.mode === "screen" && hasVideoTrack(screenSource.remoteStream);
   const popoutOpen = shellCall ? shellScreenOpen : screenPopout;
@@ -385,18 +382,11 @@ export default function ChatPage({
   burnRef.current = burnOn;
 
   useEffect(() => {
-    if (shellCall) {
-      return;
-    }
-    if (screenSource.mode !== "screen" || screenSource.phase === "idle") {
+    // The popout opens only from the expand icon; close it when the share ends.
+    if (!shellCall && !remoteScreen) {
       setScreenPopout(false);
-      setScreenDismissed(false);
-      return;
     }
-    if (remoteScreen && !screenDismissed) {
-      setScreenPopout(true);
-    }
-  }, [shellCall, screenSource.mode, screenSource.phase, remoteScreen, screenDismissed]);
+  }, [shellCall, remoteScreen]);
 
   function fillN(template: string, n: number): string {
     return template.replaceAll("{n}", String(n));
@@ -898,12 +888,20 @@ export default function ChatPage({
 
   const activeCall = shellCall ?? callRef.current;
   const view = shellView ?? callView;
+  const [callNeedsPeer, setCallNeedsPeer] = useState(false);
+  useEffect(() => {
+    if (peer) {
+      setCallNeedsPeer(false);
+    }
+  }, [peer]);
 
   async function placeCall(mode: CallMode): Promise<void> {
+    // Never open the room details from a call button; say why in the call panel instead.
     if (!peer) {
-      focusPeer();
+      setCallNeedsPeer(true);
       return;
     }
+    setCallNeedsPeer(false);
     await onBindCall?.();
     if (activeCall?.snapshot().phase === "ringing") {
       await activeCall.decline();
@@ -1618,47 +1616,36 @@ export default function ChatPage({
       />
       </div>
       <CallPanel
-        phase={view.phase}
-        expanded={view.expanded}
-        error={view.error ? localizeChatError(view.error, t) || view.error : ""}
-        localStream={view.localStream}
-        remoteStream={view.remoteStream}
+        view={view}
+        title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
+        error={
+          callNeedsPeer && !peer
+            ? t("chatCallNeedPeer")
+            : view.error
+              ? localizeChatError(view.error, t) || view.error
+              : ""
+        }
         remoteMuted={Boolean(shellCall) && (view.mode === "voice" || view.mode === "video" || popoutOpen)}
         showScreenPopout={showScreenPopout}
         onVoice={() => void placeCall("voice")}
         onVideo={() => void placeCall("video")}
         onScreen={() => void placeCall("screen")}
+        onAccept={() => void activeCall?.accept()}
+        onDecline={() => void activeCall?.decline()}
         onHangup={() => void activeCall?.hangup()}
-        onToggleExpanded={() => activeCall?.toggleExpanded()}
+        onMute={() => activeCall?.toggleMute()}
         onScreenPopout={() => {
           if (onShellScreenPopout) {
             onShellScreenPopout();
             return;
           }
-          setScreenDismissed(false);
           setScreenPopout(true);
         }}
       />
-      {!shellCall
-        ? createPortal(
-            <CallFloat
-              view={view}
-              title={remarkFor(remarks, peer) || (peer ? abbreviateAddress(peer) : "")}
-              onAccept={() => void activeCall?.accept()}
-              onDecline={() => void activeCall?.decline()}
-              onHangup={() => void activeCall?.hangup()}
-              onMute={() => activeCall?.toggleMute()}
-            />,
-            document.body,
-          )
-        : null}
       {!shellCall && screenPopout && view.remoteStream ? (
         <ScreenSharePopout
           stream={view.remoteStream}
-          onClose={() => {
-            setScreenPopout(false);
-            setScreenDismissed(true);
-          }}
+          onClose={() => setScreenPopout(false)}
         />
       ) : null}
       </div>
@@ -1696,42 +1683,57 @@ function hasVideoTrack(stream: MediaStream | null): boolean {
 }
 
 function CallPanel({
-  phase,
-  expanded,
+  view,
+  title,
   error,
-  localStream,
-  remoteStream,
   remoteMuted = false,
   showScreenPopout,
   onVoice,
   onVideo,
   onScreen,
+  onAccept,
+  onDecline,
   onHangup,
-  onToggleExpanded,
+  onMute,
   onScreenPopout,
 }: {
-  phase: CallView["phase"];
-  expanded: boolean;
+  view: CallView;
+  title: string;
   error: string;
-  localStream: MediaStream | null;
-  remoteStream: MediaStream | null;
   remoteMuted?: boolean;
   showScreenPopout: boolean;
   onVoice: () => void;
   onVideo: () => void;
   onScreen: () => void;
+  onAccept: () => void;
+  onDecline: () => void;
   onHangup: () => void;
-  onToggleExpanded: () => void;
+  onMute: () => void;
   onScreenPopout: () => void;
 }) {
   const { t } = useI18n();
-  const live = phase === "building" || phase === "live";
+  const live = view.phase === "building" || view.phase === "live";
+  const status = (
+    <CallStatus
+      view={view}
+      title={title}
+      onAccept={onAccept}
+      onDecline={onDecline}
+      onHangup={onHangup}
+      onMute={onMute}
+    />
+  );
+  // Screen share: the status sits as a bar at the bottom of the shared-screen preview.
+  const screenOn =
+    live && view.mode === "screen"
+      ? hasVideoTrack(view.remoteStream)
+        ? "remote"
+        : hasVideoTrack(view.localStream)
+          ? "local"
+          : null
+      : null;
   return (
-    <aside
-      className={`glass call-panel media-dock${expanded ? " expanded" : ""}`}
-      role="complementary"
-      aria-label={t("chatCallPanel")}
-    >
+    <aside className="glass call-panel media-dock" role="complementary" aria-label={t("chatCallPanel")}>
       <h2 className="call-panel-title">{t("chatCallPanel")}</h2>
       <div className="call-panel-actions">
         <CallStartButton label={t("chatCallVoice")} onClick={onVoice}>
@@ -1744,23 +1746,26 @@ function CallPanel({
           <ScreenIcon />
         </CallStartButton>
       </div>
-      {live ? (
+      {view.phase !== "idle" ? (
         <div className="call-panel-live" role="group" aria-label={t("chatMediaDock")}>
-          <MediaPreview label={t("chatLocalPreview")} stream={localStream} muted />
-          <MediaPreview label={t("chatRemoteMedia")} stream={remoteStream} muted={remoteMuted} />
-          <div className="row">
-            <button className="btn" type="button" onClick={onHangup}>
-              {t("chatHangUp")}
-            </button>
-            <button className="btn" type="button" aria-expanded={expanded} onClick={onToggleExpanded}>
-              {expanded ? t("chatCollapse") : t("chatExpand")}
-            </button>
-            {showScreenPopout ? (
-              <button className="btn" type="button" onClick={onScreenPopout}>
-                {t("chatScreenPopout")}
-              </button>
-            ) : null}
-          </div>
+          {live ? (
+            <>
+              <MediaPreview
+                label={t("chatLocalPreview")}
+                stream={view.localStream}
+                muted
+                overlay={screenOn === "local" ? status : null}
+              />
+              <MediaPreview
+                label={t("chatRemoteMedia")}
+                stream={view.remoteStream}
+                muted={remoteMuted}
+                onExpand={showScreenPopout ? onScreenPopout : undefined}
+                overlay={screenOn === "remote" ? status : null}
+              />
+            </>
+          ) : null}
+          {screenOn ? null : status}
         </div>
       ) : (
         <p className="chat-quiet call-panel-idle">{t("chatCallIdle")}</p>
@@ -1779,7 +1784,20 @@ function CallStartButton({ label, onClick, children }: { label: string; onClick:
   );
 }
 
-function MediaPreview({ label, stream, muted }: { label: string; stream: MediaStream | null; muted?: boolean }) {
+function MediaPreview({
+  label,
+  stream,
+  muted,
+  onExpand,
+  overlay = null,
+}: {
+  label: string;
+  stream: MediaStream | null;
+  muted?: boolean;
+  onExpand?: () => void;
+  overlay?: ReactNode;
+}) {
+  const { t } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const showVideo = Boolean(stream && stream.getVideoTracks().length > 0);
@@ -1798,7 +1816,21 @@ function MediaPreview({ label, stream, muted }: { label: string; stream: MediaSt
     <div className="media-slot">
       <p>{label}</p>
       {showVideo ? (
-        <video ref={videoRef as RefObject<HTMLVideoElement>} autoPlay muted={muted} playsInline />
+        <div className="media-frame">
+          <video ref={videoRef as RefObject<HTMLVideoElement>} autoPlay muted={muted} playsInline />
+          {onExpand ? (
+            <button
+              className="media-expand"
+              type="button"
+              aria-label={t("chatScreenPopout")}
+              title={t("chatScreenPopout")}
+              onClick={onExpand}
+            >
+              <ExpandIcon />
+            </button>
+          ) : null}
+          {overlay}
+        </div>
       ) : (
         <audio ref={audioRef as RefObject<HTMLAudioElement>} autoPlay muted={muted} />
       )}
@@ -2048,6 +2080,10 @@ function TrashIcon() {
 
 function CloseIcon() {
   return <StrokeIcon d="M6 6l12 12M18 6 6 18" />;
+}
+
+function ExpandIcon() {
+  return <StrokeIcon d="M14 4h6v6M10 20H4v-6M20 4l-6.5 6.5M4 20l6.5-6.5" />;
 }
 
 function BurnBadge({ caps }: { caps: string[] }) {

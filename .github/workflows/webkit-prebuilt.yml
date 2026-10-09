@@ -1,0 +1,102 @@
+name: WebKitGTK prebuilt (WebRTC)
+
+# Builds WebKitGTK 4.1 with WebRTC once per WebKitGTK version, for the full
+# Linux package. Distro and GNOME-runtime WebKitGTK builds leave WebRTC out,
+# so RTCPeerConnection is missing there. Run by hand on Ubuntu 24.04 (the
+# same base as the release binaries), download the artifact, and commit it
+# to third_party/webkitgtk/ (Git LFS). The release workflow reads it from
+# the checkout.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: WebKitGTK release (webkitgtk.org/releases)
+        required: true
+        default: "2.54.1"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: WebKitGTK ${{ inputs.version }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            arch: amd64
+          - os: ubuntu-24.04-arm
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+
+      - name: Install build dependencies
+        run: |
+          sudo sed -i 's/^Types: deb$/Types: deb deb-src/' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get update
+          sudo apt-get build-dep -y webkit2gtk
+          sudo apt-get install -y ninja-build ccache lld unifdef patchelf zstd \
+            libgstreamer-plugins-bad1.0-dev libnice-dev libssl-dev
+
+      - name: Fetch source
+        run: |
+          curl -fsSLO "https://webkitgtk.org/releases/webkitgtk-${{ inputs.version }}.tar.xz"
+          tar xf "webkitgtk-${{ inputs.version }}.tar.xz"
+          # Honor WEBKIT_EXEC_PATH outside developer builds, so the helper
+          # processes can live beside the app instead of the build prefix.
+          patch -p1 -d "webkitgtk-${{ inputs.version }}" < third_party/webkitgtk/exec-path.patch
+          # Ubuntu 24.04 has GStreamer 1.24, whose webrtcbin does not reuse the
+          # negotiated transceiver for an unnamed sink pad; without this no RTP
+          # is sent. No-op on GStreamer >= 1.26.
+          patch -p1 -d "webkitgtk-${{ inputs.version }}" < third_party/webkitgtk/gst124-request-pad.patch
+
+      - name: Configure
+        working-directory: webkitgtk-${{ inputs.version }}
+        # GStreamer WebRTC backend (libnice ICE; librice is not packaged).
+        # Optional image/gamepad/spelling/secret features are off so the
+        # copy needs no library the distro libwebkit2gtk-4.1-0 does not pull.
+        run: |
+          cmake -B build -G Ninja -DPORT=GTK -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/opt/tailcat-webkit \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld -DCMAKE_MODULE_LINKER_FLAGS=-fuse-ld=lld \
+            -DUSE_GTK4=OFF -DENABLE_WEB_RTC=ON -DENABLE_MEDIA_STREAM=ON -DUSE_LIBRICE=OFF \
+            -DENABLE_API_TESTS=OFF -DENABLE_LAYOUT_TESTS=OFF \
+            -DENABLE_BUBBLEWRAP_SANDBOX=OFF -DENABLE_MINIBROWSER=OFF -DENABLE_DOCUMENTATION=OFF \
+            -DENABLE_INTROSPECTION=OFF -DENABLE_SPEECH_SYNTHESIS=OFF -DENABLE_WEBDRIVER=OFF \
+            -DENABLE_GAMEPAD=OFF -DENABLE_SPELLCHECK=OFF -DUSE_LIBHYPHEN=OFF -DUSE_LIBSECRET=OFF \
+            -DUSE_JPEGXL=OFF -DUSE_AVIF=OFF -DUSE_LIBBACKTRACE=OFF
+
+      - name: Build
+        working-directory: webkitgtk-${{ inputs.version }}
+        run: ninja -C build -j4
+
+      - name: Stage
+        working-directory: webkitgtk-${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          DESTDIR="$PWD/dest" ninja -C build install
+          src=dest/opt/tailcat-webkit
+          out="$GITHUB_WORKSPACE/webkit"
+          mkdir -p "$out/lib" "$out/libexec" "$out/injected-bundle"
+          cp -a "$src"/lib/libwebkit2gtk-4.1.so* "$src"/lib/libjavascriptcoregtk-4.1.so* "$out/lib/"
+          cp -a "$src"/libexec/webkit2gtk-4.1/WebKit*Process "$out/libexec/"
+          cp -a "$src"/lib/webkit2gtk-4.1/injected-bundle/. "$out/injected-bundle/"
+          find "$out" -type f \( -name '*.so*' -o -perm -u+x \) -exec strip --strip-unneeded {} +
+          for f in "$out"/lib/*.so.*; do [ -L "$f" ] || patchelf --set-rpath '$ORIGIN' "$f"; done
+          for f in "$out"/libexec/* "$out"/injected-bundle/*.so; do patchelf --set-rpath '$ORIGIN/../lib' "$f"; done
+          tar -C "$GITHUB_WORKSPACE" -cf - webkit | zstd -19 -T0 > "$GITHUB_WORKSPACE/webkitgtk-webrtc-${{ inputs.version }}-linux-${{ matrix.arch }}.tar.zst"
+          ls -la "$GITHUB_WORKSPACE"/*.tar.zst
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: webkitgtk-webrtc-${{ inputs.version }}-linux-${{ matrix.arch }}
+          path: webkitgtk-webrtc-*.tar.zst
+          retention-days: 30
+

@@ -62,7 +62,40 @@ func TestSelectAsset(t *testing.T) {
 			goos:   "darwin", goarch: "arm64", tag: "v0.1.0",
 			want: "tailcat-box-macos-arm64-extra.zip",
 		},
-		{name: "linux", assets: published, goos: "linux", goarch: "amd64", tag: "v0.1.0", wantErr: ErrUnsupportedPlatform},
+		{name: "linux without package", assets: published, goos: "linux", goarch: "amd64", tag: "v0.1.0", wantErr: ErrNoAsset},
+		{
+			name: "linux prefers tar.gz over deb",
+			assets: assetsFor(
+				"tailcat-box-linux-amd64-v0.4.0.deb",
+				"tailcat-box-linux-amd64-v0.4.0.tar.gz",
+				"tailcat-box-linux-arm64-v0.4.0.tar.gz",
+			),
+			goos: "linux", goarch: "amd64", tag: "v0.4.0",
+			want: "tailcat-box-linux-amd64-v0.4.0.tar.gz",
+		},
+		{
+			name:   "linux deb fallback by prefix",
+			assets: assetsFor("tailcat-box-linux-arm64-extra.deb"),
+			goos:   "linux", goarch: "arm64", tag: "v0.4.0",
+			want: "tailcat-box-linux-arm64-extra.deb",
+		},
+		{
+			name: "linux full picks the full tarball",
+			assets: assetsFor(
+				"tailcat-box-linux-amd64-v0.4.0.tar.gz",
+				"tailcat-box-linux-amd64-v0.4.0-full.tar.gz",
+				"tailcat-box-linux-amd64-v0.4.0.deb",
+			),
+			goos: LinuxFull, goarch: "amd64", tag: "v0.4.0",
+			want: "tailcat-box-linux-amd64-v0.4.0-full.tar.gz",
+		},
+		{
+			name:   "linux full without full asset",
+			assets: assetsFor("tailcat-box-linux-amd64-v0.4.0.tar.gz"),
+			goos:   LinuxFull, goarch: "amd64", tag: "v0.4.0",
+			wantErr: ErrNoAsset,
+		},
+		{name: "freebsd", assets: published, goos: "freebsd", goarch: "amd64", tag: "v0.1.0", wantErr: ErrUnsupportedPlatform},
 		{name: "386", assets: published, goos: "windows", goarch: "386", tag: "v0.1.0", wantErr: ErrUnsupportedPlatform},
 		{
 			name: "prefers dmg over zip",

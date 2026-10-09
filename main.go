@@ -6,6 +6,7 @@ import (
 	goruntime "runtime"
 	"strings"
 
+	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
 	"github.com/mushroom11s/tailcat-box/internal/sshterm"
 	"github.com/mushroom11s/tailcat-box/internal/tray"
 	"github.com/wailsapp/wails/v2"
@@ -13,6 +14,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -20,10 +22,17 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// appIcon is the Linux window icon. macOS and Windows take theirs from the bundle.
+//
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	if sshterm.HandleArgs(os.Args[1:]) {
 		return
 	}
+	// The full Linux package ships WebKitGTK with WebRTC beside the binary.
+	linuxwebview.UseBundledWebKit()
 	// Create an instance of the app structure
 	app := NewApp()
 
@@ -34,16 +43,24 @@ func main() {
 	// includes the title bar in this height; macOS and Linux use it as
 	// the content height.
 	err := wails.Run(&options.App{
-		Title:             windowTitle,
-		Width:             1152,
-		Height:            720,
-		HideWindowOnClose: true,
+		Title:  windowTitle,
+		Width:  1152,
+		Height: 720,
+		// Closing hides the window when a tray icon can bring it back. A Linux
+		// desktop without a tray host quits instead.
+		HideWindowOnClose: tray.Available(),
 		// macOS draws this in the system menu bar. Windows and Linux would
 		// draw it as a second bar under the native title, so it stays unset.
 		Menu: app.startupApplicationMenu(),
 		// Mac is ignored on Windows and Linux. Leave Fullscreen unset so the
 		// window opens windowed; the green button and View menu enter fullscreen.
 		Mac: macWindowChrome(),
+		Linux: &linux.Options{
+			Icon:        appIcon,
+			ProgramName: "tailcat-box",
+			// Same as Wails' default when Linux is nil (wails#2977).
+			WebviewGpuPolicy: linux.WebviewGpuPolicyNever,
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

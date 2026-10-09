@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import CallFloat from "./components/CallFloat";
 import ScreenSharePopout from "./components/ScreenSharePopout";
 import Onboarding from "./components/Onboarding";
 import { ToastProvider, useToasts } from "./components/toasts";
@@ -29,9 +28,9 @@ import { parseReceiveJob } from "./lib/miao";
 import { NICKNAME_KEY, readNickname } from "./lib/nickname";
 import { shouldAutoShowOnboarding, writeOnboardingSeen } from "./lib/onboarding";
 import { ensureOsNotifications, focusAppWindow, sendOsNotification, type NotifyData } from "./lib/osNotify";
-import { applyRemark, readRemarks, remarkFor, writeRemarks, type RemarkMap } from "./lib/remark";
+import { applyRemark, readRemarks, writeRemarks, type RemarkMap } from "./lib/remark";
 import { forgetRoomPin, orderWithPins, readRoomPins, renameRoomPin, toggleRoomPin, writeRoomPins } from "./lib/roomPins";
-import { abbreviateAddress, remarkIsShared, roomPrimaryLabel, roomTooltip } from "./lib/roomLabel";
+import { remarkIsShared, roomPrimaryLabel, roomTooltip } from "./lib/roomLabel";
 import { applyRoomEvent, emptyRoom, type RoomSlice } from "./lib/roomState";
 import {
   connectChatPeer,
@@ -149,14 +148,12 @@ function AppShell() {
   const shellBuf = useRef<Record<string, string>>({});
   const [liveSignal, setLiveSignal] = useState<{ seq: number; data: string } | null>(null);
   const [screenPopout, setScreenPopout] = useState(false);
-  const [screenDismissed, setScreenDismissed] = useState(false);
   const callRoomRef = useRef("");
   const callRef = useRef<LiveCall | null>(null);
   const [callView, setCallView] = useState<CallView>({
     phase: "idle",
     mode: null,
     role: null,
-    expanded: false,
     error: "",
     localStream: null,
     remoteStream: null,
@@ -1113,15 +1110,11 @@ function AppShell() {
   const hostingChat = page === "chat" && Boolean(chatRoom);
   const screenRemote = callView.mode === "screen" && hasVideoTrack(callView.remoteStream);
   useEffect(() => {
-    if (callView.mode !== "screen" || callView.phase === "idle") {
+    // The popout opens only from the expand icon on the shared screen; close it when the share ends.
+    if (!screenRemote) {
       setScreenPopout(false);
-      setScreenDismissed(false);
-      return;
     }
-    if (screenRemote && !screenDismissed) {
-      setScreenPopout(true);
-    }
-  }, [callView.mode, callView.phase, screenRemote, screenDismissed]);
+  }, [screenRemote]);
 
   return (
     <div className="shell">
@@ -1301,10 +1294,7 @@ function AppShell() {
               shellCall={callRef.current ?? undefined}
               shellView={callView}
               shellScreenOpen={screenPopout}
-              onShellScreenPopout={() => {
-                setScreenDismissed(false);
-                setScreenPopout(true);
-              }}
+              onShellScreenPopout={() => setScreenPopout(true)}
               onBindCall={async () => {
                 if (callViewRef.current.phase !== "idle" && callRoomRef.current && callRoomRef.current !== chatRoom.id) {
                   await callRef.current?.hangup();
@@ -1408,24 +1398,13 @@ function AppShell() {
           </div>
         </div>
       ) : null}
-      <CallFloat
-        view={callView}
-        title={remarkFor(remarks, rooms[callRoomRef.current]?.peer ?? "") || abbreviateAddress(rooms[callRoomRef.current]?.peer ?? "")}
-        onAccept={() => void callRef.current?.accept()}
-        onDecline={() => void callRef.current?.decline()}
-        onHangup={() => void callRef.current?.hangup()}
-        onMute={() => callRef.current?.toggleMute()}
-      />
       {screenPopout && callView.remoteStream ? (
         <ScreenSharePopout
           stream={callView.remoteStream}
-          onClose={() => {
-            setScreenPopout(false);
-            setScreenDismissed(true);
-          }}
+          onClose={() => setScreenPopout(false)}
         />
       ) : null}
-      <ShellCallAudio stream={!hostingChat && callView.mode === "screen" && !screenPopout ? callView.remoteStream : null} />
+      <ShellCallAudio stream={shellAudioStream(callView, hostingChat, screenPopout)} />
       <Onboarding
         open={guideOpen}
         onStep={onGuideStep}
@@ -1451,6 +1430,18 @@ function hasVideoTrack(stream: MediaStream | null): boolean {
   return Boolean(stream && stream.getVideoTracks().length > 0);
 }
 
+// Voice and video audio always plays here so it keeps going on any page; the chat preview stays muted.
+// Screen share audio plays here only when neither the chat preview nor the popout is showing it.
+function shellAudioStream(view: CallView, hostingChat: boolean, screenPopout: boolean): MediaStream | null {
+  if (view.mode === "voice" || view.mode === "video") {
+    return view.remoteStream;
+  }
+  if (view.mode === "screen" && !hostingChat && !screenPopout) {
+    return view.remoteStream;
+  }
+  return null;
+}
+
 function ShellCallAudio({ stream }: { stream: MediaStream | null }) {
   const ref = useRef<HTMLAudioElement>(null);
   useEffect(() => {
@@ -1464,7 +1455,7 @@ function ShellCallAudio({ stream }: { stream: MediaStream | null }) {
       // Test doubles are not DOM media streams.
     }
   }, [stream]);
-  return <audio ref={ref} autoPlay />;
+  return <audio ref={ref} className="shell-call-audio" autoPlay />;
 }
 
 function RoomPinIcon() {

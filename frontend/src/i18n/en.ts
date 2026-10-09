@@ -131,8 +131,12 @@ export const en = {
     "1. Quit Tailcat Box.\n2. Run the setup program in Downloads. It installs Tailcat Box and can replace the previous copy.\n3. Windows SmartScreen may warn because this build is unsigned. Choose More info, then Run anyway.",
   updateInstallWinZip:
     "1. Quit Tailcat Box.\n2. Open the zip in Downloads and replace the old tailcat-box.exe with the new one.\n3. Windows SmartScreen may warn because this build is unsigned.",
+  updateInstallLinux:
+    "1. Quit Tailcat Box.\n2. Extract the .tar.gz in Downloads and run ./install.sh in that folder. It replaces the copy in ~/.local.\n3. Voice and video calls need a WebKitGTK built with WebRTC; most distros leave it out.",
+  updateInstallLinuxDeb:
+    "1. Quit Tailcat Box.\n2. Install the .deb in Downloads with sudo apt install ./<file>.deb, or open it in your software app.\n3. Voice and video calls need a WebKitGTK built with WebRTC; most distros leave it out.",
   updateInstallOther:
-    "1. Quit Tailcat Box.\n2. Replace the running copy with the program inside the zip.\n3. No Linux package is published, and this build is unsigned.",
+    "1. Quit Tailcat Box.\n2. Replace the running copy with the downloaded program.\n3. This build is unsigned.",
   updateErrNetwork: "Couldn't reach GitHub. Check the network and try again.",
   updateErrRateLimit: "GitHub's rate limit was hit. Try again in a little while.",
   updateErrParse: "The release info from GitHub couldn't be read.",
@@ -380,14 +384,12 @@ export const en = {
   chatCallVoice: "Voice",
   chatCallVideo: "Video",
   chatCallScreen: "Screen share",
-  chatHangUp: "Hang up",
-  chatExpand: "Expand",
-  chatCollapse: "Collapse",
   chatLocalPreview: "Local preview",
   chatRemoteMedia: "Remote media",
   chatMediaDock: "Live media",
   chatCallPanel: "Calls",
   chatCallIdle: "Start a voice call, video call, or screen share.",
+  chatCallNeedPeer: "Connect a peer first, then start the call.",
   chatCallCard: "Call",
   chatCallAnswer: "Answer",
   chatCallDecline: "Decline",
@@ -402,11 +404,12 @@ export const en = {
   chatScreenDenied:
     "Screen sharing was denied. Allow Tailcat Box in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.",
   chatScreenUnavailable: "Screen sharing is unavailable on this system.",
-  chatScreenPopout: "Pop out",
-  chatScreenEnlarge: "Enlarge",
+  chatScreenPopout: "Expand",
   chatScreenClose: "Close",
   chatScreenResize: "Resize",
   chatScreenPopoutTitle: "Shared screen",
+  chatCallUnsupported:
+    "Calls are unavailable here: this system's WebKitGTK is built without WebRTC. Install the full Linux package (-full.tar.gz) to make calls. Voice messages still work.",
   chatLiveFailed:
     "Live media failed. Restrictive networks have no relay for calls, so voice and video can fail while chat still works.",
   chatNotifyFile: "Sent a file",

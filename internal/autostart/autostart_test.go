@@ -23,7 +23,7 @@ func TestLaunchAgentPlistContainsLabelAndExe(t *testing.T) {
 }
 
 func TestSupportedMatchesProductPlatforms(t *testing.T) {
-	want := runtime.GOOS == "darwin" || runtime.GOOS == "windows"
+	want := runtime.GOOS == "darwin" || runtime.GOOS == "windows" || runtime.GOOS == "linux"
 	if got := autostart.Supported(); got != want {
 		t.Fatalf("Supported()=%v want %v on %s", got, want, runtime.GOOS)
 	}
@@ -42,5 +42,18 @@ func TestStubSetEnabledDoesNotPanic(t *testing.T) {
 	}
 	if enabled {
 		t.Fatal("stub should report not enabled")
+	}
+}
+
+func TestDesktopEntryQuotesExe(t *testing.T) {
+	text := string(autostart.DesktopEntry("/opt/Tailcat Box/tailcat-box"))
+	if !strings.Contains(text, `Exec="/opt/Tailcat Box/tailcat-box"`) {
+		t.Fatal(text)
+	}
+	if !strings.Contains(text, "Name=Tailcat Box") {
+		t.Fatal(text)
+	}
+	if got := string(autostart.DesktopEntry(`/tmp/a$b`)); !strings.Contains(got, `Exec="/tmp/a\\$b"`) {
+		t.Fatal(got)
 	}
 }
