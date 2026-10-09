@@ -381,6 +381,8 @@ export const zhCN = {
   chatVoicePause: "暂停",
   chatMicDenied:
     "没有麦克风权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 麦克风，允许猫砂盆后再试一次。",
+  chatMicDeniedWin:
+    "打不开麦克风。请到 Windows 设置 → 隐私和安全性 → 麦克风，打开「麦克风访问权限」和「让桌面应用访问你的麦克风」（猫砂盆在列表里显示为 Microsoft Edge WebView2）。再关掉正在占用麦克风的其他软件，然后重试。",
   chatPlay: "播放",
   chatCallVoice: "语音",
   chatCallVideo: "视频",
@@ -402,6 +404,8 @@ export const zhCN = {
   chatCallRinging: "来电",
   chatCamDenied:
     "没有摄像头权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 摄像头，允许猫砂盆后再试一次。",
+  chatCamDeniedWin:
+    "打不开摄像头或麦克风。请到 Windows 设置 → 隐私和安全性 → 摄像头（以及麦克风），打开访问权限和「让桌面应用访问你的相机」（猫砂盆在列表里显示为 Microsoft Edge WebView2）。再关掉正在占用摄像头的其他软件（比如会议软件），然后重试。",
   chatScreenDenied:
     "没有屏幕共享权限。请到系统设置 → 隐私与安全性（System Settings → Privacy & Security）→ 屏幕与系统音频录制，允许猫砂盆，然后退出并重新打开应用。",
   chatScreenUnavailable: "这个系统不能共享屏幕。",

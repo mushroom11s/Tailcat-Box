@@ -128,6 +128,9 @@ export function createLiveCall(options: Options): LiveCall {
       }
       return await media.getUserMedia({ audio: true, video: true });
     } catch (err) {
+      // The hint covers every cause; keep the real name (NotAllowedError,
+      // NotReadableError, NotFoundError) for the devtools console.
+      console.warn("getUserMedia failed", err);
       if (nextMode === "voice") {
         throw new Error(micDeniedError);
       }
