@@ -1,0 +1,97 @@
+--- a/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.h	2026-10-08 21:27:43.492523527 +0800
++++ b/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.h	2026-10-08 21:27:43.492523527 +0800
+@@ -170,7 +170,7 @@
+ 
+     void processSDPMessage(const GstSDPMessage*, Function<void(unsigned index, CStringView mid, const GstSDPMedia*)>);
+ 
+-    [[nodiscard]] GRefPtr<GstPad> requestPad(const GRefPtr<GstCaps>&, const String& mediaStreamID);
++    [[nodiscard]] GRefPtr<GstPad> requestPad(const GRefPtr<GstCaps>&, const String& mediaStreamID, std::optional<unsigned> mLineIndex = std::nullopt);
+ 
+     std::optional<bool> isIceGatheringComplete(const String& currentLocalDescription);
+ 
+
+--- a/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp	2026-10-08 21:27:43.492523527 +0800
++++ b/Source/WebCore/Modules/mediastream/gstreamer/GStreamerMediaEndpoint.cpp	2026-10-08 21:27:43.492523527 +0800
+@@ -731,7 +731,7 @@
+             source->configure(WTF::move(allowedCaps));
+             if (!source->pad()) {
+                 auto rtpCaps = source->rtpCaps();
+-                auto sinkPad = requestPad(rtpCaps, source->mediaStreamID());
++                auto sinkPad = requestPad(rtpCaps, source->mediaStreamID(), i);
+                 source->setSinkPad(WTF::move(sinkPad));
+             }
+ 
+@@ -1224,7 +1224,7 @@
+ #endif
+ }
+ 
+-GRefPtr<GstPad> GStreamerMediaEndpoint::requestPad(const GRefPtr<GstCaps>& allowedCaps, const String& mediaStreamID)
++GRefPtr<GstPad> GStreamerMediaEndpoint::requestPad(const GRefPtr<GstCaps>& allowedCaps, const String& mediaStreamID, std::optional<unsigned> mLineIndex)
+ {
+     GST_DEBUG_OBJECT(m_pipeline.get(), "Requesting sink pad for %" GST_PTR_FORMAT " and mediaStreamID %s", allowedCaps.get(), mediaStreamID.ascii().data());
+     GRefPtr caps = adoptGRef(gst_caps_copy(allowedCaps.get()));
+@@ -1278,11 +1278,31 @@
+ 
+         g_object_set(transceiver.get(), "codec-preferences", caps.get(), nullptr);
+         GST_DEBUG_OBJECT(m_pipeline.get(), "Expecting transceiver %" GST_PTR_FORMAT " to associate to new webrtc sink pad", transceiver.get());
++        // GStreamer < 1.26 has an inverted codec-preferences intersect check when
++        // matching unnamed request pads to unassociated transceivers
++        // (https://gitlab.freedesktop.org/gstreamer/gstreamer/-/commit/09d870a39c28428dc1c8ed77006bf8ad6d3f005e).
++        // Temporarily install a non-intersecting placeholder so the buggy path
++        // still picks this transceiver; real preferences are restored on the
++        // pad's transceiver below.
++        guint gstMajor, gstMinor, gstMicro, gstNano;
++        gst_version(&gstMajor, &gstMinor, &gstMicro, &gstNano);
++        if (gstMajor == 1 && gstMinor < 26) {
++            auto media = kind == GST_WEBRTC_KIND_VIDEO ? "video" : "audio";
++            GRefPtr placeholder = adoptGRef(gst_caps_new_simple("application/x-rtp", "media", G_TYPE_STRING, media, "encoding-name", G_TYPE_STRING, "X-WEBKIT-UNMATCHED", nullptr));
++            g_object_set(transceiver.get(), "codec-preferences", placeholder.get(), nullptr);
++        }
+         return true;
+     });
+ 
++    // Name the pad after the SDP m-line when we know it. createOffer bumps
++    // max_sink_pad_serial to the media count, so an unnamed request would get
++    // sink_N with N >= media_count and never match the negotiated m-line.
++    GUniquePtr<char> padName;
++    if (mLineIndex)
++        padName.reset(g_strdup_printf("sink_%u", *mLineIndex));
++
+     auto padTemplate = gst_element_get_pad_template(m_webrtcBin.get(), "sink_%u");
+-    GRefPtr sinkPad = adoptGRef(gst_element_request_pad(m_webrtcBin.get(), padTemplate, nullptr, caps.get()));
++    GRefPtr sinkPad = adoptGRef(gst_element_request_pad(m_webrtcBin.get(), padTemplate, padName.get(), caps.get()));
+ 
+     if (!mediaStreamID.isEmpty()) {
+         GST_DEBUG_OBJECT(m_pipeline.get(), "Setting msid to %s on sink pad %" GST_PTR_FORMAT, mediaStreamID.ascii().data(), sinkPad.get());
+@@ -1382,7 +1402,7 @@
+ 
+         source->configure(WTF::move(allowedCaps));
+         auto rtpCaps = source->rtpCaps();
+-        auto sinkPad = requestPad(rtpCaps, source->mediaStreamID());
++        auto sinkPad = requestPad(rtpCaps, source->mediaStreamID(), mLineIndex);
+         source->setSinkPad(WTF::move(sinkPad));
+     } else {
+         ASSERT(track.privateTrack().isVideo());
+@@ -1392,7 +1412,7 @@
+ 
+         source->configure(WTF::move(allowedCaps));
+         auto rtpCaps = source->rtpCaps();
+-        auto sinkPad = requestPad(rtpCaps, source->mediaStreamID());
++        auto sinkPad = requestPad(rtpCaps, source->mediaStreamID(), mLineIndex);
+         source->setSinkPad(WTF::move(sinkPad));
+     }
+ }
+@@ -1607,6 +1627,13 @@
+ 
+     unsigned totalExpectedMediaTracks = 0;
+     forEachTransceiver(m_webrtcBin, [&](auto&& transceiver) -> bool {
++        // Unassociated transceivers (no mid) must not inflate the expected
++        // count; GStreamer < 1.26 can leave extras after addTrack fails to
++        // recycle, and waiting for them prevents dataFlowStarted / ontrack.
++        GUniqueOutPtr<char> mid;
++        g_object_get(transceiver.get(), "mid", &mid.outPtr(), nullptr);
++        if (!mid || !mid.get()[0])
++            return false;
+         GstWebRTCRTPTransceiverDirection direction;
+         g_object_get(transceiver.get(), "current-direction", &direction, nullptr);
+         switch (direction) {

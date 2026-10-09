@@ -19,23 +19,42 @@ Applications symlink (drag-to-Applications):
     tailcat-box-macos-arm64-v0.4.0.dmg
     tailcat-box-macos-amd64-v0.4.0.dmg
 
+Linux jobs publish a tarball and a Debian package from the bare binary:
+
+    tailcat-box-linux-amd64-v0.4.0.tar.gz   tailcat-box, .desktop, icon, install.sh
+    tailcat-box-linux-amd64-v0.4.0.deb      /usr/bin, applications, pixmaps
+    tailcat-box-linux-amd64-v0.4.0-full.tar.gz
+        the tarball plus webkit/, a private WebKitGTK built with WebRTC so
+        calls work. Made only when third_party/webkitgtk has an archive for
+        the arch (webkitgtk-webrtc-<ver>-linux-<arch>.tar.zst, Git LFS).
+
 ``version`` keeps the leading ``v`` from the git tag.
 """
 
 from __future__ import annotations
 
 import argparse
+import glob
+import io
 import os
+import re
 import platform
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
+import time
 from pathlib import Path
 
 
 VOLUME_NAME = "Tailcat Box"
 PORTABLE_EXE_NAME = "tailcat-box.exe"
+LINUX_BINARY = "tailcat-box"
+DEB_DEPENDS = "libwebkit2gtk-4.1-0, libgtk-3-0t64 | libgtk-3-0"
+# GStreamer backs WebKitGTK audio/video, so voice notes need these plugins.
+DEB_RECOMMENDS = "gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad, gstreamer1.0-nice"
+DEB_MAINTAINER = "mushroom11s <28756933+mushroom11s@users.noreply.github.com>"
 
 
 def normalize_arch(raw: str) -> str:
@@ -61,7 +80,44 @@ def artifact_name(os_slug: str, arch: str, version: str) -> str:
         return f"tailcat-box-windows-{arch}-installer-{version}.exe"
     if os_slug == "macos":
         return f"tailcat-box-macos-{arch}-{version}.dmg"
+    if os_slug == "linux":
+        return f"tailcat-box-linux-{arch}-{version}.tar.gz"
     raise SystemExit(f"unsupported os slug: {os_slug}")
+
+
+def full_artifact_name(arch: str, version: str) -> str:
+    return f"tailcat-box-linux-{_require_arch(arch)}-{version}-full.tar.gz"
+
+
+def find_webkit_archive(webkit_dir: Path, arch: str) -> Path | None:
+    """The prebuilt WebKitGTK for arch, or None when it is not committed yet."""
+    arch = _require_arch(arch)
+    matches = sorted(Path(p) for p in glob.glob(str(webkit_dir / f"webkitgtk-webrtc-*-linux-{arch}.tar.zst")))
+    if not matches:
+        return None
+    if len(matches) > 1:
+        names = ", ".join(p.name for p in matches)
+        raise SystemExit(f"expected one WebKitGTK archive for {arch} in {webkit_dir}, found: {names}")
+    archive = matches[0]
+    with archive.open("rb") as fh:
+        head = fh.read(64)
+    if head.startswith(b"version https://git-lfs"):
+        raise SystemExit(f"{archive} is a Git LFS pointer. Check out with LFS (actions/checkout lfs: true).")
+    return archive
+
+
+def deb_name(arch: str, version: str) -> str:
+    return f"tailcat-box-linux-{_require_arch(arch)}-{version}.deb"
+
+
+def debian_version(version: str) -> str:
+    """v1.2.7 -> 1.2.7; v1.2.7-beta.1 -> 1.2.7~beta.1 (sorts before 1.2.7)."""
+    raw = version.strip().lstrip("vV")
+    raw = raw.replace("-", "~")
+    raw = re.sub(r"[^0-9A-Za-z.+~]", ".", raw)
+    if not raw or not raw[0].isdigit():
+        raw = f"0.0.0~{raw}"
+    return raw
 
 
 def portable_exe_name(os_slug: str, arch: str, version: str) -> str:
@@ -205,14 +261,118 @@ def package_windows_portable(bin_dir: Path, dest: Path) -> None:
     shutil.copy2(app, dest)
 
 
+def find_linux_binary(bin_dir: Path) -> Path:
+    binary = bin_dir / LINUX_BINARY
+    if not binary.is_file():
+        raise SystemExit(f"missing Linux binary: {binary}")
+    return binary
+
+
+def _add_file(tar: tarfile.TarFile, name: str, data: bytes, mode: int) -> None:
+    info = tarfile.TarInfo(name)
+    info.size = len(data)
+    info.mode = mode
+    info.mtime = int(time.time())
+    tar.addfile(info, io.BytesIO(data))
+
+
+def package_linux_tarball(binary: Path, linux_dir: Path, icon: Path, dest: Path) -> None:
+    """One top-level folder named like the tarball, so extracting is tidy."""
+    top = dest.name[: -len(".tar.gz")]
+    if dest.exists():
+        dest.unlink()
+    with tarfile.open(dest, "w:gz") as tar:
+        _add_file(tar, f"{top}/{LINUX_BINARY}", binary.read_bytes(), 0o755)
+        _add_file(tar, f"{top}/install.sh", (linux_dir / "install.sh").read_bytes(), 0o755)
+        _add_file(tar, f"{top}/tailcat-box.desktop", (linux_dir / "tailcat-box.desktop").read_bytes(), 0o644)
+        _add_file(tar, f"{top}/tailcat-box.png", icon.read_bytes(), 0o644)
+
+
+def package_linux_full(binary: Path, linux_dir: Path, icon: Path, archive: Path, dest: Path) -> None:
+    """Small tarball layout plus webkit/. The binary's RPATH points there."""
+    if shutil.which("patchelf") is None:
+        raise SystemExit("patchelf is required to build the full Linux package")
+    top = dest.name[: -len(".tar.gz")]
+    work = Path(tempfile.mkdtemp(prefix="tailcat-full-"))
+    try:
+        root = work / top
+        root.mkdir()
+        app = root / LINUX_BINARY
+        shutil.copyfile(binary, app)
+        app.chmod(0o755)
+        # DT_RPATH (not RUNPATH) also covers libwebkit's own dependencies.
+        subprocess.run(["patchelf", "--force-rpath", "--set-rpath", "$ORIGIN/webkit/lib", str(app)], check=True)
+        subprocess.run(["tar", "--zstd", "-xf", str(archive.resolve()), "-C", str(root)], check=True)
+        if not (root / "webkit" / "libexec" / "WebKitWebProcess").is_file():
+            raise SystemExit(f"{archive} has no webkit/libexec/WebKitWebProcess")
+        for name, mode in (("install.sh", 0o755), ("tailcat-box.desktop", 0o644)):
+            shutil.copyfile(linux_dir / name, root / name)
+            (root / name).chmod(mode)
+        shutil.copyfile(icon, root / "tailcat-box.png")
+        if dest.exists():
+            dest.unlink()
+        with tarfile.open(dest, "w:gz") as tar:
+            tar.add(root, arcname=top)
+    finally:
+        shutil.rmtree(work)
+
+
+def deb_control(version: str, arch: str, installed_kb: int) -> str:
+    return (
+        "Package: tailcat-box\n"
+        f"Version: {debian_version(version)}\n"
+        f"Architecture: {_require_arch(arch)}\n"
+        f"Maintainer: {DEB_MAINTAINER}\n"
+        f"Installed-Size: {installed_kb}\n"
+        f"Depends: {DEB_DEPENDS}\n"
+        f"Recommends: {DEB_RECOMMENDS}\n"
+        "Section: net\n"
+        "Priority: optional\n"
+        "Homepage: https://github.com/mushroom11s/Tailcat-Box\n"
+        "Description: Desktop GUI for Tailscale Tailcat\n"
+        " Chat rooms, voice notes, Mew Share file transfer, port tunnels, and SSH over Tailcat.\n"
+    )
+
+
+def package_linux_deb(binary: Path, linux_dir: Path, icon: Path, dest: Path, version: str, arch: str) -> None:
+    if shutil.which("dpkg-deb") is None:
+        raise SystemExit("dpkg-deb is required to build the .deb")
+    root = Path(tempfile.mkdtemp(prefix="tailcat-deb-"))
+    try:
+        files = {
+            root / "usr/bin" / LINUX_BINARY: (binary, 0o755),
+            root / "usr/share/applications/tailcat-box.desktop": (linux_dir / "tailcat-box.desktop", 0o644),
+            root / "usr/share/pixmaps/tailcat-box.png": (icon, 0o644),
+        }
+        size = 0
+        for target, (src, mode) in files.items():
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(src, target)
+            target.chmod(mode)
+            size += target.stat().st_size
+        control = root / "DEBIAN/control"
+        control.parent.mkdir()
+        control.write_text(deb_control(version, arch, (size + 1023) // 1024))
+        for d in [root, *[p for p in root.rglob("*") if p.is_dir()]]:
+            d.chmod(0o755)
+        if dest.exists():
+            dest.unlink()
+        subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(root), str(dest)], check=True)
+    finally:
+        shutil.rmtree(root)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--version", required=True)
-    parser.add_argument("--os-slug", required=True, choices=("macos", "windows"))
+    parser.add_argument("--os-slug", required=True, choices=("macos", "windows", "linux"))
     parser.add_argument("--arch", default="", help="amd64 or arm64. Defaults to this machine.")
     parser.add_argument("--bin-dir", default="build/bin")
     parser.add_argument("--out-dir", default="dist-upload")
     parser.add_argument("--volume-name", default=VOLUME_NAME)
+    parser.add_argument("--linux-dir", default="build/linux")
+    parser.add_argument("--icon", default="build/appicon.png")
+    parser.add_argument("--webkit-dir", default="third_party/webkitgtk")
     args = parser.parse_args()
 
     bin_dir = Path(args.bin_dir)
@@ -231,6 +391,22 @@ def main() -> int:
         package_windows_portable(bin_dir, portable)
         print(installer)
         print(portable)
+    elif args.os_slug == "linux":
+        binary = find_linux_binary(bin_dir)
+        linux_dir, icon = Path(args.linux_dir), Path(args.icon)
+        tarball = out_dir / artifact_name(args.os_slug, arch, args.version)
+        deb = out_dir / deb_name(arch, args.version)
+        package_linux_tarball(binary, linux_dir, icon, tarball)
+        package_linux_deb(binary, linux_dir, icon, deb, args.version, arch)
+        print(tarball)
+        print(deb)
+        archive = find_webkit_archive(Path(args.webkit_dir), arch)
+        if archive is None:
+            print(f"no WebKitGTK archive for {arch} in {args.webkit_dir}; skipping the full package")
+        else:
+            full = out_dir / full_artifact_name(arch, args.version)
+            package_linux_full(binary, linux_dir, icon, archive, full)
+            print(full)
     else:
         dest = out_dir / artifact_name(args.os_slug, arch, args.version)
         package_macos_dmg(find_macos_app(bin_dir), dest, args.volume_name)

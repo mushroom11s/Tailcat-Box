@@ -5,6 +5,9 @@ export const micDeniedError = "Microphone access was denied.";
 export const cameraDeniedError = "Camera access was denied.";
 export const screenDeniedError = "Screen sharing was denied.";
 export const screenUnavailableError = "Screen sharing is unavailable on this system.";
+// Distro WebKitGTK builds (Debian, Ubuntu) compile WebRTC out, so Linux
+// has no RTCPeerConnection. Voice notes still work there; calls do not.
+export const callUnsupportedError = "Calls need WebRTC, which this system's web engine does not include.";
 export const liveMediaError =
   "Live media failed. Restrictive networks have no relay for calls, so voice and video can fail while chat still works.";
 
@@ -145,32 +148,61 @@ export function createLiveCall(options: Options): LiveCall {
     });
   }
 
+  function peerCtor(): PeerCtor | undefined {
+    try {
+      const Ctor = options.PeerConnection?.() ?? (globalThis as { RTCPeerConnection?: PeerCtor }).RTCPeerConnection;
+      return typeof Ctor === "function" ? Ctor : undefined;
+    } catch {
+      // A bare RTCPeerConnection reference throws where the global is missing.
+      return undefined;
+    }
+  }
+
   function openPeer(gen: number): RTCPeerConnection {
-    const Ctor = options.PeerConnection?.() ?? RTCPeerConnection;
-    if (typeof Ctor !== "function") {
-      throw new Error(liveMediaError);
+    const Ctor = peerCtor();
+    if (!Ctor) {
+      throw new Error(callUnsupportedError);
     }
     const next = new Ctor({ iceServers });
     pc = next;
-    next.addEventListener("track", (event) => {
-      if (pc !== next) {
+    const takeRemote = (stream: MediaStream | null, track?: MediaStreamTrack | null) => {
+      if (!stream || pc !== next) {
         return;
       }
+      remoteStream = stream;
+      publish();
+      if (mode === "screen" && track?.kind === "video") {
+        watchEnded(track, gen);
+      }
+    };
+    next.addEventListener("track", (event) => {
       const trackEvent = event as RTCTrackEvent;
       const remote =
         trackEvent.streams?.[0] ??
         (trackEvent.track && typeof MediaStream === "function" ? new MediaStream([trackEvent.track]) : null);
-      if (remote) {
-        remoteStream = remote;
-        publish();
-      }
-      if (mode === "screen" && trackEvent.track?.kind === "video") {
-        watchEnded(trackEvent.track, gen);
-      }
+      takeRemote(remote, trackEvent.track);
     });
+    // WebKitGTK on GStreamer < 1.26 can skip the track event even though
+    // getReceivers() already has live tracks (audio/video RTP still flows).
+    const pickReceivers = () => {
+      if (pc !== next || remoteStream || typeof MediaStream !== "function") {
+        return;
+      }
+      const tracks = next
+        .getReceivers()
+        .map((receiver) => receiver.track)
+        .filter((track): track is MediaStreamTrack => !!track && track.readyState !== "ended");
+      if (!tracks.length) {
+        return;
+      }
+      takeRemote(new MediaStream(tracks), tracks.find((track) => track.kind === "video") ?? tracks[0]);
+    };
     const onState = () => {
       if (retired.has(next) || pc !== next || gen !== generation) {
         return;
+      }
+      if (next.connectionState === "connected") {
+        pickReceivers();
       }
       if (next.connectionState === "failed" || next.connectionState === "closed" || next.iceConnectionState === "failed") {
         failLive();
@@ -288,6 +320,12 @@ export function createLiveCall(options: Options): LiveCall {
 
   const api: LiveCall = {
     async start(nextMode) {
+      if (!peerCtor()) {
+        // Fail before asking for the microphone or screen.
+        error = callUnsupportedError;
+        publish();
+        return;
+      }
       const gen = ++generation;
       buildingOffer = true;
       signaled = false;
@@ -494,6 +532,7 @@ function failureText(err: unknown): string {
     err.message === screenDeniedError ||
     err.message === screenUnavailableError ||
     err.message === liveMediaError ||
+    err.message === callUnsupportedError ||
     err.message === "Could not reach peer. Check the address and that they are online." ||
     err.message === "no peer"
   ) {

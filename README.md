@@ -2,9 +2,9 @@
 
 [中文说明](README.zh-CN.md)
 
-Desktop GUI for [Tailscale Tailcat](https://github.com/tailscale/tailcat) on macOS and Windows, built with [Wails](https://wails.io) v2 (Go + React + TypeScript).
+Desktop GUI for [Tailscale Tailcat](https://github.com/tailscale/tailcat) on macOS, Windows, and Linux, built with [Wails](https://wails.io) v2 (Go + React + TypeScript).
 
-[![CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg)](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/mushroom11s/tailcat-box)](https://github.com/mushroom11s/tailcat-box/releases) [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows-lightgrey) [![Telegram](https://img.shields.io/badge/Telegram-chat-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+YCUAoqBJ_ZIyZGVh)
+[![CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg)](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/mushroom11s/tailcat-box)](https://github.com/mushroom11s/tailcat-box/releases) [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) [![Telegram](https://img.shields.io/badge/Telegram-chat-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+YCUAoqBJ_ZIyZGVh)
 
 <p align="center">
   <img src="docs/assets/icon.png" alt="Tailcat Box" width="160" />
@@ -46,7 +46,7 @@ The window opens at 1100×980 on Mew Share. The active sidebar item keeps its fu
 - **Tunnel** — serve TCP ports, forward them to this machine, or browse the peer’s web port
 - **SSH** — optional, and off until you turn on Allow SSH. This is Tailcat’s built-in shell, not the operating system’s sshd. It trusts the Tailcat address plus an allowlist of saved devices and open chat rooms, not an OS password or an SSH key. Allow any peer is a separate warning. SSH opens an in-app shell or the system terminal
 - **Settings** — system / light / dark theme, English and 简体中文, keys and DERP, client and system info, launch at login
-- **Tray** — Open, Hide, Chat, Tunnel, Settings, and Quit on macOS and Windows. Left-click the icon to show the window. The macOS app menu has the same actions. The tray icon is the same pixel-art cat as the app icon. Closing the window hides it so sessions keep running
+- **Tray** — Open, Hide, Chat, Tunnel, Settings, and Quit on macOS, Windows, and Linux (Linux needs a StatusNotifierItem tray; see [Linux](#linux)). Left-click the icon to show the window. The macOS app menu has the same actions. The tray icon is the same pixel-art cat as the app icon. Closing the window hides it so sessions keep running
 - **macOS window** — The standard title bar stays visible and shows Tailcat Box. The green button, and View → Enter Full Screen / Exit Full Screen (⌃⌘F), use native fullscreen. Windows and Linux are unchanged
 
 The UI talks to a Go service layer. Only `internal/adapter` imports `github.com/tailscale/tailcat` (pinned at **v0.7.0**).
@@ -58,7 +58,7 @@ The UI talks to a Go service layer. Only `internal/adapter` imports `github.com/
 | **Go 1.27.1+** | Required by `github.com/tailscale/tailcat` v0.7.0. Wails v2.16 needs Go 1.25+. Older local Go can still bootstrap with `GOTOOLCHAIN=auto`. |
 | **Node.js 18+** and npm | Frontend is Vite + React + TypeScript in `frontend/`. |
 | **Wails CLI v2** | `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0` |
-| **Platform webview** | macOS: Xcode Command Line Tools. Windows: WebView2 (usually already installed). |
+| **Platform webview** | macOS: Xcode Command Line Tools. Windows: WebView2 (usually already installed). Linux: `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`. |
 
 ```bash
 wails doctor
@@ -99,9 +99,9 @@ On the OS you want a binary for:
 wails build
 ```
 
-The binary is `build/bin/tailcat-box` (`.app` on macOS, `.exe` on Windows). macOS and Windows are the product targets.
+The binary is `build/bin/tailcat-box` (`.app` on macOS, `.exe` on Windows).
 
-Linux is not a shipped target. On Ubuntu 24.04 you can still build with `wails build -tags webkit2_41` after installing `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`.
+On Linux, install `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, then run `wails build -tags webkit2_41`.
 
 Frontend only:
 
@@ -157,7 +157,7 @@ The Keys page also lists the Tailcat CLI key directory (`~/.config/tailcat/keys`
 
 ## Releases
 
-Pushing a `v*` tag builds unsigned installers, plus a Windows portable exe, and attaches them to a GitHub Release. Download the file and open it:
+Pushing a `v*` tag builds unsigned installers, plus a Windows portable exe and Linux packages, and attaches them to a GitHub Release. Download the file and open it:
 
 | File | How to install |
 | --- | --- |
@@ -167,10 +167,30 @@ Pushing a `v*` tag builds unsigned installers, plus a Windows portable exe, and 
 | `tailcat-box-windows-arm64-installer-vX.Y.Z.exe` | Windows ARM64 NSIS setup. Run it. |
 | `tailcat-box-windows-amd64-vX.Y.Z.exe` | Windows x64 portable build. Run this exe. No setup program. |
 | `tailcat-box-windows-arm64-vX.Y.Z.exe` | Windows ARM64 portable build. Run this exe. No setup program. |
+| `tailcat-box-linux-amd64-vX.Y.Z.deb` / `-arm64-` | Debian / Ubuntu. `sudo apt install ./tailcat-box-linux-amd64-vX.Y.Z.deb` |
+| `tailcat-box-linux-amd64-vX.Y.Z.tar.gz` / `-arm64-` | Any distro. Extract it and run `./install.sh` (installs to `~/.local`, no sudo), or just run `./tailcat-box`. |
+| `tailcat-box-linux-amd64-vX.Y.Z-full.tar.gz` / `-arm64-` | Full package: the same, plus a bundled WebKitGTK with WebRTC so voice/video calls and screen share work. Larger download. |
 
 The version in the filename is the git tag, including the leading `v`. These builds are unsigned, so Gatekeeper and SmartScreen warnings are expected. macOS: System Settings → Privacy & Security → Open Anyway, or right-click → Open. Windows: More info → Run anyway. Notes for that tag live under `docs/releases/`.
 
 Tagging, dry-run builds, and which runners are used are described in [docs/releases/README.md](docs/releases/README.md).
+
+## Linux
+
+The Linux packages are built on Ubuntu 24.04 and need glibc 2.39 or newer (Ubuntu 24.04+, Debian 13+, Fedora 40+). Runtime libraries:
+
+```bash
+# Debian / Ubuntu (the .deb pulls these in)
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+# Fedora
+sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-bad-free
+```
+
+- **Tray** — uses the StatusNotifierItem (AppIndicator) protocol over D-Bus. KDE, Xfce, Cinnamon, and Ubuntu's GNOME show it. Stock GNOME needs the *AppIndicator and KStatusNotifierItem Support* extension. Without a tray, closing the window quits the app instead of hiding it.
+- **Voice and video calls, and screen sharing, need WebRTC.** Debian, Ubuntu, and Fedora build WebKitGTK without it, so the small packages cannot make calls and the app says so. Voice notes, chat, files, Mew Share, tunnels, and SSH work. The `-full.tar.gz` package bundles WebKitGTK built with WebRTC (see [third_party/webkitgtk](third_party/webkitgtk/README.md)); it also needs `gstreamer1.0-plugins-bad gstreamer1.0-nice gstreamer1.0-plugins-good`. In-app updates keep a full install on the full package.
+- **Open in Terminal** — tries `x-terminal-emulator`, `gnome-terminal`, `ptyxis`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `foot`, then `xterm`.
+- **Launch at login** writes `~/.config/autostart/tailcat-box.desktop`.
+- **Updates** — the in-app checker downloads the new `.tar.gz` and shows it in its folder. Install it the same way as before.
 
 ## macOS microphone, camera, and screen sharing
 

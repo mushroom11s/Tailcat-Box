@@ -10,13 +10,15 @@ The [Release workflow](../../.github/workflows/release.yml) uses standard GitHub
 | `macos-15-intel` | Intel Mac disk image, `tailcat-box-macos-amd64-<tag>.dmg`. `macos-13` was retired in December 2025. |
 | `windows-latest` | Windows amd64 NSIS setup `tailcat-box-windows-amd64-installer-<tag>.exe`, and bare portable exe `tailcat-box-windows-amd64-<tag>.exe` |
 | `windows-11-arm` | Windows ARM64 NSIS setup `tailcat-box-windows-arm64-installer-<tag>.exe`, and bare portable exe `tailcat-box-windows-arm64-<tag>.exe` |
+| `ubuntu-24.04` | Linux amd64 `tailcat-box-linux-amd64-<tag>.tar.gz` (binary, `.desktop`, icon, `install.sh`) and `tailcat-box-linux-amd64-<tag>.deb` |
+| `ubuntu-24.04-arm` | Linux arm64 `.tar.gz` and `.deb`, same layout |
 
 The Windows installer filename always includes `installer`. The portable build is a bare runnable exe with the same basename as the old v0.3.0 zip (`tailcat-box-windows-<arch>-<tag>.exe`). It is a copy of Wails' `tailcat-box.exe`. Current Wails output is that one file and no sidecar DLL, so the release does not ship a portable zip or extra DLLs. The `installer` word keeps the setup program distinct from the portable exe.
 
 | Workflow | When | What |
 | --- | --- | --- |
 | [CI](../../.github/workflows/ci.yml) | Pull requests and pushes to `main` | `go test ./...`, `scripts/package_wails_artifact_test.py`, and `frontend` `npm ci` + `npm run build` on `ubuntu-latest` |
-| [Release](../../.github/workflows/release.yml) | Push of a `v*` tag, or **Run workflow** | `wails build` for the four targets above, package a `.dmg`, a Windows NSIS `.exe` whose name includes `installer`, and a bare Windows portable `.exe`, and publish a GitHub Release when the tag is real |
+| [Release](../../.github/workflows/release.yml) | Push of a `v*` tag, or **Run workflow** | `wails build` for the six targets above, package a `.dmg`, a Windows NSIS `.exe` whose name includes `installer`, a bare Windows portable `.exe`, and a Linux `.tar.gz` and `.deb`, and publish a GitHub Release when the tag is real |
 
 Installers are unsigned (no Apple notarization, no Authenticode), so Gatekeeper and SmartScreen warnings are expected.
 
@@ -32,11 +34,13 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-3. The workflow builds the installers and the Windows portable exe, and attaches the `.dmg` and `.exe` files to the GitHub Release. The body is `docs/releases/<tag>.md` when that file exists. If it is missing, this README is copied into a short fallback. Do not force-push tags.
+3. The workflow builds the installers and the Windows portable exe, and attaches the `.dmg`, `.exe`, `.tar.gz`, and `.deb` files to the GitHub Release. The body is `docs/releases/<tag>.md` when that file exists. If it is missing, this README is copied into a short fallback. Do not force-push tags.
 
 The filename version is the git tag, including the leading `v` (`tailcat-box-macos-arm64-v0.4.0.dmg`). Each Windows matrix cell runs `wails build -nsis` after `choco install nsis`. That leaves a single-arch NSIS setup and the runnable `tailcat-box.exe`. Packaging copies the setup to `tailcat-box-windows-<arch>-installer-<tag>.exe` and copies the runnable exe to `tailcat-box-windows-<arch>-<tag>.exe`. It does not write a portable zip. Wails currently leaves no sidecar DLL next to that exe, so the portable asset is the one file. Each macOS cell wraps `tailcat-box.app` plus an Applications symlink in a UDZO disk image with stock `hdiutil`. Installers are unsigned (no notarization, no Authenticode).
 
-The in-app updater prefers the macOS `.dmg` and the Windows installer whose name contains `installer`. The bare portable exe uses the same name as the v1.0.0 / v1.1.0 setup (`tailcat-box-windows-<arch>-<tag>.exe`). That exe, and older `.zip` names, are fallbacks when the labeled installer is absent. A portable exe or zip published next to the labeled installer is not selected.
+Each Linux cell installs `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, runs `wails build -tags webkit2_41`, and packages the binary as a `.tar.gz` and, with `dpkg-deb`, a `.deb` (prerelease tags become Debian versions like `1.2.7~beta.1`).
+
+The in-app updater prefers the macOS `.dmg`, the Windows installer whose name contains `installer`, and the Linux `.tar.gz` (then `.deb`). The bare portable exe uses the same name as the v1.0.0 / v1.1.0 setup (`tailcat-box-windows-<arch>-<tag>.exe`). That exe, and older `.zip` names, are fallbacks when the labeled installer is absent. A portable exe or zip published next to the labeled installer is not selected.
 
 ## Dry run
 
