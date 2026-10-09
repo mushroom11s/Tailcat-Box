@@ -124,6 +124,7 @@ type SystemInfo struct {
 	OSVersion              string
 	LaunchAtLogin          bool
 	LaunchAtLoginSupported bool
+	ReceiveBetaUpdates     bool
 	NetworkOnline          bool
 	NetworkSummary         string
 }
@@ -1007,7 +1008,8 @@ func (a *App) GetUpdateStatus() UpdateStatus {
 	return overlayUpdateDownload(status, a.downloadProgress())
 }
 
-// CheckForUpdate fetches the latest stable GitHub Release and stores the result.
+// CheckForUpdate fetches the newest applicable GitHub Release and stores the result.
+// Pre-releases are included only when Receive Beta Updates is on.
 func (a *App) CheckForUpdate() (UpdateStatus, error) {
 	if prog := a.downloadProgress(); prog.downloading {
 		return a.GetUpdateStatus(), nil
@@ -1180,17 +1182,28 @@ func updateGOOS() string {
 }
 
 func (a *App) checkerLocked() *update.Checker {
-	if a.updates != nil {
-		return a.updates
+	includePre := false
+	if a.settings != nil {
+		includePre = a.settings.BetaUpdatesEnabled()
 	}
-	a.updates = update.New(update.Config{
-		CurrentVersion: appinfo.ClientVersion(),
-		LatestURL:      os.Getenv("TAILCAT_UPDATE_URL"),
-		DownloadsDir:   os.Getenv("TAILCAT_DOWNLOADS_DIR"),
-		GOOS:           updateGOOS(),
-		GOARCH:         goruntime.GOARCH,
-		UserAgent:      update.UserAgent(appinfo.ClientVersion()),
-	})
+	if a.updates == nil {
+		updateURL := os.Getenv("TAILCAT_UPDATE_URL")
+		cfg := update.Config{
+			CurrentVersion:    appinfo.ClientVersion(),
+			LatestURL:         updateURL,
+			DownloadsDir:      os.Getenv("TAILCAT_DOWNLOADS_DIR"),
+			GOOS:              updateGOOS(),
+			GOARCH:            goruntime.GOARCH,
+			UserAgent:         update.UserAgent(appinfo.ClientVersion()),
+			IncludePrerelease: includePre,
+		}
+		// Tests point both feeds at the same httptest server via TAILCAT_UPDATE_URL.
+		if updateURL != "" {
+			cfg.ReleasesURL = updateURL
+		}
+		a.updates = update.New(cfg)
+	}
+	a.updates.SetIncludePrerelease(includePre)
 	return a.updates
 }
 
@@ -1300,6 +1313,16 @@ func (a *App) SetLaunchAtLogin(enabled bool) (SystemInfo, error) {
 	return a.systemInfo(), nil
 }
 
+// SetReceiveBetaUpdates persists whether check-for-update should consider GitHub pre-releases.
+func (a *App) SetReceiveBetaUpdates(enabled bool) (SystemInfo, error) {
+	if a.settings != nil {
+		if err := a.settings.SetReceiveBetaUpdates(enabled); err != nil {
+			return a.systemInfo(), err
+		}
+	}
+	return a.systemInfo(), nil
+}
+
 func (a *App) systemInfo() SystemInfo {
 	net := sysinfo.Network()
 	info := SystemInfo{
@@ -1310,6 +1333,7 @@ func (a *App) systemInfo() SystemInfo {
 	}
 	if a.settings != nil {
 		info.LaunchAtLogin, _ = a.settings.Snapshot()
+		info.ReceiveBetaUpdates = a.settings.BetaUpdatesEnabled()
 	}
 	if autostart.Supported() {
 		if enabled, err := autostart.Enabled(); err == nil {

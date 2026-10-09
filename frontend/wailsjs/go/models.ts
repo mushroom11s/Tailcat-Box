@@ -157,6 +157,7 @@ export namespace main {
 	    OSVersion: string;
 	    LaunchAtLogin: boolean;
 	    LaunchAtLoginSupported: boolean;
+	    ReceiveBetaUpdates: boolean;
 	    NetworkOnline: boolean;
 	    NetworkSummary: string;
 	
@@ -169,6 +170,7 @@ export namespace main {
 	        this.OSVersion = source["OSVersion"];
 	        this.LaunchAtLogin = source["LaunchAtLogin"];
 	        this.LaunchAtLoginSupported = source["LaunchAtLoginSupported"];
+	        this.ReceiveBetaUpdates = source["ReceiveBetaUpdates"];
 	        this.NetworkOnline = source["NetworkOnline"];
 	        this.NetworkSummary = source["NetworkSummary"];
 	    }

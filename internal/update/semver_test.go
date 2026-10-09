@@ -26,6 +26,9 @@ func TestParseAndCompareSemver(t *testing.T) {
 		{"0.1.0-dev", "v0.1.0", -1},
 		{"0.1.0-dev", "0.1.0-dev", 0},
 		{"0.2.0-dev", "0.1.0", 1},
+		{"1.2.7-beta.1", "1.2.7", -1},
+		{"1.2.7-beta.1", "1.2.7-beta.2", -1},
+		{"1.2.8-beta.1", "1.2.7", 1},
 	}
 	for _, tc := range cases {
 		got, err := Compare(tc.a, tc.b)

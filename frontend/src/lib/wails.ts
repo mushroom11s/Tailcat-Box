@@ -64,6 +64,7 @@ import {
   JoinMiaoShare as bindJoinMiaoShare,
   MiaoShareStatus as bindMiaoShareStatus,
   SetLaunchAtLogin as bindSetLaunchAtLogin,
+  SetReceiveBetaUpdates as bindSetReceiveBetaUpdates,
   SetTrayUnread as bindSetTrayUnread,
   SetUILocale as bindSetUILocale,
 } from "../../wailsjs/go/main/App";
@@ -153,6 +154,7 @@ export type SystemInfo = {
   OSVersion: string;
   LaunchAtLogin: boolean;
   LaunchAtLoginSupported: boolean;
+  ReceiveBetaUpdates: boolean;
   NetworkOnline: boolean;
   NetworkSummary: string;
 };
@@ -234,6 +236,7 @@ type FakeState = {
   startedAt: string;
   lastUpdateCheck: string;
   launchAtLogin: boolean;
+  receiveBetaUpdates: boolean;
   miaoChunkStreams: number;
   update: UpdateStatus;
   updateChecks: number;
@@ -276,6 +279,7 @@ const fake: FakeState = {
   startedAt: new Date().toISOString(),
   lastUpdateCheck: "",
   launchAtLogin: false,
+  receiveBetaUpdates: false,
   miaoChunkStreams: 4,
   update: emptyUpdateStatus(),
   updateChecks: 0,
@@ -1403,6 +1407,7 @@ function asSystemInfo(info: main.SystemInfo): SystemInfo {
     OSVersion: info.OSVersion ?? "",
     LaunchAtLogin: Boolean(info.LaunchAtLogin),
     LaunchAtLoginSupported: Boolean(info.LaunchAtLoginSupported),
+    ReceiveBetaUpdates: Boolean(info.ReceiveBetaUpdates),
     NetworkOnline: Boolean(info.NetworkOnline),
     NetworkSummary: info.NetworkSummary ?? "",
   };
@@ -1423,6 +1428,7 @@ function fakeSystemInfo(): SystemInfo {
     OSVersion: typeof navigator !== "undefined" ? navigator.platform || "browser" : "browser",
     LaunchAtLogin: fake.launchAtLogin,
     LaunchAtLoginSupported: false,
+    ReceiveBetaUpdates: fake.receiveBetaUpdates,
     NetworkOnline: online,
     NetworkSummary: online ? "browser" : "offline",
   };
@@ -1672,6 +1678,14 @@ export async function setLaunchAtLogin(enabled: boolean): Promise<SystemInfo> {
     return asSystemInfo(await bindSetLaunchAtLogin(enabled));
   }
   fake.launchAtLogin = enabled;
+  return fakeSystemInfo();
+}
+
+export async function setReceiveBetaUpdates(enabled: boolean): Promise<SystemInfo> {
+  if (hasWailsBindings()) {
+    return asSystemInfo(await bindSetReceiveBetaUpdates(enabled));
+  }
+  fake.receiveBetaUpdates = enabled;
   return fakeSystemInfo();
 }
 

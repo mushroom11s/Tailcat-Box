@@ -129,3 +129,37 @@ func TestPersistChunkStreams(t *testing.T) {
 		t.Fatalf("persisted ChunkStreams=%d want 1", reloaded.ChunkStreams())
 	}
 }
+
+func TestPersistReceiveBetaUpdates(t *testing.T) {
+	dir := t.TempDir()
+	s, err := settings.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.BetaUpdatesEnabled() {
+		t.Fatal("default ReceiveBetaUpdates should be false")
+	}
+	if err := s.SetReceiveBetaUpdates(true); err != nil {
+		t.Fatal(err)
+	}
+	if !s.BetaUpdatesEnabled() {
+		t.Fatal("ReceiveBetaUpdates not set")
+	}
+	reloaded, err := settings.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reloaded.BetaUpdatesEnabled() {
+		t.Fatal("ReceiveBetaUpdates not persisted")
+	}
+	if err := reloaded.SetReceiveBetaUpdates(false); err != nil {
+		t.Fatal(err)
+	}
+	again, err := settings.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.BetaUpdatesEnabled() {
+		t.Fatal("ReceiveBetaUpdates should clear")
+	}
+}

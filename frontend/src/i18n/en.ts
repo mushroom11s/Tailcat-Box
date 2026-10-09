@@ -145,6 +145,8 @@ export const en = {
   systemInfoTitle: "System Info",
   osVersion: "System version",
   launchAtLogin: "Launch at login",
+  betaUpdates: "Beta updates",
+  betaUpdatesHelp: "When on, Check for updates also considers GitHub pre-releases (for example 1.2.8-beta.1).",
   launchAtLoginNote:
     "Login item registration is available on macOS and Windows. The preference is saved but is not applied on this OS.",
   networkStatus: "Network status",

@@ -14,6 +14,8 @@ import (
 const (
 	// DefaultLatestURL is the GitHub API for the newest stable release.
 	DefaultLatestURL = "https://api.github.com/repos/mushroom11s/tailcat-box/releases/latest"
+	// DefaultReleasesURL lists releases (stable and pre-release) newest-first.
+	DefaultReleasesURL = "https://api.github.com/repos/mushroom11s/tailcat-box/releases"
 
 	// StatusUpToDate means the running version is not older than the release.
 	StatusUpToDate = "upToDate"
@@ -52,10 +54,14 @@ const (
 type Config struct {
 	CurrentVersion string
 	LatestURL      string
-	HTTPClient     *http.Client
-	GOOS           string
-	GOARCH         string
-	DownloadsDir   string
+	// ReleasesURL lists releases when IncludePrerelease is set. Empty uses DefaultReleasesURL.
+	ReleasesURL  string
+	HTTPClient   *http.Client
+	GOOS         string
+	GOARCH       string
+	DownloadsDir string
+	// IncludePrerelease considers GitHub pre-releases when picking the newest tag.
+	IncludePrerelease bool
 	// PermissiveAssets allows non-GitHub download URLs. Tests use it.
 	PermissiveAssets bool
 	UserAgent        string
@@ -97,6 +103,11 @@ func New(cfg Config) *Checker {
 	return &Checker{cfg: cfg}
 }
 
+// SetIncludePrerelease toggles whether Check considers GitHub pre-releases.
+func (c *Checker) SetIncludePrerelease(enabled bool) {
+	c.cfg.IncludePrerelease = enabled
+}
+
 // UserAgent identifies Tailcat Box to the GitHub API.
 func UserAgent(version string) string {
 	version = strings.TrimSpace(version)
@@ -106,7 +117,9 @@ func UserAgent(version string) string {
 	return "TailcatBox/" + version + " (+https://github.com/mushroom11s/tailcat-box)"
 }
 
-// Check fetches the latest stable release and compares it with CurrentVersion.
+// Check fetches the newest applicable GitHub Release and compares it with CurrentVersion.
+// When IncludePrerelease is false, only the stable /releases/latest feed is used.
+// When true, the releases list is scanned and the highest semver (including -beta.N) wins.
 // Transport and parse failures are reported on Result and do not return an error.
 func (c *Checker) Check(ctx context.Context) Result {
 	base := Result{
@@ -115,13 +128,9 @@ func (c *Checker) Check(ctx context.Context) Result {
 		Status:         StatusError,
 		Error:          ErrNetwork,
 	}
-	rel, err := c.fetchLatest(ctx)
+	rel, err := c.fetchSelected(ctx)
 	if err != nil {
 		base.Error = errorCode(err)
-		return base
-	}
-	if rel.Draft || rel.Prerelease || strings.TrimSpace(rel.TagName) == "" {
-		base.Error = ErrParse
 		return base
 	}
 	latest, err := ParseVersion(rel.TagName)
@@ -172,6 +181,55 @@ func (c *Checker) Check(ctx context.Context) Result {
 	return base
 }
 
+func (c *Checker) fetchSelected(ctx context.Context) (ghRelease, error) {
+	if c.cfg.IncludePrerelease {
+		rels, err := c.fetchReleaseList(ctx)
+		if err != nil {
+			return ghRelease{}, err
+		}
+		rel, ok := pickNewestRelease(rels, true)
+		if !ok {
+			return ghRelease{}, errParseSentinel
+		}
+		return rel, nil
+	}
+	rel, err := c.fetchLatest(ctx)
+	if err != nil {
+		return ghRelease{}, err
+	}
+	// Stable channel: never offer a pre-release even if the feed returns one.
+	if rel.Draft || rel.Prerelease || strings.TrimSpace(rel.TagName) == "" {
+		return ghRelease{}, errParseSentinel
+	}
+	return rel, nil
+}
+
+// pickNewestRelease chooses the highest semver release. Drafts are always skipped.
+// When includePre is false, prereleases are skipped too.
+func pickNewestRelease(rels []ghRelease, includePre bool) (ghRelease, bool) {
+	var best ghRelease
+	var bestVer Version
+	found := false
+	for _, rel := range rels {
+		if rel.Draft || strings.TrimSpace(rel.TagName) == "" {
+			continue
+		}
+		if rel.Prerelease && !includePre {
+			continue
+		}
+		ver, err := ParseVersion(rel.TagName)
+		if err != nil {
+			continue
+		}
+		if !found || compareVersion(ver, bestVer) > 0 {
+			best = rel
+			bestVer = ver
+			found = true
+		}
+	}
+	return best, found
+}
+
 type ghRelease struct {
 	TagName    string    `json:"tag_name"`
 	Draft      bool      `json:"draft"`
@@ -188,36 +246,67 @@ type ghAsset struct {
 }
 
 func (c *Checker) fetchLatest(ctx context.Context) (ghRelease, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.LatestURL, nil)
+	body, err := c.getJSON(ctx, c.cfg.LatestURL)
 	if err != nil {
-		return ghRelease{}, errParseSentinel
-	}
-	req.Header.Set("User-Agent", c.cfg.UserAgent)
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	resp, err := c.client(apiTimeout).Do(req)
-	if err != nil {
-		return ghRelease{}, errNetworkSentinel
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, apiBodyLimit))
-	if err != nil {
-		return ghRelease{}, errNetworkSentinel
-	}
-	if rateLimited(resp, body) {
-		return ghRelease{}, errRateSentinel
-	}
-	if resp.StatusCode == http.StatusNotFound {
-		return ghRelease{}, errParseSentinel
-	}
-	if resp.StatusCode != http.StatusOK {
-		return ghRelease{}, errNetworkSentinel
+		return ghRelease{}, err
 	}
 	var rel ghRelease
 	if err := json.Unmarshal(body, &rel); err != nil {
 		return ghRelease{}, errParseSentinel
 	}
 	return rel, nil
+}
+
+func (c *Checker) fetchReleaseList(ctx context.Context) ([]ghRelease, error) {
+	body, err := c.getJSON(ctx, c.releasesListURL())
+	if err != nil {
+		return nil, err
+	}
+	var rels []ghRelease
+	if err := json.Unmarshal(body, &rels); err != nil {
+		return nil, errParseSentinel
+	}
+	return rels, nil
+}
+
+func (c *Checker) releasesListURL() string {
+	raw := strings.TrimSpace(c.cfg.ReleasesURL)
+	if raw == "" {
+		raw = DefaultReleasesURL
+	}
+	if strings.Contains(raw, "?") {
+		return raw + "&per_page=100"
+	}
+	return raw + "?per_page=100"
+}
+
+func (c *Checker) getJSON(ctx context.Context, rawURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, errParseSentinel
+	}
+	req.Header.Set("User-Agent", c.cfg.UserAgent)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	resp, err := c.client(apiTimeout).Do(req)
+	if err != nil {
+		return nil, errNetworkSentinel
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, apiBodyLimit))
+	if err != nil {
+		return nil, errNetworkSentinel
+	}
+	if rateLimited(resp, body) {
+		return nil, errRateSentinel
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, errParseSentinel
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, errNetworkSentinel
+	}
+	return body, nil
 }
 
 func (c *Checker) client(timeout time.Duration) *http.Client {

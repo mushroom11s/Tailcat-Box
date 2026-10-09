@@ -147,6 +147,8 @@ export const zhCN = {
   systemInfoTitle: "系统信息",
   osVersion: "系统版本",
   launchAtLogin: "开机时启动",
+  betaUpdates: "Beta 版本",
+  betaUpdatesHelp: "打开后，检查更新也会把 GitHub 的预发布版算进去（例如 1.2.8-beta.1）。",
   launchAtLoginNote: "开机时启动目前只支持 macOS 和 Windows。这里会记住你的选择，但这台系统上不会真正开机启动。",
   networkStatus: "网络状态",
   online: "已联网",
