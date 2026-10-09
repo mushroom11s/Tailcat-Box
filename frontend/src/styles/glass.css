@@ -1996,11 +1996,6 @@ textarea {
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.35);
 }
-.media-slot p {
-  margin: 0;
-  font-size: 12px;
-  opacity: 0.75;
-}
 .media-frame {
   position: relative;
 }
@@ -2191,6 +2186,46 @@ textarea {
   border-radius: 50%;
   background: #fa5151;
   align-self: center;
+}
+
+/* WeChat-style call record: icon + one line, on the caller's side. */
+.chat-call-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  text-align: left;
+  white-space: nowrap;
+}
+button.chat-call-record {
+  cursor: pointer;
+}
+button.chat-call-record:hover .chat-call-record-text {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.chat-call-record.out {
+  flex-direction: row-reverse;
+}
+.chat-call-record-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.chat-call-record-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.chat-call-record.alert {
+  color: #fa5151;
 }
 
 .chat-bubble:has(.chat-voice) {

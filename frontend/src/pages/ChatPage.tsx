@@ -13,7 +13,8 @@ import { extractShareableAddress } from "../lib/qr";
 import { highlightParts, matchesQuery } from "../lib/chatSearch";
 import { localizeChatError, systemText } from "../lib/chatText";
 import { purgeDiscardIds } from "../lib/chatPurge";
-import { createLiveCall, type CallMode, type CallView, type LiveCall, type LiveDevices } from "../lib/liveCall";
+import { createLiveCall, type CallMode, type CallRecord, type CallView, type LiveCall, type LiveDevices } from "../lib/liveCall";
+import { callModeLabel, callRecordMode, callRecordOutcome, callRecordText } from "../lib/callRecord";
 import { audioBytesToBase64, formatRecordElapsed } from "../lib/voiceBubble";
 import { startVoiceCapture, type VoiceCapture } from "../lib/voiceCapture";
 import { readPlayedVoices, rememberPlayedVoice } from "../lib/voicePlayed";
@@ -83,6 +84,8 @@ type Props = {
   shellScreenOpen?: boolean;
   onShellScreenPopout?: () => void;
   onBindCall?: () => void | Promise<void>;
+  /** Saves a finished call to the transcript. Only the page's own call uses it; the shell call records in App. */
+  onRecordCall?: (record: CallRecord) => Promise<void>;
   nickname?: string;
   notifyNote?: string;
   remarks?: RemarkMap;
@@ -212,6 +215,7 @@ export default function ChatPage({
   shellScreenOpen = false,
   onShellScreenPopout,
   onBindCall,
+  onRecordCall,
   nickname = "",
   notifyNote = "",
   remarks = noRemarks,
@@ -332,6 +336,8 @@ export default function ChatPage({
   const liveMediaRef = useRef(liveMedia);
   const peerCtorRef = useRef(peerConnection);
   const sendSignalRef = useRef(onSendSignal);
+  const recordCallRef = useRef(onRecordCall);
+  recordCallRef.current = onRecordCall;
   const signalSeq = useRef(0);
   const logRef = useRef<HTMLDivElement>(null);
   const stickBottomRef = useRef(true);
@@ -377,6 +383,9 @@ export default function ChatPage({
       devices: () => liveMediaRef.current,
       PeerConnection: () => peerCtorRef.current ?? RTCPeerConnection,
       onChange: setCallView,
+      onRecord: (record) => {
+        void recordCallRef.current?.(record).catch(() => undefined);
+      },
     });
   }
   burnRef.current = burnOn;
@@ -1124,6 +1133,9 @@ export default function ChatPage({
     if (msg.direction === "system") {
       return systemText(msg.code, msg.body ?? "", t);
     }
+    if (msg.type === "call") {
+      return `${callModeLabel(callRecordMode(msg), t)}\n${callRecordText(msg, t)}`;
+    }
     const sealed = Boolean(msg.burn && msg.direction === "in" && openMessage?.id !== msg.id);
     if (sealed) {
       return "";
@@ -1501,6 +1513,9 @@ export default function ChatPage({
                 onVoicePlay={() => markVoicePlayed(msg.id)}
                 canPlayMime={canPlayMime}
                 decodeVoice={decodeVoice}
+                onRedial={
+                  !multiSelectActive && connected && view.phase === "idle" ? (mode) => void placeCall(mode) : undefined
+                }
               />
               <header>
                 <span className="chat-who">
@@ -1813,8 +1828,8 @@ function MediaPreview({
     }
   }, [showVideo, stream]);
   return (
-    <div className="media-slot">
-      <p>{label}</p>
+    // The label stays for screen readers only; the panel shows no "Local preview" / "Remote media" captions.
+    <div className="media-slot" role="group" aria-label={label}>
       {showVideo ? (
         <div className="media-frame">
           <video ref={videoRef as RefObject<HTMLVideoElement>} autoPlay muted={muted} playsInline />
@@ -1868,6 +1883,7 @@ function BubbleBody({
   onVoicePlay,
   canPlayMime,
   decodeVoice,
+  onRedial,
 }: {
   msg: ChatMessage;
   caps: string[];
@@ -1878,8 +1894,12 @@ function BubbleBody({
   onVoicePlay?: () => void;
   canPlayMime?: (mime: string) => boolean;
   decodeVoice?: (mime: string, audio: string) => Promise<string | null>;
+  onRedial?: (mode: CallMode) => void;
 }) {
   const { t } = useI18n();
+  if (msg.type === "call") {
+    return <CallRecordBody msg={msg} onRedial={onRedial} />;
+  }
   const inboundBurn = msg.burn && msg.direction === "in";
   const image = (msg.mime ?? "").startsWith("image/");
   if (inboundBurn && !open && msg.type !== "voice") {
@@ -1950,6 +1970,45 @@ function BubbleBody({
   return (
     <p>
       <HighlightText text={msg.body ?? ""} query={query} />
+    </p>
+  );
+}
+
+function CallRecordBody({ msg, onRedial }: { msg: ChatMessage; onRedial?: (mode: CallMode) => void }) {
+  const { t } = useI18n();
+  const mode = callRecordMode(msg);
+  const outcome = callRecordOutcome(msg);
+  const label = callModeLabel(mode, t);
+  const text = callRecordText(msg, t);
+  // Missed or cancelled incoming calls read red, like WeChat.
+  const alert = msg.direction === "in" && (outcome === "missed" || outcome === "cancelled");
+  const className = `chat-call-record ${msg.direction} ${outcome}${alert ? " alert" : ""}`;
+  const icon = mode === "video" ? <VideoIcon /> : mode === "screen" ? <ScreenIcon /> : <PhoneIcon />;
+  const body = (
+    <>
+      <span className="chat-call-record-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <span className="chat-call-record-text">{text}</span>
+    </>
+  );
+  if (onRedial && mode) {
+    return (
+      <button
+        type="button"
+        className={className}
+        data-outcome={outcome}
+        title={`${label} · ${t("callRecAgain")}`}
+        aria-label={`${label}: ${text}. ${t("callRecAgain")}`}
+        onClick={() => onRedial(mode)}
+      >
+        {body}
+      </button>
+    );
+  }
+  return (
+    <p className={className} data-outcome={outcome} title={label} aria-label={`${label}: ${text}`}>
+      {body}
     </p>
   );
 }

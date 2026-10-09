@@ -4,6 +4,8 @@ export const gatherTimeoutMs = 5000;
 export const micDeniedError = "Microphone access was denied.";
 export const cameraDeniedError = "Camera access was denied.";
 export const screenDeniedError = "Screen sharing was denied.";
+/** getUserMedia found no matching device (NotFoundError / OverconstrainedError), so a permissions hint would mislead. */
+export const mediaNotFoundError = "No microphone or camera found.";
 export const screenUnavailableError = "Screen sharing is unavailable on this system.";
 // Distro WebKitGTK builds (Debian, Ubuntu) compile WebRTC out, so Linux
 // has no RTCPeerConnection. Voice notes still work there; calls do not.
@@ -13,10 +15,31 @@ export const liveMediaError =
 
 export type CallMode = "voice" | "video" | "screen";
 
+/** How long the caller rings before giving up (WeChat uses about a minute). */
+export const ringTimeoutMs = 60_000;
+
+/** Why a call ended before it connected. Rides on rtc-hangup; older peers omit it. */
+export type HangupReason = "decline" | "cancel" | "timeout" | "failed";
+
+export type CallOutcome = "completed" | "declined" | "cancelled" | "missed" | "failed";
+
+/**
+ * One side's view of a finished call. Each side derives its own record from the
+ * signals it saw, so no extra message goes over the wire.
+ * outgoing is true when this side placed the call.
+ */
+export type CallRecord = {
+  mode: CallMode;
+  outgoing: boolean;
+  outcome: CallOutcome;
+  durationSec: number;
+};
+
 export type SignalMeta = {
   v: 1;
   type: "rtc-offer" | "rtc-answer" | "rtc-hangup";
   mode?: CallMode;
+  reason?: HangupReason;
   description?: { type: RTCSdpType; sdp: string };
 };
 
@@ -54,6 +77,10 @@ type Options = {
   PeerConnection?: () => PeerCtor;
   gatherTimeoutMs?: number;
   onChange?: (view: CallView) => void;
+  /** Called once when a call that reached the peer ends. */
+  onRecord?: (record: CallRecord) => void;
+  ringTimeoutMs?: number;
+  now?: () => number;
 };
 
 export function createLiveCall(options: Options): LiveCall {
@@ -72,6 +99,46 @@ export function createLiveCall(options: Options): LiveCall {
   let pending: { gen: number; mode: CallMode; description: { type: RTCSdpType; sdp: string } } | null = null;
   let pc: RTCPeerConnection | null = null;
   const retired = new WeakSet<RTCPeerConnection>();
+  const ringMs = options.ringTimeoutMs ?? ringTimeoutMs;
+  const now = options.now ?? (() => Date.now());
+  let linkedAt: number | null = null;
+  let ringTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function clearRing(): void {
+    if (ringTimer != null) {
+      clearTimeout(ringTimer);
+      ringTimer = null;
+    }
+  }
+
+  function markLinked(): void {
+    clearRing();
+    linked = true;
+    linkedAt = now();
+  }
+
+  type Ending = { mode: CallMode | null; role: CallView["role"]; linked: boolean; linkedAt: number | null };
+
+  /** Capture the call before a reset wipes it. */
+  function ending(): Ending {
+    const was = { mode, role, linked, linkedAt };
+    clearRing();
+    linkedAt = null;
+    return was;
+  }
+
+  function record(was: Ending, outcome: CallOutcome | null): void {
+    if (!outcome || !was.mode || !was.role) {
+      return;
+    }
+    const durationSec =
+      outcome === "completed" && was.linkedAt != null ? Math.max(0, Math.round((now() - was.linkedAt) / 1000)) : 0;
+    try {
+      options.onRecord?.({ mode: was.mode, outgoing: was.role === "caller", outcome, durationSec });
+    } catch {
+      // A record is best effort; never break the call flow.
+    }
+  }
 
   function snapshot(): CallView {
     return { phase, mode, role, error, localStream, remoteStream, linked, muted };
@@ -129,7 +196,10 @@ export function createLiveCall(options: Options): LiveCall {
       return await media.getUserMedia({ audio: true, video: true });
     } catch (err) {
       if (nextMode === "voice") {
-        throw new Error(micDeniedError);
+        throw new Error(missingDevice(err) ? mediaNotFoundError : micDeniedError);
+      }
+      if (missingDevice(err)) {
+        throw new Error(mediaNotFoundError);
       }
       const text = err instanceof Error ? `${err.name} ${err.message}`.toLowerCase() : "";
       if (text.includes("microphone") || (text.includes("audio") && !text.includes("video") && !text.includes("camera"))) {
@@ -225,6 +295,7 @@ export function createLiveCall(options: Options): LiveCall {
 
   function failLive(): void {
     const notify = signaled;
+    const was = ending();
     generation += 1;
     buildingOffer = false;
     signaled = false;
@@ -235,8 +306,10 @@ export function createLiveCall(options: Options): LiveCall {
     role = null;
     error = liveMediaError;
     publish();
+    // Media that dropped mid-call still counts as a call with a duration.
+    record(was, was.linked ? "completed" : notify ? "failed" : null);
     if (notify) {
-      void options.send({ v: 1, type: "rtc-hangup" }).catch(() => undefined);
+      void options.send({ v: 1, type: "rtc-hangup", reason: was.linked ? undefined : "failed" }).catch(() => undefined);
     }
   }
 
@@ -296,13 +369,14 @@ export function createLiveCall(options: Options): LiveCall {
         return;
       }
       phase = "live";
-      linked = true;
+      markLinked();
       publish();
     } catch (err) {
       if (gen !== generation) {
         return;
       }
       const notify = signaled;
+      const was = ending();
       signaled = false;
       buildingOffer = false;
       resetMedia();
@@ -312,8 +386,48 @@ export function createLiveCall(options: Options): LiveCall {
       role = null;
       error = failureText(err);
       publish();
+      record(was, notify ? "failed" : null);
       if (notify) {
-        await options.send({ v: 1, type: "rtc-hangup" }).catch(() => undefined);
+        await options.send({ v: 1, type: "rtc-hangup", reason: "failed" }).catch(() => undefined);
+      }
+    }
+  }
+
+  /** This side ends the call: hang up, cancel, decline, or ring timeout. */
+  async function endLocal(timedOut: "timeout" | null): Promise<void> {
+    const ringing = phase === "ringing";
+    const notify = signaled || ringing;
+    const idle = phase === "idle";
+    const was = ending();
+    generation += 1;
+    buildingOffer = false;
+    signaled = false;
+    resetMedia();
+    clearLink();
+    phase = "idle";
+    mode = null;
+    role = null;
+    publish();
+    let outcome: CallOutcome | null = null;
+    let reason: HangupReason | undefined;
+    if (!idle && notify) {
+      if (was.linked) {
+        outcome = "completed";
+      } else if (was.role === "caller") {
+        outcome = timedOut ? "missed" : "cancelled";
+        reason = timedOut ? "timeout" : "cancel";
+      } else {
+        outcome = "declined";
+        reason = "decline";
+      }
+    }
+    record(was, outcome);
+    if (notify) {
+      try {
+        await options.send(reason ? { v: 1, type: "rtc-hangup", reason } : { v: 1, type: "rtc-hangup" });
+      } catch (err) {
+        error = failureText(err);
+        publish();
       }
     }
   }
@@ -326,6 +440,7 @@ export function createLiveCall(options: Options): LiveCall {
         publish();
         return;
       }
+      ending();
       const gen = ++generation;
       buildingOffer = true;
       signaled = false;
@@ -373,6 +488,15 @@ export function createLiveCall(options: Options): LiveCall {
         signaled = true;
         buildingOffer = false;
         phase = "live";
+        if (ringMs > 0 && !linked) {
+          clearRing();
+          ringTimer = setTimeout(() => {
+            ringTimer = null;
+            if (gen === generation && !linked && role === "caller") {
+              void endLocal("timeout");
+            }
+          }, ringMs);
+        }
         publish();
       } catch (err) {
         if (gen !== generation) {
@@ -419,24 +543,7 @@ export function createLiveCall(options: Options): LiveCall {
       publish();
     },
     async hangup() {
-      generation += 1;
-      buildingOffer = false;
-      const notify = signaled || phase === "ringing";
-      signaled = false;
-      resetMedia();
-      clearLink();
-      phase = "idle";
-      mode = null;
-      role = null;
-      publish();
-      if (notify) {
-        try {
-          await options.send({ v: 1, type: "rtc-hangup" });
-        } catch (err) {
-          error = failureText(err);
-          publish();
-        }
-      }
+      await endLocal(null);
     },
     async receive(raw) {
       let meta: Partial<SignalMeta>;
@@ -446,6 +553,8 @@ export function createLiveCall(options: Options): LiveCall {
         return;
       }
       if (meta.type === "rtc-hangup") {
+        const idle = phase === "idle";
+        const was = ending();
         generation += 1;
         buildingOffer = false;
         signaled = false;
@@ -455,6 +564,9 @@ export function createLiveCall(options: Options): LiveCall {
         mode = null;
         role = null;
         publish();
+        if (!idle) {
+          record(was, remoteOutcome(was, meta.reason));
+        }
         return;
       }
       if (meta.type === "rtc-answer") {
@@ -466,7 +578,7 @@ export function createLiveCall(options: Options): LiveCall {
           await current.setRemoteDescription(meta.description);
           if (pc === current) {
             phase = "live";
-            linked = true;
+            markLinked();
             publish();
           }
         } catch {
@@ -485,6 +597,7 @@ export function createLiveCall(options: Options): LiveCall {
       if (meta.mode !== "voice" && meta.mode !== "video" && meta.mode !== "screen") {
         return;
       }
+      ending();
       const gen = ++generation;
       const offerMode = meta.mode;
       const description = meta.description;
@@ -511,6 +624,21 @@ export function createLiveCall(options: Options): LiveCall {
   return api;
 }
 
+/** What this side saw when the peer sent rtc-hangup. */
+function remoteOutcome(was: { role: CallView["role"]; linked: boolean }, reason: unknown): CallOutcome {
+  if (was.linked) {
+    return "completed";
+  }
+  if (reason === "failed") {
+    return "failed";
+  }
+  if (was.role === "caller") {
+    // The callee hung up before answering. Older peers send no reason.
+    return "declined";
+  }
+  return reason === "timeout" ? "missed" : "cancelled";
+}
+
 function defaultDevices(): LiveDevices {
   const media = typeof navigator === "undefined" ? undefined : navigator.mediaDevices;
   if (!media) {
@@ -530,6 +658,7 @@ function failureText(err: unknown): string {
     err.message === micDeniedError ||
     err.message === cameraDeniedError ||
     err.message === screenDeniedError ||
+    err.message === mediaNotFoundError ||
     err.message === screenUnavailableError ||
     err.message === liveMediaError ||
     err.message === callUnsupportedError ||
@@ -539,6 +668,12 @@ function failureText(err: unknown): string {
     return err.message;
   }
   return liveMediaError;
+}
+
+function missingDevice(err: unknown): boolean {
+  const name = typeof err === "object" && err !== null ? String((err as { name?: unknown }).name ?? "") : "";
+  // DevicesNotFoundError is the legacy Chromium name for NotFoundError.
+  return name === "NotFoundError" || name === "OverconstrainedError" || name === "DevicesNotFoundError";
 }
 
 function waitGathering(pc: RTCPeerConnection, ms: number): Promise<void> {

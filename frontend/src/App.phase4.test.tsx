@@ -117,8 +117,10 @@ describe("phase 4 live media dock", () => {
     expect(composerActions?.contains(screen.getByRole("button", { name: "Record voice note" }))).toBe(true);
     await user.click(screen.getByRole("button", { name: "Voice" }));
     expect(await screen.findByRole("complementary", { name: "Calls" })).toBe(panel);
-    expect(screen.getByText("Local preview")).toBeTruthy();
-    expect(screen.getByText("Remote media")).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Local preview" })).toBeTruthy();
+    expect(screen.getByRole("group", { name: "Remote media" })).toBeTruthy();
+    expect(screen.queryByText("Local preview")).toBeNull();
+    expect(screen.queryByText("Remote media")).toBeNull();
     expect(screen.getByRole("group", { name: "Live media" })).toBeTruthy();
     expect(screen.queryByText(en.chatCallIdle)).toBeNull();
     expect(document.querySelector(".chat-main .chat-log")).toBeTruthy();

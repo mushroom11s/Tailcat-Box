@@ -342,6 +342,14 @@ func (m *Manager) SendSignal(id, metaJSON string) error {
 	return svc.SendSignal(metaJSON)
 }
 
+func (m *Manager) RecordCall(id, mode, outcome string, outgoing bool, durationSec int) error {
+	svc, err := m.service(id)
+	if err != nil {
+		return err
+	}
+	return svc.RecordCall(mode, outcome, outgoing, durationSec)
+}
+
 func (m *Manager) Discard(id, messageID string) error {
 	svc, err := m.service(id)
 	if err != nil {
