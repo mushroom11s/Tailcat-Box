@@ -215,7 +215,39 @@ describe("calls survive page navigation", () => {
     expect(sent.some((meta) => meta.includes("rtc-hangup"))).toBe(true);
   });
 
+  it("opens the shared screen in a separate OS window and closes it on hang up", async () => {
+    const doc = document.implementation.createHTMLDocument("");
+    const popup = { document: doc, closed: false, close: vi.fn(() => (popup.closed = true)) };
+    const open = vi.spyOn(window, "open").mockReturnValue(popup as unknown as Window);
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockResolvedValue(undefined);
+    const user = await renderChat();
+    await user.click(screen.getByRole("button", { name: "Screen share" }));
+    await screen.findByRole("button", { name: "End call" });
+    FakePC.instances.at(-1)?.emitRemoteVideo();
+    await user.click(await screen.findByRole("button", { name: "Expand" }));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(doc.title).toBe("Tailcat Box · Shared screen");
+    expect(doc.querySelector("video")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Shared screen" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Expand" })).toBeNull();
+
+    // User closes the OS window: the icon comes back.
+    popup.closed = true;
+    await user.click(await screen.findByRole("button", { name: "Expand" }));
+    expect(open).toHaveBeenCalledTimes(2);
+    popup.closed = false;
+    popup.close.mockClear();
+
+    // Off the chat page the window stays; hang up closes it.
+    await user.click(screen.getByRole("button", { name: "Tunnel" }));
+    expect(popup.close).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Chat" }));
+    await user.click(await screen.findByRole("button", { name: "End call" }));
+    await waitFor(() => expect(popup.close).toHaveBeenCalled());
+  });
+
   it("shows the shared screen inline, expands it from the corner icon, and keeps it across tunnel until hang up", async () => {
+    vi.spyOn(window, "open").mockReturnValue(null);
     const user = await renderChat();
     await user.click(screen.getByRole("button", { name: "Screen share" }));
     expect(await screen.findByRole("button", { name: "End call" })).toBeTruthy();
