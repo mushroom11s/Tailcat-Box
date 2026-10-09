@@ -320,6 +320,7 @@ export const en = {
   chatRemark: "Remark",
   chatRemarkHelp: "Only on this device, for this address. The other person never sees it. This is not your nickname.",
   chatConnect: "Connect",
+  chatNewMessages: "New messages",
   chatEmptyLede: "Messages stay on this device until you quit.",
   chatSearch: "Search messages",
   chatSearchPlaceholder: "Search this room",

@@ -203,6 +203,8 @@ function AppShell() {
   const localeRef = useRef(locale);
   const notifiedIds = useRef(new Set<string>());
   const unreadByRoom = useRef(new Map<string, Set<string>>());
+  // First unread message per room, snapshotted when the room is read.
+  const [newMarkers, setNewMarkers] = useState<Record<string, string>>({});
   const appliedChatErr = useRef<Record<string, string>>({});
   const appliedTunnelErr = useRef<Record<string, string>>({});
   const [notifyDenied, setNotifyDenied] = useState(false);
@@ -375,8 +377,13 @@ function AppShell() {
     if (!id || !readingOpenTranscript(document, viewing)) {
       return;
     }
-    if (!unreadByRoom.current.delete(id)) {
+    const ids = unreadByRoom.current.get(id);
+    if (!ids || !unreadByRoom.current.delete(id)) {
       return;
+    }
+    const first = ids.values().next().value;
+    if (first) {
+      setNewMarkers((prev) => ({ ...prev, [id]: first }));
     }
     syncTrayUnread();
   }
@@ -1341,6 +1348,7 @@ function AppShell() {
               peer={chatRoom.peer}
               caps={chatRoom.caps}
               messages={chatRoom.messages}
+              newMarkerId={newMarkers[chatRoom.id] ?? ""}
               transfers={chatRoom.transfers}
               roomError={chatRoom.error}
               initialPeerDraft={chatRoom.peerDraft}
