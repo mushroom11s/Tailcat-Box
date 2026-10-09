@@ -3,6 +3,7 @@ import {
   cameraDeniedError,
   callUnsupportedError,
   liveMediaError,
+  mediaNotFoundError,
   micDeniedError,
   screenDeniedError,
   screenUnavailableError,
@@ -56,6 +57,8 @@ export function localizeChatError(message: string, t: (key: MessageKey) => strin
       return t("chatLiveFailed");
     case callUnsupportedError:
       return t("chatCallUnsupported");
+    case mediaNotFoundError:
+      return t("chatMediaNotFound");
     case "room is starting":
       return "";
     default:

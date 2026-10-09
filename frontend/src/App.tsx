@@ -58,6 +58,7 @@ import {
   sendChatFile,
   sendChatFileBytes,
   sendChatSignal,
+  recordChatCall,
   sendChatText,
   sendChatVoice,
   setNetworkSettings,
@@ -177,6 +178,13 @@ function AppShell() {
       onChange: (view) => {
         callViewRef.current = view;
         setCallView(view);
+      },
+      onRecord: (record) => {
+        // Each side writes its own record; the call's room is still bound here.
+        const id = callRoomRef.current;
+        if (id) {
+          void recordChatCall(id, record).catch(() => undefined);
+        }
       },
     });
   }

@@ -59,6 +59,8 @@ export function OpenSSHShell(arg1:string,arg2:boolean):Promise<session.Session>;
 
 export function ParseAddr(arg1:string):Promise<string>;
 
+export function RecordChatCall(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:number):Promise<void>;
+
 export function RecordUpdateCheck():Promise<main.ClientInfo>;
 
 export function RemoveSSHPeer(arg1:string):Promise<main.SSHDeskStatus>;

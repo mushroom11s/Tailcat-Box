@@ -110,6 +110,10 @@ export function ParseAddr(arg1) {
   return window['go']['main']['App']['ParseAddr'](arg1);
 }
 
+export function RecordChatCall(arg1, arg2, arg3, arg4, arg5) {
+  return window['go']['main']['App']['RecordChatCall'](arg1, arg2, arg3, arg4, arg5);
+}
+
 export function RecordUpdateCheck() {
   return window['go']['main']['App']['RecordUpdateCheck']();
 }

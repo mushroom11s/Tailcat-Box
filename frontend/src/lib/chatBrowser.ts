@@ -299,6 +299,16 @@ export function createBrowserHub() {
         Data: JSON.stringify({ id: transferID, offset: 0, size: 0, mode: "resume", status: "active" }),
       });
     },
+    recordCall(mode: string, outcome: string, outgoing: boolean, durationSec: number) {
+      if (!running) {
+        throw new Error("room is not running");
+      }
+      const out = message(outgoing ? "out" : "in", "call", mode, outcome);
+      if (outcome === "completed" && durationSec > 0) {
+        out.duration = Math.round(durationSec);
+      }
+      emit({ Kind: "message", SessionID: sessionID, Data: JSON.stringify(out) });
+    },
     sendSignal(metaJSON: string) {
       if (!peer) {
         throw new Error("no peer");

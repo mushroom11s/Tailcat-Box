@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { translate } from "../i18n/locale";
 import { localizeChatError, systemText } from "./chatText";
-import { cameraDeniedError, micDeniedError, screenDeniedError } from "./liveCall";
+import { cameraDeniedError, mediaNotFoundError, micDeniedError, screenDeniedError } from "./liveCall";
 
 describe("chat text", () => {
   it("keeps they're hear meow in zh-CN and translates peer changed", () => {
@@ -54,5 +54,12 @@ describe("multi-select delete strings", () => {
     expect(translate("en", "chatBurnKept")).toBe("They may keep a copy.");
     expect(translate("zh-CN", "chatBurnRemoved")).toBe("对方打开后，他们那边会删掉。");
     expect(translate("zh-CN", "chatBurnKept")).toBe("对方可能会留下一份。");
+  });
+
+  it("says no device was found instead of a permissions hint", () => {
+    const en = (key: Parameters<typeof translate>[1]) => translate("en", key);
+    const zh = (key: Parameters<typeof translate>[1]) => translate("zh-CN", key);
+    expect(localizeChatError(mediaNotFoundError, en)).toBe("No microphone or camera found.");
+    expect(localizeChatError(mediaNotFoundError, zh)).toBe("未检测到麦克风或摄像头");
   });
 });

@@ -29,6 +29,7 @@ import {
   SaveChatFile as bindSaveChatFile,
   SendChatFile as bindSendChatFile,
   SendChatSignal as bindSendChatSignal,
+  RecordChatCall as bindRecordChatCall,
   SendChatText as bindSendChatText,
   SendChatVoice as bindSendChatVoice,
   StartChatRoom as bindStartChatRoom,
@@ -778,6 +779,18 @@ export async function sendChatSignal(roomID: string, metaJSON: string): Promise<
     return;
   }
   requireRoom(roomID).hub.sendSignal(metaJSON);
+}
+
+// recordChatCall adds this side's call record to the room transcript. Local only.
+export async function recordChatCall(
+  roomID: string,
+  record: { mode: string; outcome: string; outgoing: boolean; durationSec: number },
+): Promise<void> {
+  if (hasWailsBindings()) {
+    await bindRecordChatCall(roomID, record.mode, record.outcome, record.outgoing, record.durationSec);
+    return;
+  }
+  requireRoom(roomID).hub.recordCall(record.mode, record.outcome, record.outgoing, record.durationSec);
 }
 
 export async function sendChatText(roomID: string, body: string, burn = false, ttlSec = 0): Promise<void> {

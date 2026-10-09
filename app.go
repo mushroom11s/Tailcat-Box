@@ -670,6 +670,13 @@ func (a *App) SendChatSignal(roomID string, metaJSON string) error {
 	return a.rooms.SendSignal(roomID, metaJSON)
 }
 
+// RecordChatCall adds a local call record (voice, video, or screen) to the
+// room transcript when a call ends. outcome is completed, declined, cancelled,
+// missed, or failed. Each side records its own view; nothing is sent.
+func (a *App) RecordChatCall(roomID string, mode string, outcome string, outgoing bool, durationSec int) error {
+	return a.rooms.RecordCall(roomID, mode, outcome, outgoing, durationSec)
+}
+
 // DecodeChatVoice turns a voice payload the webview cannot play into WAV bytes.
 // Both the input and the WAV result are standard base64 strings.
 func (a *App) DecodeChatVoice(mime string, audioBase64 string) (string, error) {
