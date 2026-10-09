@@ -983,9 +983,7 @@ func TestByRefShareServesOriginalAndNoticesMoves(t *testing.T) {
 	if err != nil || string(got) != "hello" || receipt.Files[0].Name != "note.txt" {
 		t.Fatalf("got=%q receipt=%+v err=%v", got, receipt.Files, err)
 	}
-	if listed := svc.List(); len(listed) != 1 || listed[0].Downloads != 1 {
-		t.Fatalf("after download=%+v", listed)
-	}
+	waitDownloads(t, svc, 1)
 
 	moved := filepath.Join(srcDir, "moved.txt")
 	if err := os.Rename(src, moved); err != nil {

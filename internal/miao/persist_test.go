@@ -60,9 +60,7 @@ func TestShareRestoredAfterRestart(t *testing.T) {
 	if _, err := first.Join(context.Background(), snap.Payload, dest, adapter.NetworkOpts{}); err != nil {
 		t.Fatal(err)
 	}
-	if listed := first.List(); len(listed) != 1 || listed[0].Downloads != 1 {
-		t.Fatalf("after download=%+v", listed)
-	}
+	waitDownloads(t, first, 1)
 	first.Close()
 	if _, err := os.Stat(filepath.Join(root, snap.ID)); err != nil {
 		t.Fatalf("quit removed the share: %v", err)
@@ -104,6 +102,7 @@ func TestShareRestoredAfterRestart(t *testing.T) {
 	if err != nil || string(body) != "purr" || receipt.Files[0].Name != "笔记.txt" {
 		t.Fatalf("body=%q receipt=%+v err=%v", body, receipt.Files, err)
 	}
+	waitDownloads(t, again, 2)
 	if listed = again.List(); len(listed) != 1 || listed[0].Downloads != 2 || listed[0].Payload != snap.Payload {
 		t.Fatalf("after second download=%+v", listed)
 	}
@@ -232,6 +231,7 @@ func TestShareRecordStaysListedWhenListenFails(t *testing.T) {
 	if _, err := first.Join(context.Background(), snap.Payload, dest, adapter.NetworkOpts{}); err != nil {
 		t.Fatal(err)
 	}
+	waitDownloads(t, first, 1)
 	first.Close()
 
 	again := New(denyRooms{ChatAdapter: adapter.NewFake()}, root)
@@ -304,6 +304,7 @@ func TestShareListensAgainAfterAFailedRestore(t *testing.T) {
 	if joined != nil {
 		t.Fatal(joined)
 	}
+	waitDownloads(t, again, 1)
 	if listed := again.List(); len(listed) != 1 || listed[0].Downloads != 1 || listed[0].Payload != snap.Payload || !listed[0].Listening {
 		t.Fatalf("after download=%+v", listed)
 	}
@@ -397,6 +398,25 @@ func TestByRefRestartReportsMovedFile(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(root, snap.ID)); !os.IsNotExist(err) {
 		t.Fatalf("broken by-ref share kept: %v", err)
+	}
+}
+
+// waitDownloads waits for the host to count a finished pull. Join returns as
+// soon as the receiver has the "done" frame, while the host bumps and persists
+// its download count only after that frame was sent, so a check made right
+// after Join can see the old count.
+func waitDownloads(t *testing.T, svc *Service, want int) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		listed := svc.List()
+		if len(listed) == 1 && listed[0].Downloads == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("downloads want=%d listed=%+v", want, listed)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
