@@ -2635,6 +2635,23 @@ button.chat-call-record:hover .chat-call-record-text {
   color: var(--faint);
   font-size: 12px;
 }
+.chat-new-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.chat-new-divider::before,
+.chat-new-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.45;
+}
 .chat-bubble header {
   display: flex;
   gap: 8px;

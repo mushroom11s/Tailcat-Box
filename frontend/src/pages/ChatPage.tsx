@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import CallStatus from "../components/CallStatus";
 import QrScanButton from "../components/QrScanButton";
@@ -57,6 +57,8 @@ type Props = {
   peer: string;
   caps?: string[];
   messages: ChatMessage[];
+  /** First unread inbound message when the room was opened; a "New messages" line sits above it. */
+  newMarkerId?: string;
   transfers?: ChatTransfer[];
   roomError: string;
   onConnect: (addr: string) => Promise<void>;
@@ -188,6 +190,7 @@ export default function ChatPage({
   peer,
   caps = [],
   messages,
+  newMarkerId = "",
   transfers = [],
   roomError,
   onConnect,
@@ -1172,6 +1175,23 @@ export default function ChatPage({
     };
   }, [address, lastShownId, shown.length]);
 
+  // Opening a room with more unread than fits: start at the divider, not the bottom.
+  const dividerRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const log = logRef.current;
+    const line = dividerRef.current;
+    if (!newMarkerId || !log || !line) {
+      return;
+    }
+    const top = Math.max(0, line.offsetTop - 8);
+    if (top >= log.scrollHeight - log.clientHeight) {
+      return;
+    }
+    stickBottomRef.current = false;
+    forceScrollRef.current = false;
+    log.scrollTop = top;
+  }, [newMarkerId]);
+
   function sideActions(msg: ChatMessage): ReactNode {
     const inboundBurn = Boolean(msg.burn && msg.direction === "in");
     const sealed = inboundBurn && openMessage?.id !== msg.id;
@@ -1457,8 +1477,14 @@ export default function ChatPage({
         <div ref={dragRectEl} className="chat-drag-rect" hidden />
         {transcript.length === 0 ? <p className="lede">{t("chatEmptyLede")}</p> : null}
         {transcript.length > 0 && shown.length === 0 ? <p className="lede">{t("chatSearchEmpty")}</p> : null}
-        {shown.map((msg) =>
-          msg.direction === "system" ? (
+        {shown.map((msg) => (
+          <Fragment key={msg.id}>
+          {msg.id === newMarkerId && msg.direction === "in" ? (
+            <div ref={dividerRef} className="chat-new-divider" role="separator" aria-label={t("chatNewMessages")}>
+              <span>{t("chatNewMessages")}</span>
+            </div>
+          ) : null}
+          {msg.direction === "system" ? (
             <p key={msg.id} className="chat-system">
               {systemText(msg.code, msg.body ?? "", t)}
             </p>
@@ -1542,8 +1568,9 @@ export default function ChatPage({
             {sideActions(msg)}
             </div>
             </div>
-          ),
-        )}
+          )}
+          </Fragment>
+        ))}
         {transfers.map((tr) => (
           <p key={tr.id} className="chat-transfer">
             {tr.mode === "full" ? t("chatFullTransfer") : `${tr.offset} / ${tr.size}`}

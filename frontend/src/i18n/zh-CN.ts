@@ -319,6 +319,7 @@ export const zhCN = {
   chatRemark: "备注",
   chatRemarkHelp: "只存在这台设备上，对应这个地址。对方看不到。这不是你的昵称。",
   chatConnect: "连接",
+  chatNewMessages: "新消息",
   chatEmptyLede: "消息只留在这台设备上，退出后就没了。",
   chatSearch: "搜索消息",
   chatSearchPlaceholder: "搜索这个房间",
