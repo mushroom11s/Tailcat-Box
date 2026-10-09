@@ -186,3 +186,32 @@ func validateName(name string) error {
 	}
 	return nil
 }
+
+// SetPrivateKey replaces the saved Tailcat private key JSON of an app key,
+// keeping its other fields. Keys outside the app key directory are left alone.
+func (s *Store) SetPrivateKey(name string, privateKeyJSON string) error {
+	if err := validateName(name); err != nil {
+		return err
+	}
+	if !json.Valid([]byte(privateKeyJSON)) {
+		return fmt.Errorf("private key JSON is invalid")
+	}
+	path := filepath.Join(s.Dir, name+keySuffix)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var rec map[string]json.RawMessage
+	if err := json.Unmarshal(body, &rec); err != nil {
+		return err
+	}
+	if _, ok := rec["PrivateKey"]; !ok {
+		return fmt.Errorf("key %q has no app private key", name)
+	}
+	rec["PrivateKey"] = json.RawMessage(privateKeyJSON)
+	out, err := json.MarshalIndent(rec, "", "\t")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, append(out, '\n'), 0o600)
+}

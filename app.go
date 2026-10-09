@@ -462,6 +462,10 @@ func (a *App) StartPortServe(mappings []adapter.PortMapping, keyName string) (se
 			return session.Session{}, err
 		}
 		opts.IdentityJSON = material
+		opts.Region = keyRegion(raw)
+		opts.OnPinned = func(pinned string) {
+			_ = a.keys.SetPrivateKey(keyName, pinned)
+		}
 	}
 	sess, err := a.svc.StartPortServe(mappings, opts)
 	if err != nil {
@@ -598,6 +602,15 @@ func roomKeyMaterial(raw []byte) (string, error) {
 		return string(raw), nil
 	}
 	return "", fmt.Errorf("saved key is not a Tailcat private key")
+}
+
+// keyRegion returns the region saved with an app key, if any.
+func keyRegion(raw []byte) string {
+	var rec struct {
+		Region string `json:"Region"`
+	}
+	_ = json.Unmarshal(raw, &rec)
+	return strings.TrimSpace(rec.Region)
 }
 
 func (a *App) chatOpts(keyName string) (chat.StartOpts, error) {
