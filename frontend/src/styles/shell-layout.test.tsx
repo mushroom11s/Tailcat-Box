@@ -42,6 +42,13 @@ describe("shell scroll", () => {
     expect(main.scrollTop).toBe(0);
   });
 
+  it("scrolls the new-room lobby instead of clipping it in short windows", () => {
+    const rules = [...css.matchAll(/\.main:has\(\.chat-lobby\),\s*\.main:has\(\.miao-page\)\s*\{[^}]*\}/g)];
+    // Last matching rule wins over the shared overflow: hidden flex block.
+    expect(rules.at(-1)?.[0]).toContain("overflow-y: auto");
+    expect(cssBlock(css, ".chat-lobby")).toContain("flex-shrink: 0");
+  });
+
   it("nests room rows narrower than the Chat button", async () => {
     const style = document.createElement("style");
     style.textContent = `${cssBlock(css, ".nav-rooms")}\n${cssBlock(css, ".nav-btn.nav-child")}`;

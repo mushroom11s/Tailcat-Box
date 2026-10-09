@@ -656,9 +656,16 @@ textarea {
   padding: 16px 18px 14px;
 }
 
+/* The lobby and Mew Share are plain forms: scroll the pane so short
+   windows (1152x720) do not clip the bottom buttons. */
+.main:has(.chat-lobby),
 .main:has(.miao-page) {
   overflow-x: clip;
   overflow-y: auto;
+}
+
+.chat-lobby {
+  flex-shrink: 0;
 }
 
 .main,
