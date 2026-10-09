@@ -118,6 +118,12 @@ type FileEntry struct {
 // SSH desk identity) so the advertised address stays stable across restarts.
 type PortServeOpts struct {
 	IdentityJSON string
+	// Region overrides the global region for this serve (the saved key's own region).
+	Region string
+	// OnPinned receives IdentityJSON with the DERP region it served on embedded,
+	// so the caller can save it and the next start reuses the same address
+	// without depending on DERP map lookups (e.g. right after a reboot).
+	OnPinned func(keyJSON string)
 }
 
 type TailcatAdapter interface {

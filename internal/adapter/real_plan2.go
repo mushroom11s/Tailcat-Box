@@ -107,14 +107,21 @@ func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun
 			}
 		},
 	}
-	r.applyServerNet(ctx, srv)
 	if err := applyRoomKey(srv, opts.IdentityJSON); err != nil {
+		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
+		return
+	}
+	pinned, err := r.applyKeyedServerNet(ctx, srv, opts)
+	if err != nil {
 		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
 		return
 	}
 	if err := srv.Start(); err != nil {
 		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
 		return
+	}
+	if pinned != "" && opts.OnPinned != nil {
+		opts.OnPinned(pinned)
 	}
 
 	r.mu.Lock()
