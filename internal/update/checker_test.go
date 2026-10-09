@@ -258,3 +258,183 @@ func TestDownloadRejectsForeignHost(t *testing.T) {
 		t.Fatal("expected foreign host to fail")
 	}
 }
+
+func TestPickNewestRelease(t *testing.T) {
+	t.Parallel()
+	rel := func(tag string, draft, pre bool) ghRelease {
+		return ghRelease{TagName: tag, Draft: draft, Prerelease: pre, HTMLURL: "https://example/" + tag}
+	}
+	cases := []struct {
+		name       string
+		includePre bool
+		rels       []ghRelease
+		wantTag    string
+		wantOK     bool
+	}{
+		{
+			name:       "stable skips prerelease",
+			includePre: false,
+			rels:       []ghRelease{rel("v1.2.8-beta.1", false, true), rel("v1.2.7", false, false)},
+			wantTag:    "v1.2.7",
+			wantOK:     true,
+		},
+		{
+			name:       "beta picks newer prerelease",
+			includePre: true,
+			rels:       []ghRelease{rel("v1.2.7", false, false), rel("v1.2.8-beta.1", false, true)},
+			wantTag:    "v1.2.8-beta.1",
+			wantOK:     true,
+		},
+		{
+			name:       "beta prefers stable over older beta of same line",
+			includePre: true,
+			rels:       []ghRelease{rel("v1.2.7-beta.1", false, true), rel("v1.2.7", false, false)},
+			wantTag:    "v1.2.7",
+			wantOK:     true,
+		},
+		{
+			name:       "skips drafts",
+			includePre: true,
+			rels:       []ghRelease{rel("v9.0.0", true, false), rel("v1.0.0", false, false)},
+			wantTag:    "v1.0.0",
+			wantOK:     true,
+		},
+		{
+			name:       "skips invalid tags",
+			includePre: true,
+			rels:       []ghRelease{rel("latest", false, false), rel("v0.2.0-beta.1", false, true)},
+			wantTag:    "v0.2.0-beta.1",
+			wantOK:     true,
+		},
+		{
+			name:       "empty",
+			includePre: true,
+			rels:       nil,
+			wantOK:     false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := pickNewestRelease(tc.rels, tc.includePre)
+			if ok != tc.wantOK {
+				t.Fatalf("ok=%v want %v", ok, tc.wantOK)
+			}
+			if !tc.wantOK {
+				return
+			}
+			if got.TagName != tc.wantTag {
+				t.Fatalf("tag=%q want %q", got.TagName, tc.wantTag)
+			}
+		})
+	}
+}
+
+func TestCheckIncludePrerelease(t *testing.T) {
+	t.Parallel()
+	listBody := `[
+		{
+			"tag_name": "v1.2.8-beta.1",
+			"draft": false,
+			"prerelease": true,
+			"html_url": "https://github.com/mushroom11s/tailcat-box/releases/tag/v1.2.8-beta.1",
+			"body": "beta notes",
+			"assets": [{
+				"name": "tailcat-box-macos-arm64-v1.2.8-beta.1.zip",
+				"browser_download_url": "https://github.com/mushroom11s/tailcat-box/releases/download/v1.2.8-beta.1/tailcat-box-macos-arm64-v1.2.8-beta.1.zip",
+				"size": 4
+			}]
+		},
+		{
+			"tag_name": "v1.2.7",
+			"draft": false,
+			"prerelease": false,
+			"html_url": "https://github.com/mushroom11s/tailcat-box/releases/tag/v1.2.7",
+			"body": "stable",
+			"assets": [{
+				"name": "tailcat-box-macos-arm64-v1.2.7.zip",
+				"browser_download_url": "https://github.com/mushroom11s/tailcat-box/releases/download/v1.2.7/tailcat-box-macos-arm64-v1.2.7.zip",
+				"size": 4
+			}]
+		}
+	]`
+	stableBody := `{
+		"tag_name": "v1.2.7",
+		"draft": false,
+		"prerelease": false,
+		"html_url": "https://github.com/mushroom11s/tailcat-box/releases/tag/v1.2.7",
+		"body": "stable",
+		"assets": [{
+			"name": "tailcat-box-macos-arm64-v1.2.7.zip",
+			"browser_download_url": "https://github.com/mushroom11s/tailcat-box/releases/download/v1.2.7/tailcat-box-macos-arm64-v1.2.7.zip",
+			"size": 4
+		}]
+	}`
+
+	t.Run("beta on offers prerelease", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(listBody))
+		}))
+		defer srv.Close()
+		c := New(Config{
+			CurrentVersion:    "1.2.7",
+			LatestURL:         srv.URL,
+			ReleasesURL:       srv.URL,
+			IncludePrerelease: true,
+			GOOS:              "darwin",
+			GOARCH:            "arm64",
+		})
+		got := c.Check(context.Background())
+		if got.Status != StatusAvailable || got.LatestVersion != "1.2.8-beta.1" {
+			t.Fatalf("%+v", got)
+		}
+		if got.AssetName != "tailcat-box-macos-arm64-v1.2.8-beta.1.zip" {
+			t.Fatalf("asset=%q", got.AssetName)
+		}
+		if !strings.Contains(got.DownloadURL, "v1.2.8-beta.1") {
+			t.Fatalf("url=%q", got.DownloadURL)
+		}
+	})
+
+	t.Run("beta off keeps stable only", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(stableBody))
+		}))
+		defer srv.Close()
+		c := New(Config{
+			CurrentVersion:    "1.2.6",
+			LatestURL:         srv.URL,
+			IncludePrerelease: false,
+			GOOS:              "darwin",
+			GOARCH:            "arm64",
+		})
+		got := c.Check(context.Background())
+		if got.Status != StatusAvailable || got.LatestVersion != "1.2.7" {
+			t.Fatalf("%+v", got)
+		}
+	})
+
+	t.Run("beta on stable newer than older beta", func(t *testing.T) {
+		body := `[
+			{"tag_name":"v1.2.7-beta.1","draft":false,"prerelease":true,"html_url":"https://example/v1.2.7-beta.1","body":"","assets":[{"name":"tailcat-box-macos-arm64-v1.2.7-beta.1.zip","browser_download_url":"https://github.com/mushroom11s/tailcat-box/releases/download/v1.2.7-beta.1/tailcat-box-macos-arm64-v1.2.7-beta.1.zip","size":1}]},
+			{"tag_name":"v1.2.7","draft":false,"prerelease":false,"html_url":"https://example/v1.2.7","body":"","assets":[{"name":"tailcat-box-macos-arm64-v1.2.7.zip","browser_download_url":"https://github.com/mushroom11s/tailcat-box/releases/download/v1.2.7/tailcat-box-macos-arm64-v1.2.7.zip","size":1}]}
+		]`
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(body))
+		}))
+		defer srv.Close()
+		c := New(Config{
+			CurrentVersion:    "1.2.6",
+			ReleasesURL:       srv.URL,
+			IncludePrerelease: true,
+			GOOS:              "darwin",
+			GOARCH:            "arm64",
+		})
+		got := c.Check(context.Background())
+		if got.Status != StatusAvailable || got.LatestVersion != "1.2.7" {
+			t.Fatalf("%+v", got)
+		}
+	})
+}

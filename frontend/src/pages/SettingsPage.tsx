@@ -17,6 +17,7 @@ import {
   openReleasePage,
   revealDownloadedUpdate,
   setLaunchAtLogin,
+  setReceiveBetaUpdates,
   type ClientInfo,
   type KeyInfo,
   type SystemInfo,
@@ -354,6 +355,17 @@ export default function SettingsPage({
     }
   }
 
+  async function onToggleBeta(enabled: boolean): Promise<void> {
+    setBusy(true);
+    try {
+      setSystem(await setReceiveBetaUpdates(enabled));
+    } catch (err) {
+      report(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   void now;
   const uptime = client ? formatUptime(client.StartedAt) : "—";
   const checkedAt = update?.LastChecked || client?.LastUpdateCheck || "";
@@ -475,6 +487,18 @@ export default function SettingsPage({
           <InfoRow label={t("tailcatVersion")} value={client?.TailcatVersion ?? "—"} mono />
           <InfoRow label={t("latestVersion")} value={update?.LatestVersion || "—"} mono />
           <InfoRow label={t("lastUpdateCheck")} value={formatChecked(checkedAt, locale, t("never"))} />
+          <InfoRow label={t("betaUpdates")}>
+            <button
+              type="button"
+              className={`chip-toggle${system?.ReceiveBetaUpdates ? " on" : ""}`}
+              disabled={localBusy || !system}
+              aria-pressed={Boolean(system?.ReceiveBetaUpdates)}
+              onClick={() => void onToggleBeta(!system?.ReceiveBetaUpdates)}
+            >
+              {system?.ReceiveBetaUpdates ? t("on") : t("off")}
+            </button>
+          </InfoRow>
+          <p className="info-card-note">{t("betaUpdatesHelp")}</p>
           {statusText ? <p className="update-status">{statusText}</p> : null}
           {update?.Notes ? (
             <div className="update-notes">

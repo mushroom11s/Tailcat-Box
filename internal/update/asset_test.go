@@ -35,6 +35,12 @@ func TestSelectAsset(t *testing.T) {
 		wantErr error
 	}{
 		{name: "darwin arm64", assets: published, goos: "darwin", goarch: "arm64", tag: "v0.1.0", want: "tailcat-box-macos-arm64-v0.1.0.zip"},
+		{
+			name:   "prerelease tag asset",
+			assets: assetsFor("tailcat-box-macos-arm64-v1.2.8-beta.1.zip"),
+			goos:   "darwin", goarch: "arm64", tag: "v1.2.8-beta.1",
+			want: "tailcat-box-macos-arm64-v1.2.8-beta.1.zip",
+		},
 		{name: "darwin amd64", assets: published, goos: "darwin", goarch: "amd64", tag: "v0.1.0", want: "tailcat-box-macos-amd64-v0.1.0.zip"},
 		{name: "windows amd64", assets: published, goos: "windows", goarch: "amd64", tag: "v0.1.0", want: "tailcat-box-windows-amd64-v0.1.0.zip"},
 		{name: "windows arm64", assets: published, goos: "windows", goarch: "arm64", tag: "v0.1.0", want: "tailcat-box-windows-arm64-v0.1.0.zip"},

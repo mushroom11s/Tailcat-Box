@@ -42,20 +42,22 @@ type updateRecord struct {
 }
 
 type fileRecord struct {
-	LaunchAtLogin   bool          `json:"LaunchAtLogin"`
-	LastUpdateCheck string        `json:"LastUpdateCheck,omitempty"`
-	ChunkStreams    int           `json:"ChunkStreams,omitempty"`
-	Update          *updateRecord `json:"Update,omitempty"`
+	LaunchAtLogin      bool          `json:"LaunchAtLogin"`
+	ReceiveBetaUpdates bool          `json:"ReceiveBetaUpdates,omitempty"`
+	LastUpdateCheck    string        `json:"LastUpdateCheck,omitempty"`
+	ChunkStreams       int           `json:"ChunkStreams,omitempty"`
+	Update             *updateRecord `json:"Update,omitempty"`
 }
 
 // Store persists desktop-client settings beside the key store.
 type Store struct {
-	mu              sync.Mutex
-	dir             string
-	LaunchAtLogin   bool
-	LastUpdateCheck time.Time
-	chunkStreams    int
-	update          UpdateState
+	mu                 sync.Mutex
+	dir                string
+	LaunchAtLogin      bool
+	ReceiveBetaUpdates bool
+	LastUpdateCheck    time.Time
+	chunkStreams       int
+	update             UpdateState
 }
 
 // Load reads settings.json from dir, or returns defaults if the file is missing.
@@ -73,6 +75,7 @@ func Load(dir string) (*Store, error) {
 		return nil, err
 	}
 	s.LaunchAtLogin = rec.LaunchAtLogin
+	s.ReceiveBetaUpdates = rec.ReceiveBetaUpdates
 	s.chunkStreams = clampChunkStreams(rec.ChunkStreams)
 	if rec.LastUpdateCheck != "" {
 		parsed, err := time.Parse(time.RFC3339, rec.LastUpdateCheck)
@@ -122,6 +125,21 @@ func (s *Store) SetLaunchAtLogin(enabled bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.LaunchAtLogin = enabled
+	return s.saveLocked()
+}
+
+// BetaUpdatesEnabled reports whether update checks include GitHub pre-releases.
+func (s *Store) BetaUpdatesEnabled() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.ReceiveBetaUpdates
+}
+
+// SetReceiveBetaUpdates persists whether check-for-update should consider pre-releases.
+func (s *Store) SetReceiveBetaUpdates(enabled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ReceiveBetaUpdates = enabled
 	return s.saveLocked()
 }
 
@@ -182,7 +200,11 @@ func (s *Store) saveLocked() error {
 	if err := os.MkdirAll(s.dir, 0o700); err != nil {
 		return err
 	}
-	rec := fileRecord{LaunchAtLogin: s.LaunchAtLogin, ChunkStreams: s.chunkStreams}
+	rec := fileRecord{
+		LaunchAtLogin:      s.LaunchAtLogin,
+		ReceiveBetaUpdates: s.ReceiveBetaUpdates,
+		ChunkStreams:       s.chunkStreams,
+	}
 	if !s.LastUpdateCheck.IsZero() {
 		rec.LastUpdateCheck = s.LastUpdateCheck.UTC().Format(time.RFC3339)
 	}

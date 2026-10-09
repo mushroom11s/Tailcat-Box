@@ -174,6 +174,10 @@ export function SetLaunchAtLogin(arg1) {
   return window['go']['main']['App']['SetLaunchAtLogin'](arg1);
 }
 
+export function SetReceiveBetaUpdates(arg1) {
+  return window['go']['main']['App']['SetReceiveBetaUpdates'](arg1);
+}
+
 export function SetMiaoChunkStreams(arg1) {
   return window['go']['main']['App']['SetMiaoChunkStreams'](arg1);
 }

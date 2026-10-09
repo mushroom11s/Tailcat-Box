@@ -91,6 +91,8 @@ export function SendChatVoice(arg1:string,arg2:string,arg3:number,arg4:string,ar
 
 export function SetLaunchAtLogin(arg1:boolean):Promise<main.SystemInfo>;
 
+export function SetReceiveBetaUpdates(arg1:boolean):Promise<main.SystemInfo>;
+
 export function SetMiaoChunkStreams(arg1:number):Promise<number>;
 export function SetMiaoReceiveDest(arg1:string,arg2:string):Promise<void>;
 
