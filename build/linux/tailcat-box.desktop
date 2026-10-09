@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Tailcat Box
+Comment=Desktop GUI for Tailscale Tailcat
+Exec=tailcat-box
+Icon=tailcat-box
+Terminal=false
+Categories=Network;Chat;
+StartupWMClass=tailcat-box

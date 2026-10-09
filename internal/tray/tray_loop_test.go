@@ -22,7 +22,7 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 	}
 
 	// tray_native.go was split into platform install files.
-	for _, name := range []string{"tray_install_darwin.go", "tray_install_windows.go"} {
+	for _, name := range []string{"tray_install_darwin.go", "tray_install_systray.go"} {
 		install := nonCommentCode(t, name)
 		if strings.Contains(install, "go start()") || strings.Contains(install, "RunWithExternalLoop") || strings.Contains(install, "systray.Run(") {
 			t.Fatalf("%s must not start the platform loop", name)
@@ -45,7 +45,7 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 			}
 		}
 	}
-	windows := nonCommentCode(t, "tray_install_windows.go")
+	windows := nonCommentCode(t, "tray_install_systray.go")
 	if !strings.Contains(windows, "SetOnClick") {
 		t.Fatal("windows tray must open on left-click")
 	}

@@ -85,11 +85,11 @@ func TestCheckReleaseFeed(t *testing.T) {
 			wantSt: StatusError, wantErr: ErrParse,
 		},
 		{
-			name:    "linux has no package",
+			name:    "freebsd has no package",
 			status:  200,
 			body:    release("v0.1.0", false, false, mac+","+win),
 			current: "0.0.1",
-			goos:    "linux", goarch: "amd64",
+			goos:    "freebsd", goarch: "amd64",
 			wantSt: StatusUnsupported, wantErr: ErrPlatform, wantVer: "0.1.0",
 		},
 		{

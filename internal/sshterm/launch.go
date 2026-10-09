@@ -35,15 +35,22 @@ func terminalArgs(goos, exe, addr, token string, look func(string) (string, erro
 		)
 		return "osascript", []string{"-e", script}, nil
 	default:
-		for _, name := range []string{"x-terminal-emulator", "gnome-terminal", "konsole", "xterm"} {
+		// Debian/Ubuntu alias first, then common desktop defaults.
+		for _, name := range []string{"x-terminal-emulator", "gnome-terminal", "ptyxis", "konsole", "xfce4-terminal", "kitty", "alacritty", "foot", "xterm"} {
 			path, err := look(name)
 			if err != nil {
 				continue
 			}
-			if name == "gnome-terminal" {
-				return path, []string{"--", exe, AttachArg, addr, token}, nil
+			cmd := []string{exe, AttachArg, addr, token}
+			switch name {
+			case "gnome-terminal", "ptyxis":
+				return path, append([]string{"--"}, cmd...), nil
+			case "xfce4-terminal":
+				return path, append([]string{"-x"}, cmd...), nil
+			case "kitty", "foot":
+				return path, cmd, nil
 			}
-			return path, []string{"-e", exe, AttachArg, addr, token}, nil
+			return path, append([]string{"-e"}, cmd...), nil
 		}
 		return "", nil, fmt.Errorf("no system terminal found")
 	}

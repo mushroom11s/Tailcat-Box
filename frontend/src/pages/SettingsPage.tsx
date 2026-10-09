@@ -620,5 +620,8 @@ function installSteps(platform: string, assetName: string, t: (key: MessageKey) 
   if (platform === "windows") {
     return t(zip ? "updateInstallWinZip" : "updateInstallWin");
   }
+  if (platform === "linux") {
+    return t(assetName.toLowerCase().endsWith(".deb") ? "updateInstallLinuxDeb" : "updateInstallLinux");
+  }
   return t("updateInstallOther");
 }

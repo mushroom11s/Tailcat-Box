@@ -134,6 +134,19 @@ func TestTerminalArgs(t *testing.T) {
 		t.Fatalf("linux %s %v", bin, args)
 	}
 
+	for name, first := range map[string]string{"xfce4-terminal": "-x", "kitty": "/usr/local/bin/tailcat-box", "ptyxis": "--"} {
+		only := name
+		bin, args, err = terminalArgs("linux", "/usr/local/bin/tailcat-box", "127.0.0.1:9", "tok", func(n string) (string, error) {
+			if n == only {
+				return "/usr/bin/" + n, nil
+			}
+			return "", osMissing(n)
+		})
+		if err != nil || bin != "/usr/bin/"+only || args[0] != first || args[len(args)-1] != "tok" {
+			t.Fatalf("linux %s: %s %v %v", only, bin, args, err)
+		}
+	}
+
 	_, _, err = terminalArgs("linux", "tailcat-box", "127.0.0.1:9", "tok", func(name string) (string, error) {
 		return "", osMissing(name)
 	})

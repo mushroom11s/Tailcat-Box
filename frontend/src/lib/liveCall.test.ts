@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  callUnsupportedError,
   cameraDeniedError,
   createLiveCall,
   iceServers,
@@ -311,5 +312,23 @@ describe("live WebRTC signaling", () => {
     await call.receive(JSON.stringify({ v: 1, type: "rtc-hangup" }));
     expect(call.snapshot().phase).toBe("idle");
     expect(sent.map((meta) => meta.type)).toEqual(["rtc-offer"]);
+  });
+
+  it("reports missing WebRTC before capturing media, like WebKitGTK on Linux", async () => {
+    const getUserMedia = vi.fn();
+    const sent: SignalMeta[] = [];
+    const call = createLiveCall({
+      send: async (meta) => {
+        sent.push(meta);
+      },
+      devices: () => ({ getUserMedia }),
+      PeerConnection: () => {
+        throw new ReferenceError("Can't find variable: RTCPeerConnection");
+      },
+    });
+    await call.start("voice");
+    expect(call.snapshot()).toMatchObject({ phase: "idle", error: callUnsupportedError });
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(sent).toEqual([]);
   });
 });
