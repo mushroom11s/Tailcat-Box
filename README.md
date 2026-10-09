@@ -12,7 +12,7 @@ Desktop GUI for [Tailscale Tailcat](https://github.com/tailscale/tailcat) on mac
 
 ## Demo
 
-The window opens at 1100×980 on Mew Share. The active sidebar item keeps its full border. Settings covers appearance, language, keys, and about this app.
+The window opens at 1152×720 on Mew Share. The active sidebar item keeps its full border. Settings covers appearance, language, keys, and about this app.
 
 <table>
   <tr>
