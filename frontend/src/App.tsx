@@ -183,6 +183,7 @@ function AppShell() {
   const roomsRef = useRef(rooms);
   const mappingsRef = useRef(mappings);
   const linksRef = useRef(links);
+  const sessionsRef = useRef(sessions);
   const tunnelBusyRef = useRef(false);
   const autostartDidRef = useRef(false);
   const orderRef = useRef(order);
@@ -204,6 +205,7 @@ function AppShell() {
   const [updateFocus, setUpdateFocus] = useState(0);
   mappingsRef.current = mappings;
   linksRef.current = links;
+  sessionsRef.current = sessions;
   pageRef.current = page;
   localeRef.current = locale;
   const fallback = !hasWailsBindings();
@@ -952,8 +954,16 @@ function AppShell() {
     if (!mapping) {
       return;
     }
-    if (linksRef.current[id]) {
-      return;
+    const existingID = linksRef.current[id];
+    if (existingID) {
+      const existing = sessionsRef.current.find((item) => item.ID === existingID);
+      if (existing && (existing.Status === "running" || existing.Status === "starting")) {
+        return;
+      }
+      const cleared = { ...linksRef.current };
+      delete cleared[id];
+      linksRef.current = cleared;
+      setLinks(cleared);
     }
     const port = toPortMapping(mapping);
     const started =
@@ -974,7 +984,22 @@ function AppShell() {
     if (!sessionID) {
       return;
     }
-    await runTunnel(() => stopSession(sessionID));
+    await runTunnel(async () => {
+      try {
+        await stopSession(sessionID);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!/unknown session/i.test(message)) {
+          throw err;
+        }
+      }
+      // Drop the mapping→session link so Start can create a new session.
+      // Leaving it behind made the next Start a silent no-op.
+      const next = { ...linksRef.current };
+      delete next[id];
+      linksRef.current = next;
+      setLinks(next);
+    });
   }
 
   async function deleteMapping(id: string): Promise<void> {

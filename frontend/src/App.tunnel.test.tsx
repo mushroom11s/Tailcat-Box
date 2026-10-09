@@ -149,6 +149,24 @@ describe("tunnel page", () => {
     expect(JSON.parse(localStorage.getItem(MAPPINGS_KEY) ?? "null")).toEqual([]);
   });
 
+  it("can start a port serve again after stopping it", async () => {
+    const user = userEvent.setup();
+    renderApp();
+    await user.click(screen.getByRole("button", { name: "Tunnel" }));
+    await addServe(user);
+    await user.click(screen.getByRole("button", { name: "Start 8080" }));
+    await screen.findByText(/tc:fake-port-/, { selector: ".address" });
+    expect(startPortServe).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole("button", { name: "Stop 8080" }));
+    expect(await screen.findByRole("button", { name: "Start 8080" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Start 8080" }));
+    await waitFor(() => {
+      expect(startPortServe).toHaveBeenCalledTimes(2);
+    });
+    expect(await screen.findByRole("button", { name: "Stop 8080" })).toBeTruthy();
+    await screen.findByText(/tc:fake-port-/, { selector: ".address" });
+  });
+
 
   it("starts only serve mappings with autostart on launch", async () => {
     localStorage.setItem(
