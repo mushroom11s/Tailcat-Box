@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
+	"github.com/mushroom11s/tailcat-box/internal/screenwin"
 	"github.com/mushroom11s/tailcat-box/internal/sshterm"
 	"github.com/mushroom11s/tailcat-box/internal/tray"
 	"github.com/wailsapp/wails/v2"
@@ -42,6 +43,9 @@ func main() {
 	// above the taskbar. Taller pages such as Mew Share scroll. Windows
 	// includes the title bar in this height; macOS and Linux use it as
 	// the content height.
+	// Lets window.open (shared-screen window) create a real window on macOS.
+	// Must run before wails.Run sets the WKWebView UI delegate.
+	screenwin.Install()
 	err := wails.Run(&options.App{
 		Title:  windowTitle,
 		Width:  1152,
