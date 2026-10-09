@@ -513,3 +513,67 @@ func TestFakePortServeStableKeyAddress(t *testing.T) {
 		t.Fatalf("keyed addresses differ: %q vs %q", addr1, addr2)
 	}
 }
+
+
+func TestFakePortServeRestartAfterStop(t *testing.T) {
+	f := adapter.NewFake()
+	ctx := context.Background()
+	waitReady := func(ch <-chan adapter.Event) string {
+		t.Helper()
+		for ev := range ch {
+			if ev.Kind == adapter.EventReady && ev.Address != "" {
+				return ev.Address
+			}
+			if ev.Kind == adapter.EventError {
+				t.Fatalf("error: %s", ev.Err)
+			}
+		}
+		t.Fatal("channel closed before ready")
+		return ""
+	}
+	roundTrip := func(sessionPrefix, keyJSON string) {
+		t.Helper()
+		opts := adapter.PortServeOpts{IdentityJSON: keyJSON}
+		ch1, err := f.StartPortServe(ctx, sessionPrefix+"-1", []adapter.PortMapping{{LocalPort: 8080}}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr1 := waitReady(ch1)
+		if err := f.Stop(sessionPrefix + "-1"); err != nil {
+			t.Fatal(err)
+		}
+		for range ch1 {
+		}
+		ch2, err := f.StartPortServe(ctx, sessionPrefix+"-2", []adapter.PortMapping{{LocalPort: 8080}}, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr2 := waitReady(ch2)
+		if keyJSON != "" && addr2 != addr1 {
+			t.Fatalf("fixed key address changed: %s -> %s", addr1, addr2)
+		}
+		fwdCh, err := f.StartForward(ctx, sessionPrefix+"-fwd", addr2, []adapter.PortMapping{{LocalPort: 0, RemotePort: 8080}}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gotReady := false
+		for ev := range fwdCh {
+			if ev.Kind == adapter.EventReady {
+				gotReady = true
+				break
+			}
+			if ev.Kind == adapter.EventError {
+				t.Fatalf("forward error: %s", ev.Err)
+			}
+		}
+		if !gotReady {
+			t.Fatal("forward never ready after restart")
+		}
+		_ = f.Stop(sessionPrefix + "-fwd")
+		_ = f.Stop(sessionPrefix + "-2")
+		for range ch2 {
+		}
+	}
+	roundTrip("ephemeral", "")
+	roundTrip("fixed", `{"fake":"restart-key"}`)
+}

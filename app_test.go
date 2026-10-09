@@ -942,3 +942,88 @@ func TestNavigateDefersOffMenuCallback(t *testing.T) {
 		t.Fatal("EventsEmit must run inside the deferred goroutine")
 	}
 }
+
+func TestAppPortServeRestartAfterStop(t *testing.T) {
+	t.Setenv("TAILCAT_ADAPTER", "fake")
+	dir := t.TempDir()
+	t.Setenv("TAILCAT_KEYS_DIR", dir+"/keys")
+	t.Setenv("TAILCAT_SETTINGS_DIR", dir+"/settings")
+	t.Setenv("TAILCAT_CHAT_DIR", dir+"/chat")
+	t.Setenv("TAILCAT_MIAO_DIR", dir+"/miao")
+	a := NewApp()
+	if _, err := a.CreateKey("fixed", false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	waitReady := func(id string) string {
+		t.Helper()
+		deadline := time.After(2 * time.Second)
+		for {
+			for _, item := range a.ListSessions() {
+				if item.ID != id {
+					continue
+				}
+				if item.Status == session.StatusRunning && item.Address != "" {
+					return item.Address
+				}
+				if item.Err != "" {
+					t.Fatalf("serve failed: %s", item.Err)
+				}
+			}
+			select {
+			case <-deadline:
+				t.Fatalf("serve never ready: %+v", a.ListSessions())
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+	}
+	waitStopped := func(id string) {
+		t.Helper()
+		deadline := time.After(2 * time.Second)
+		for {
+			for _, item := range a.ListSessions() {
+				if item.ID == id && item.Status == session.StatusStopped {
+					return
+				}
+			}
+			select {
+			case <-deadline:
+				t.Fatalf("serve never stopped: %+v", a.ListSessions())
+			case <-time.After(20 * time.Millisecond):
+			}
+		}
+	}
+	roundTrip := func(keyName string) {
+		t.Helper()
+		first, err := a.StartPortServe([]adapter.PortMapping{{LocalPort: 18080}}, keyName)
+		if err != nil {
+			t.Fatalf("first start (%q): %v", keyName, err)
+		}
+		addr1 := waitReady(first.ID)
+		if err := a.StopSession(first.ID); err != nil {
+			t.Fatalf("stop (%q): %v", keyName, err)
+		}
+		waitStopped(first.ID)
+		second, err := a.StartPortServe([]adapter.PortMapping{{LocalPort: 18080}}, keyName)
+		if err != nil {
+			t.Fatalf("second start (%q): %v", keyName, err)
+		}
+		if second.ID == first.ID {
+			t.Fatalf("expected a new session after restart, got %s", second.ID)
+		}
+		addr2 := waitReady(second.ID)
+		if keyName != "" && addr2 != addr1 {
+			t.Fatalf("fixed-key address changed across restart: %s -> %s", addr1, addr2)
+		}
+		if _, err := a.StartForward(addr2, []adapter.PortMapping{{LocalPort: 19090, RemotePort: 18080}}, false); err != nil {
+			t.Fatalf("forward after restart (%q): %v", keyName, err)
+		}
+		if err := a.StopSession(second.ID); err != nil {
+			t.Fatalf("final stop (%q): %v", keyName, err)
+		}
+		waitStopped(second.ID)
+	}
+
+	roundTrip("")
+	roundTrip("fixed")
+}
