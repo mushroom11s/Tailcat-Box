@@ -46,9 +46,9 @@ export function localizeChatError(message: string, t: (key: MessageKey) => strin
     case "Could not reach peer. Check the address and that they are online.":
       return t("chatUnreachable");
     case micDeniedError:
-      return t("chatMicDenied");
+      return t(onWindows() ? "chatMicDeniedWin" : "chatMicDenied");
     case cameraDeniedError:
-      return t("chatCamDenied");
+      return t(onWindows() ? "chatCamDeniedWin" : "chatCamDenied");
     case screenDeniedError:
       return t("chatScreenDenied");
     case screenUnavailableError:
@@ -64,4 +64,11 @@ export function localizeChatError(message: string, t: (key: MessageKey) => strin
     default:
       return message;
   }
+}
+
+// Windows has no per-app prompt for desktop apps. WebView2 captures in
+// msedgewebview2.exe, so Settings lists "Microsoft Edge WebView2", not
+// Tailcat Box, and the hint has to say where the switches really are.
+function onWindows(): boolean {
+  return typeof navigator !== "undefined" && /Win/i.test(`${navigator.platform} ${navigator.userAgent}`);
 }

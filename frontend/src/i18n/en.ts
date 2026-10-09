@@ -382,6 +382,8 @@ export const en = {
   chatVoicePause: "Pause",
   chatMicDenied:
     "Microphone access was denied. Allow Tailcat Box in System Settings → Privacy & Security → Microphone, then try again.",
+  chatMicDeniedWin:
+    "Could not open the microphone. In Windows Settings → Privacy & security → Microphone, turn on Microphone access and Let desktop apps access your microphone (Tailcat Box is listed as Microsoft Edge WebView2). Close other apps using the microphone, then try again.",
   chatPlay: "Play",
   chatCallVoice: "Voice",
   chatCallVideo: "Video",
@@ -416,6 +418,8 @@ export const en = {
   callRecAgain: "Call again",
   chatCamDenied:
     "Camera access was denied. Allow Tailcat Box in System Settings → Privacy & Security → Camera, then try again.",
+  chatCamDeniedWin:
+    "Could not open the camera or microphone. In Windows Settings → Privacy & security → Camera (and Microphone), turn on access and Let desktop apps access your camera (Tailcat Box is listed as Microsoft Edge WebView2). Close other apps using the camera, such as meeting apps, then try again.",
   chatScreenDenied:
     "Screen sharing was denied. Allow Tailcat Box in System Settings → Privacy & Security → Screen & System Audio Recording, then quit and reopen the app.",
   chatScreenUnavailable: "Screen sharing is unavailable on this system.",
