@@ -1,228 +1,345 @@
-# Tailcat Box <img src="docs/assets/loading-cat.gif" alt="" height="28" />
-
-[中文说明](README.zh-CN.md)
-
-Desktop GUI for [Tailscale Tailcat](https://github.com/tailscale/tailcat) on macOS, Windows, and Linux, built with [Wails](https://wails.io) v2 (Go + React + TypeScript).
-
-[![CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg)](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml) [![Release](https://img.shields.io/github/v/release/mushroom11s/tailcat-box)](https://github.com/mushroom11s/tailcat-box/releases) [![License: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue)](LICENSE) ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey) [![Telegram](https://img.shields.io/badge/Telegram-chat-2CA5E0?logo=telegram&logoColor=white)](https://t.me/+YCUAoqBJ_ZIyZGVh)
-
 <p align="center">
-  <img src="docs/assets/icon.png" alt="Tailcat Box" width="160" />
+  <img src="docs/assets/icon.png" alt="Tailcat Box" width="128" />
 </p>
 
-## Demo
+<h1 align="center">Tailcat Box <img src="docs/assets/loading-cat.gif" alt="" height="28" /></h1>
 
-The window opens at 1152×720 on Mew Share. The active sidebar item keeps its full border. Settings covers appearance, language, keys, and about this app.
+<p align="center">
+  A cross-platform desktop client for <a href="https://github.com/tailscale/tailcat">Tailscale Tailcat</a>: chat, calls, file sharing, and port tunnels between two machines, with no account and no server to run.
+</p>
+
+<p align="center">
+  <a href="https://github.com/mushroom11s/tailcat-box/releases/latest"><img src="https://img.shields.io/github/v/release/mushroom11s/tailcat-box" alt="Latest release" /></a>
+  <a href="https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml"><img src="https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue" alt="License: PolyForm Noncommercial 1.0.0" /></a>
+  <img src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey" alt="Platforms: Windows, macOS, Linux" />
+  <a href="https://t.me/+YCUAoqBJ_ZIyZGVh"><img src="https://img.shields.io/badge/Telegram-chat-2CA5E0?logo=telegram&logoColor=white" alt="Telegram" /></a>
+</p>
+
+<p align="center">
+  English | <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+---
+
+## Overview
+
+Tailcat Box (Chinese name: 猫砂盆) wraps the [Tailcat](https://github.com/tailscale/tailcat) library in a desktop app for Windows, macOS, and Linux. Tailcat gives each endpoint a `tc…` address and connects peers through Tailscale DERP relays, upgrading to a direct path when the network allows it. Tailcat Box builds on that to provide one-to-one chat with voice and video calls, peer-to-peer file sharing, TCP port tunnels, and an optional built-in SSH shell.
+
+The app is built with [Wails](https://wails.io) v2 (Go backend, React + TypeScript frontend) and embeds `github.com/tailscale/tailcat` **v0.7.0**. The current stable release is **[v1.3.0](https://github.com/mushroom11s/tailcat-box/releases/tag/v1.3.0)**.
+
+## Features
+
+- **Chat** — Open a room, exchange Tailcat addresses (by text, QR code, or a pasted QR image), and send text, files, and voice notes. Messages can be set to burn after reading. You can keep up to 8 rooms open at once.
+- **Voice, video, and screen sharing** — Incoming calls ring until you answer or decline, and stop after 60 seconds if nobody picks up. A shared screen can be opened in its own OS window at native resolution.
+- **Call records** — When a call ends, both sides see a record in the conversation: duration, declined, cancelled, missed, or failed.
+- **Mew Share (喵传)** — Peer-to-peer file sharing with pickup codes and QR codes. Run several shares at once, each with its own expiry and download limit.
+- **Tunnel** — Expose local TCP ports on a Tailcat address, including ports on other hosts in your LAN, or forward a peer's port onto this machine. Use a saved key so the address survives restarts.
+- **SSH** — An optional, off-by-default shell served by Tailcat itself (not the system `sshd`), restricted to an allowlist of known peers.
+- **Runs in the background** — Closing the window hides it to the system tray, so rooms, shares, and tunnels keep running. Optional launch at login.
+- **Native on each platform** — Light and dark themes, English and Simplified Chinese UI, and in-app update checks with an opt-in Beta channel.
+
+## Screenshots
 
 <table>
   <tr>
     <td align="center" valign="top" width="50%">
-      <b>Mew Share — packing</b><br />
-      <img src="docs/assets/demo/en/miao-packing.png" alt="Mew Share packing a file into a share" width="100%" />
+      <img src="docs/assets/demo/en/miao-packing.png" alt="Mew Share packing files into a share" width="100%" /><br />
+      <sub>Mew Share: preparing a share</sub>
     </td>
     <td align="center" valign="top" width="50%">
-      <b>Share QR — cut-out cat in the center</b><br />
-      <img src="docs/assets/demo/en/miao-qr.png" alt="Share card with a QR code and the cut-out cat in the center" width="100%" />
+      <img src="docs/assets/demo/en/miao-qr.png" alt="Share card with a QR code" width="100%" /><br />
+      <sub>Mew Share: pickup code and QR code</sub>
     </td>
   </tr>
   <tr>
     <td align="center" valign="top" width="50%">
-      <b>Download — running cat</b><br />
-      <img src="docs/assets/demo/en/miao-running.png" alt="Download progress with a running cat on the bar" width="100%" />
+      <img src="docs/assets/demo/en/miao-running.png" alt="Download in progress" width="100%" /><br />
+      <sub>Mew Share: download in progress</sub>
     </td>
     <td align="center" valign="top" width="50%">
-      <b>Scan QR — camera, image, or paste</b><br />
-      <img src="docs/assets/demo/en/qr-scan.png" alt="Scan dialog with camera, choose image, and paste" width="100%" />
+      <img src="docs/assets/demo/en/qr-scan.png" alt="Scan dialog with camera, image, and paste options" width="100%" /><br />
+      <sub>Scanning a QR code from the camera, an image, or the clipboard</sub>
     </td>
   </tr>
 </table>
 
-**Tailcat Box** (Simplified Chinese: **猫砂盆**). GitHub: [mushroom11s/tailcat-box](https://github.com/mushroom11s/tailcat-box).
+## Download
 
-## Features
+Get the latest build from [GitHub Releases](https://github.com/mushroom11s/tailcat-box/releases/latest). Files for v1.3.0:
 
-- **Mew Share (喵传)** — the screen that opens. Drop files and keep several shares going at once. Shares up to 300 MiB are copied into the app; larger ones stay at the original path and must not be moved. Each share has its own QR code, with the cut-out packing cat in the center. A packing cat shows while the share is prepared, and a running cat follows the download. Paste a share code, or scan a QR from the camera, an image, or the clipboard. Another Tailcat Box downloads one share over Tailcat while this device stays online
-- **Chat** — open a room, exchange a Tailcat address (show a QR, or paste an image of one), and send text, files, voice notes, or a live voice, video, or screen share
-- **Tunnel** — serve TCP ports, forward them to this machine, or browse the peer’s web port
-- **SSH** — optional, and off until you turn on Allow SSH. This is Tailcat’s built-in shell, not the operating system’s sshd. It trusts the Tailcat address plus an allowlist of saved devices and open chat rooms, not an OS password or an SSH key. Allow any peer is a separate warning. SSH opens an in-app shell or the system terminal
-- **Settings** — system / light / dark theme, English and 简体中文, keys and DERP, client and system info, launch at login
-- **Tray** — Open, Hide, Chat, Tunnel, Settings, and Quit on macOS, Windows, and Linux (Linux needs a StatusNotifierItem tray; see [Linux](#linux)). Left-click the icon to show the window. The macOS app menu has the same actions. The tray icon is the same pixel-art cat as the app icon. Closing the window hides it so sessions keep running
-- **macOS window** — The standard title bar stays visible and shows Tailcat Box. The green button, and View → Enter Full Screen / Exit Full Screen (⌃⌘F), use native fullscreen. Windows and Linux are unchanged
+| Platform | Architecture | File | Notes |
+| --- | --- | --- | --- |
+| Windows 10/11 | x64 | `tailcat-box-windows-amd64-installer-v1.3.0.exe` | Installer (recommended) |
+| | ARM64 | `tailcat-box-windows-arm64-installer-v1.3.0.exe` | Installer (recommended) |
+| | x64 | `tailcat-box-windows-amd64-v1.3.0.exe` | Portable, no installation |
+| | ARM64 | `tailcat-box-windows-arm64-v1.3.0.exe` | Portable, no installation |
+| macOS | Apple silicon | `tailcat-box-macos-arm64-v1.3.0.dmg` | Disk image |
+| | Intel | `tailcat-box-macos-amd64-v1.3.0.dmg` | Disk image |
+| Linux | x64 | `tailcat-box-linux-amd64-v1.3.0.deb` | Debian / Ubuntu package |
+| | x64 | `tailcat-box-linux-amd64-v1.3.0.tar.gz` | Generic archive |
+| | x64 | `tailcat-box-linux-amd64-v1.3.0-full.tar.gz` | Generic archive with a bundled WebKitGTK that supports calls and screen sharing |
+| | ARM64 | `tailcat-box-linux-arm64-v1.3.0.deb` | Debian / Ubuntu package |
+| | ARM64 | `tailcat-box-linux-arm64-v1.3.0.tar.gz` | Generic archive |
 
-The UI talks to a Go service layer. Only `internal/adapter` imports `github.com/tailscale/tailcat` (pinned at **v0.7.0**).
+> [!NOTE]
+> Release builds are not code-signed (no Authenticode, no Apple notarization). Windows SmartScreen and macOS Gatekeeper will warn on first launch; see [FAQ](#faq-and-troubleshooting).
 
-## Requirements
+### System requirements
 
-| Tool | Notes |
-| --- | --- |
-| **Go 1.27.1+** | Required by `github.com/tailscale/tailcat` v0.7.0. Wails v2.16 needs Go 1.25+. Older local Go can still bootstrap with `GOTOOLCHAIN=auto`. |
-| **Node.js 18+** and npm | Frontend is Vite + React + TypeScript in `frontend/`. |
-| **Wails CLI v2** | `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0` |
-| **Platform webview** | macOS: Xcode Command Line Tools. Windows: WebView2 (usually already installed). Linux: `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`. |
+- **Windows**: Microsoft Edge WebView2 Runtime (preinstalled on current Windows 10 and 11).
+- **macOS**: Apple silicon or Intel.
+- **Linux**: glibc 2.39 or later (Ubuntu 24.04+, Debian 13+, Fedora 40+), WebKitGTK 4.1, GTK 3, and GStreamer. Voice/video calls and screen sharing require WebRTC, which distribution WebKitGTK builds omit; use the amd64 `-full.tar.gz` for calls. See [Linux notes](#linux-notes).
+
+## Installation
+
+**Windows** — Run the installer. The final page offers to launch Tailcat Box (as the current user, not as administrator). Upgrades install into the previous location by default. The portable `.exe` runs without installation.
+
+**macOS** — Open the `.dmg` and drag Tailcat Box into Applications. On first launch, allow it under System Settings → Privacy & Security → Open Anyway, or right-click the app and choose Open.
+
+**Linux (.deb)**
 
 ```bash
-wails doctor
+sudo apt install ./tailcat-box-linux-amd64-v1.3.0.deb
 ```
 
-## Develop
+**Linux (.tar.gz)** — Extract the archive, then either run `./install.sh` to install into `~/.local` (no `sudo` needed) or run `./tailcat-box` in place. For calls on amd64, use the `-full.tar.gz` and install the GStreamer plugins listed in [Linux notes](#linux-notes).
+
+## Quick start
+
+1. Install Tailcat Box on both machines and launch it. The app opens on Mew Share.
+2. **To chat**: on one machine, open **Chat** and create a room. Share the room's `tc…` address (copy it or show its QR code). On the other machine, paste or scan that address to connect.
+3. **To send files**: in **Mew Share**, drop files to create a share and send the pickup code. The recipient pastes it under **Download**. The sending machine must stay online until the download completes.
+4. **To expose a port**: in **Tunnel**, create a **Port serve** mapping such as `8080`, start it, and send the address to your peer. On the peer, create a **Local forward** to that address and open the local port.
+
+## Usage guide
+
+### Chat and calls
+
+- Each room has its own address, listener, current peer, and transcript. A room is a one-to-one conversation, not a group chat: if several people connect to the same address, replies go only to the most recent peer. Details are in the [usage FAQ](docs/faq.md).
+- Rooms opened with **Create temporary room** use an ephemeral key, and their address disappears when the app quits. A saved key (Settings → Keys & DERP) keeps the same address until you delete the key.
+- Voice, video, and screen sharing run inside the chat room and stay connected when you switch to another page. Incoming calls ring until answered or declined and end automatically after 60 seconds.
+- A **New messages** divider marks the first unread message when you return to a room. Nicknames and peer remarks are stored locally and are never sent to the other side.
+
+### Call records
+
+When a voice call, video call, or screen share ends, both peers see a record in the conversation, aligned to the caller's side:
+
+| Outcome | Caller sees | Callee sees |
+| --- | --- | --- |
+| Completed | Call type and duration, e.g. "Voice call · Call duration 03:12" | Same |
+| Declined | Declined | You declined |
+| Caller hung up before an answer | Cancelled | Caller cancelled |
+| No answer within 60 seconds | No answer | Missed call |
+| Connection or device error | Call failed | Call failed |
+
+Click a record to start the same kind of call again.
+
+### Mew Share
+
+- Drop one or more files to create a share. Several shares can run at the same time, each with its own pickup code and QR code.
+- Shares up to 300 MiB are copied into the app. Larger shares are served from their original location, so do not move or delete those files while the share is active.
+- Each share can expire after 1, 7, or 15 days, a custom number of days, or only when you end it, and can limit the number of downloads.
+- Recipients paste a pickup code or scan a QR code (camera, image file, or clipboard). Transfers run over Tailcat between two Tailcat Box instances; the sender must stay online.
+- Active shares come back with the same code after the app restarts.
+
+### Tunnel (port forwarding)
+
+The Tunnel page stores port mappings that you can start and stop at any time.
+
+- **Port serve** publishes TCP ports on a Tailcat address. Enter comma-separated ports or mappings:
+  - `8080` exposes port 8080 on this machine.
+  - `8080:192.168.1.10:80` exposes port 80 on another host in your LAN as port 8080. The machine running Tailcat Box must be able to reach that host, and the host's firewall must allow the connection.
+- **Local forward** listens on a local port and forwards connections to a port on a peer's Tailcat address. You can also open a peer's web port directly in the browser.
+- **Stable addresses** — Pick a saved key instead of **Ephemeral** to keep the same `tc…` address across restarts. The address also encodes the DERP region, so Tailcat Box stores the region a key last served on and reuses it while it still matches your region setting, even if the network is not ready at boot. Pinning a region (see [Configuration](#configuration)) keeps the address predictable.
+- A key can be used by only one listener at a time (a chat room or a port serve). Do not run the same saved key on two machines simultaneously.
+- Each mapping can be set to start automatically when the app launches.
+
+### SSH
+
+SSH is off until you enable **Allow SSH**. It is Tailcat's built-in shell, not the operating system's `sshd`. Access is limited to an allowlist made up of saved devices and peers of open chat rooms; it does not use OS passwords or SSH keys. **Allow any peer** is a separate option and shows a warning. Sessions can be opened in the in-app terminal or the system terminal.
+
+### Tray and background operation
+
+Closing the window hides it to the tray (menu bar on macOS) so that rooms, shares, and tunnels keep running. The tray menu provides Open, Hide, Chat, Tunnel, Settings, and Quit, and shows a badge for unread messages. Choose **Quit** to stop all sessions. On Linux, the tray requires a StatusNotifierItem host; without one, closing the window quits the app.
+
+## Configuration
+
+### Settings
+
+| Setting | Location | Description |
+| --- | --- | --- |
+| DERP region | Settings → Keys & DERP | Region used by new serve and client sessions, given as an ID, code, or name. Empty means automatic. A numeric ID (for example `301`) is used directly without fetching the DERP map. |
+| DERP map URL | Settings → Keys & DERP | Optional custom DERP map. Defaults to Tailcat's public map, [`https://tailcat.dev/derpmap.json`](https://tailcat.dev/derpmap.json), which lists the available region IDs and codes. |
+| Beta updates | Settings | Off by default. When on, **Check for updates** also considers GitHub pre-releases. |
+| Launch at login | Settings | Starts Tailcat Box when you sign in. |
+| Appearance and language | Settings | System, light, or dark theme; English or Simplified Chinese. |
+
+The Keys page also lists keys from the Tailcat CLI directory (`~/.config/tailcat/keys` or the OS equivalent) so you can import them.
+
+### Data directory
+
+Keys and settings are stored under the user configuration directory:
+
+| OS | Path |
+| --- | --- |
+| Windows | `%AppData%\tailcat-box` |
+| macOS | `~/Library/Application Support/tailcat-box` |
+| Linux | `~/.config/tailcat-box` |
+
+Keys are saved as `keys/*.private.json`, chat files under `chat/`, and Mew Share copies under `miao/`. If a legacy `tailcat-desktop-client` directory exists and `tailcat-box` does not, the app keeps using the legacy directory; rename it to switch.
+
+### Environment variables
+
+| Variable | Purpose |
+| --- | --- |
+| `TAILCAT_KEYS_DIR` | Override the keys directory |
+| `TAILCAT_SETTINGS_DIR` | Override the settings directory |
+| `TAILCAT_CHAT_DIR` | Override the chat file directory |
+| `TAILCAT_MIAO_DIR` | Override the Mew Share copy directory |
+| `TAILCAT_ADAPTER=fake` | Use the offline fake backend (development only) |
+
+## FAQ and troubleshooting
+
+**Windows SmartScreen says "Windows protected your PC".**
+Release builds are unsigned. Click **More info**, then **Run anyway**.
+
+**macOS says the app cannot be opened.**
+Unsigned builds are blocked by Gatekeeper on first launch. Open System Settings → Privacy & Security and click **Open Anyway**, or right-click the app and choose **Open**.
+
+**Windows: the microphone or camera does not work, and Tailcat Box is not listed in privacy settings.**
+Tailcat Box uses Microsoft Edge WebView2, and Windows does not show a separate permission prompt for desktop apps. Open Settings → Privacy & security → Microphone (and Camera) and make sure both the main switch and **Let desktop apps access your microphone/camera** are on. Recent use appears under **Microsoft Edge WebView2**, not under Tailcat Box. If the switches are on and the call still fails, another application may be holding the device.
+
+**The app says "No microphone or camera found" in a Hyper-V virtual machine.**
+Hyper-V VMs have no camera, and often no microphone, by default. Connect with an Enhanced Session and enable audio recording and camera redirection under **Show Options → Local Resources**, or test on a physical machine.
+
+**macOS: no microphone, camera, or screen recording prompt appears.**
+macOS prompts on first use. If you previously chose Don't Allow, enable Tailcat Box under System Settings → Privacy & Security → Microphone, Camera, and Screen & System Audio Recording. Screen recording permission is tied to the code signature, so after updating an unsigned build you may need to grant it again and restart the app. When running `wails dev`, macOS may attribute the request to the terminal instead.
+
+**Linux: calls are unavailable.**
+Distribution WebKitGTK builds do not include WebRTC. Use the amd64 `-full.tar.gz` package and install the GStreamer plugins listed below.
+
+**My Tunnel address changed after a reboot.**
+Use a saved key instead of an ephemeral one, and set a fixed DERP region. The address embeds the region, so a different region produces a different address. Since v1.3.0, a saved key reuses the region it last served on.
+
+More questions about rooms, temporary addresses, nicknames, and remarks are answered in the [usage FAQ](docs/faq.md).
+
+## Linux notes
+
+Runtime dependencies:
+
+```bash
+# Debian / Ubuntu (installed automatically with the .deb)
+sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+# Additional packages for calls with the -full.tar.gz build
+sudo apt install gstreamer1.0-nice
+# Fedora
+sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-bad-free
+```
+
+- **Tray**: uses the StatusNotifierItem (AppIndicator) protocol over D-Bus. KDE, Xfce, Cinnamon, and Ubuntu's GNOME support it; stock GNOME needs the *AppIndicator and KStatusNotifierItem Support* extension.
+- **Full package**: bundles WebKitGTK 2.54.1 built with WebRTC (see [third_party/webkitgtk](third_party/webkitgtk/README.md)). In-app updates keep a full install on the full package.
+- **Open in Terminal** tries `x-terminal-emulator`, `gnome-terminal`, `ptyxis`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `foot`, and `xterm`, in that order.
+- **Launch at login** writes `~/.config/autostart/tailcat-box.desktop`.
+- **Updates**: the update checker downloads the new `.tar.gz` and opens its folder; install it the same way as before.
+
+## Build from source
+
+### Prerequisites
+
+| Tool | Version |
+| --- | --- |
+| Go | 1.27.1 or later (required by Tailcat v0.7.0; `GOTOOLCHAIN=auto` can fetch it) |
+| Node.js and npm | Node.js 20.19+ or 22.12+ (required by Vite 7; CI uses Node.js 22) |
+| Wails CLI | v2.16.0: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0` |
+| Platform toolchain | macOS: Xcode Command Line Tools. Windows: WebView2. Linux: `libgtk-3-dev`, `libwebkit2gtk-4.1-dev` |
+
+Run `wails doctor` to verify the environment.
+
+### Develop
 
 ```bash
 git clone https://github.com/mushroom11s/tailcat-box.git
 cd tailcat-box
+wails dev                          # real Tailcat backend, uses public DERP
+TAILCAT_ADAPTER=fake wails dev     # offline fake backend
 ```
 
-From the repository root:
+On Linux, add `-tags webkit2_41` to `wails dev` and `wails build`. Running `npm run dev` inside `frontend/` starts the UI without Go bindings and falls back to an in-browser fake.
+
+### Build
 
 ```bash
-wails dev
+wails build                        # Linux: wails build -tags webkit2_41
 ```
 
-Offline, with no DERP traffic:
+The output is written to `build/bin/` (`tailcat-box.app` on macOS, `tailcat-box.exe` on Windows, `tailcat-box` on Linux).
 
-```bash
-TAILCAT_ADAPTER=fake wails dev
-```
-
-On Linux (including Ubuntu 24.04, where only WebKitGTK 4.1 is available):
-
-```bash
-TAILCAT_ADAPTER=fake wails dev -tags webkit2_41
-```
-
-`npm run dev` inside `frontend/` has no Go bindings. The UI falls back to an in-browser fake and shows an “In-browser fake adapter” chip.
-
-## Build
-
-On the OS you want a binary for:
-
-```bash
-wails build
-```
-
-The binary is `build/bin/tailcat-box` (`.app` on macOS, `.exe` on Windows).
-
-On Linux, install `libgtk-3-dev` and `libwebkit2gtk-4.1-dev`, then run `wails build -tags webkit2_41`.
-
-Frontend only:
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-## Test
+### Test
 
 ```bash
 go test ./...
-cd frontend && npm run build
+cd frontend && npm ci && npm run build && npm test
 ```
 
-Pull requests and pushes to `main` run these checks in [CI](https://github.com/mushroom11s/tailcat-box/actions/workflows/ci.yml).
-
-`go test ./...` does not include the real-adapter integration test. That one needs outbound HTTPS/UDP to Tailcat DERP and is optional:
+CI runs `go test ./...`, the packaging script tests, and the frontend build on every pull request and push to `main`. An integration test against real DERP relays is available separately and needs outbound HTTPS/UDP:
 
 ```bash
 go test -tags=integration ./internal/adapter/ -v -count=1
 ```
 
-## Fake vs real adapter
+Release packaging and tagging are described in [docs/releases/README.md](docs/releases/README.md).
 
-The default backend is the embedded Tailcat library. It uses public DERP relays.
+## Project structure
 
-| | Real (default) | Fake (`TAILCAT_ADAPTER=fake`) |
-| --- | --- | --- |
-| How | `wails dev` / `wails build` | `TAILCAT_ADAPTER=fake wails dev` |
-| Network | Public DERP | None |
-| Pipe | Prints a `tc…` address. Connect dials TCP port **1** (same as bare `tailcat <addr>`). | Address `tc:fake-<id>`. Dial replies `echo:<payload>`. |
-| Ports | Port serve proxies the mappings. Forward and browse listen on localhost. | Address `tc:fake-port-<id>`. |
-| Files | Recv and serve use SFTP on TCP port **22**. | Recv, serve, copy, and ls return stub addresses and listings. |
-| SSH, SOCKS, exit node, exec | SSH uses port **22**. SOCKS dials through the peer. Exit node and exec use the library handlers. | Deterministic `tc:fake-…` addresses and a local SOCKS URL. |
-| Keys and DERP | Parse and resolve call the library. Saved region / map URL apply to later sessions. | Parse returns stub JSON. Resolve returns `tc:fake-resolved`. |
-| Ping | Disco pings (DERP, then direct when possible). | Emits DERP, then direct, `EventData` lines. |
-
-## Configuration
-
-New installs store keys and settings under `<user-config>/tailcat-box` (keys are `*.private.json` in `keys/`).
-
-| OS | Typical path |
-| --- | --- |
-| macOS | `~/Library/Application Support/tailcat-box` |
-| Windows | `%AppData%\tailcat-box` |
-| Linux | `~/.config/tailcat-box` |
-
-If `<user-config>/tailcat-desktop-client` already exists and `tailcat-box` does not, the app keeps using the old directory for keys and settings. Move or rename that folder to `tailcat-box` when you want the new path. Override those directories with `TAILCAT_KEYS_DIR` and `TAILCAT_SETTINGS_DIR`. Chat files are stored in `<user-config>/tailcat-box/chat` (override with `TAILCAT_CHAT_DIR`). Mew Share temp copies live in `<user-config>/tailcat-box/miao` (override with `TAILCAT_MIAO_DIR`). They come back with the same code when you open the app again, and are deleted when that share ends.
-
-The Keys page also lists the Tailcat CLI key directory (`~/.config/tailcat/keys`, or the OS equivalent) so you can import those keys.
-
-## Releases
-
-Pushing a `v*` tag builds unsigned installers, plus a Windows portable exe and Linux packages, and attaches them to a GitHub Release. Download the file and open it:
-
-| File | How to install |
-| --- | --- |
-| `tailcat-box-macos-arm64-vX.Y.Z.dmg` | Apple Silicon. Open the disk image and drag Tailcat Box to Applications. |
-| `tailcat-box-macos-amd64-vX.Y.Z.dmg` | Intel Mac. Same drag-to-Applications disk image. |
-| `tailcat-box-windows-amd64-installer-vX.Y.Z.exe` | Windows x64 NSIS setup. Run it. |
-| `tailcat-box-windows-arm64-installer-vX.Y.Z.exe` | Windows ARM64 NSIS setup. Run it. |
-| `tailcat-box-windows-amd64-vX.Y.Z.exe` | Windows x64 portable build. Run this exe. No setup program. |
-| `tailcat-box-windows-arm64-vX.Y.Z.exe` | Windows ARM64 portable build. Run this exe. No setup program. |
-| `tailcat-box-linux-amd64-vX.Y.Z.deb` / `-arm64-` | Debian / Ubuntu. `sudo apt install ./tailcat-box-linux-amd64-vX.Y.Z.deb` |
-| `tailcat-box-linux-amd64-vX.Y.Z.tar.gz` / `-arm64-` | Any distro. Extract it and run `./install.sh` (installs to `~/.local`, no sudo), or just run `./tailcat-box`. |
-| `tailcat-box-linux-amd64-vX.Y.Z-full.tar.gz` / `-arm64-` | Full package: the same, plus a bundled WebKitGTK with WebRTC so voice/video calls and screen share work. Larger download. |
-
-The version in the filename is the git tag, including the leading `v`. These builds are unsigned, so Gatekeeper and SmartScreen warnings are expected. macOS: System Settings → Privacy & Security → Open Anyway, or right-click → Open. Windows: More info → Run anyway. Notes for that tag live under `docs/releases/`.
-
-Tagging, dry-run builds, and which runners are used are described in [docs/releases/README.md](docs/releases/README.md).
-
-## Linux
-
-The Linux packages are built on Ubuntu 24.04 and need glibc 2.39 or newer (Ubuntu 24.04+, Debian 13+, Fedora 40+). Runtime libraries:
-
-```bash
-# Debian / Ubuntu (the .deb pulls these in)
-sudo apt install libwebkit2gtk-4.1-0 libgtk-3-0t64 gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
-# Fedora
-sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-bad-free
+```text
+.
+├── main.go, app.go        # Wails entry point and bindings exposed to the frontend
+├── internal/
+│   ├── adapter/           # The only package that imports Tailcat (real and fake backends)
+│   ├── chat/              # Rooms, files, voice notes, live calls
+│   ├── miao/              # Mew Share
+│   ├── service/           # Session commands: pipe, ports, files, SSH, SOCKS, exit node, exec, ping
+│   ├── session/           # Session state
+│   ├── settings/, store/  # Settings, named keys, network options
+│   ├── sshdesk/, sshterm/ # Built-in SSH server and terminal
+│   ├── tray/              # System tray
+│   ├── update/            # Update checks
+│   └── ...                # autostart, notify, screenwin, linuxwebview, sysinfo, appinfo
+├── frontend/              # React + TypeScript UI (Vite)
+├── build/                 # Platform packaging: Info.plist, NSIS installer, Linux desktop files
+├── third_party/webkitgtk/ # WebRTC-enabled WebKitGTK for the full Linux package (Git LFS)
+├── scripts/               # Packaging scripts
+└── docs/                  # FAQ, release notes, assets
 ```
 
-- **Tray** — uses the StatusNotifierItem (AppIndicator) protocol over D-Bus. KDE, Xfce, Cinnamon, and Ubuntu's GNOME show it. Stock GNOME needs the *AppIndicator and KStatusNotifierItem Support* extension. Without a tray, closing the window quits the app instead of hiding it.
-- **Voice and video calls, and screen sharing, need WebRTC.** Debian, Ubuntu, and Fedora build WebKitGTK without it, so the small packages cannot make calls and the app says so. Voice notes, chat, files, Mew Share, tunnels, and SSH work. The `-full.tar.gz` package bundles WebKitGTK built with WebRTC (see [third_party/webkitgtk](third_party/webkitgtk/README.md)); it also needs `gstreamer1.0-plugins-bad gstreamer1.0-nice gstreamer1.0-plugins-good`. In-app updates keep a full install on the full package.
-- **Open in Terminal** — tries `x-terminal-emulator`, `gnome-terminal`, `ptyxis`, `konsole`, `xfce4-terminal`, `kitty`, `alacritty`, `foot`, then `xterm`.
-- **Launch at login** writes `~/.config/autostart/tailcat-box.desktop`.
-- **Updates** — the in-app checker downloads the new `.tar.gz` and shows it in its folder. Install it the same way as before.
+The frontend talks only to the Go service layer; only `internal/adapter` depends on `github.com/tailscale/tailcat`.
 
-## macOS microphone, camera, and screen sharing
+## Contributing
 
-The first voice note, video call, or screen share asks macOS for permission. `build/darwin/Info.plist` (and `Info.dev.plist` for `wails dev`) includes `NSMicrophoneUsageDescription`, `NSCameraUsageDescription`, and `NSScreenCaptureUsageDescription`. Wails writes that file to `tailcat-box.app/Contents/Info.plist`, and the release disk image contains that `.app`, so the shipped build can show the system dialogs. Without those strings, macOS denies the capture and does not prompt.
+Bug reports and pull requests are welcome.
 
-Unsigned builds still hit Gatekeeper before the app opens (System Settings → Privacy & Security → Open Anyway, or right-click → Open). That check is separate from microphone, camera, and screen recording. After the app is allowed to run, those prompts appear on first use. Screen recording follows the app’s code signature, so a new unsigned build may need to be allowed again, and macOS often applies it only after you quit and reopen the app. If you previously chose Don’t Allow, turn Tailcat Box on under Microphone, Camera, and Screen & System Audio Recording. The in-app message says the same thing in English and 简体中文.
+- Use [Issues](https://github.com/mushroom11s/tailcat-box/issues) for bugs and feature requests. Include your OS, architecture, app version, and steps to reproduce.
+- Keep pull requests focused, target `main`, and make sure `go test ./...` and `npm run build` in `frontend/` pass.
+- User-facing strings live in `frontend/src/i18n/en.ts` and `frontend/src/i18n/zh-CN.ts`; please update both.
 
-`wails dev` can attribute the request to the terminal that launched it. Allow that terminal, or confirm the prompts with `wails build`.
+## Security
 
-## Layout
+- Anyone who has a room address, a Tunnel address, or a Mew Share pickup code can connect to it. Treat them like passwords, and stop or delete what you no longer need.
+- A Port serve mapping exposes the target port to whoever has the address. Only expose services that are safe for that audience.
+- SSH is off by default and limited to an allowlist; enabling **Allow any peer** removes that restriction.
+- Transport security is provided by the embedded Tailcat library. Refer to the [Tailcat project](https://github.com/tailscale/tailcat) for its protocol and security properties.
+- Release binaries are unsigned. Download them only from this repository's [Releases](https://github.com/mushroom11s/tailcat-box/releases) page.
 
-- `main.go` / `app.go` — Wails entry and JS bindings
-- `internal/adapter` — Tailcat adapter, fake and real
-- `internal/chat` — room, files, voice notes, and live media
-- `internal/service` — session commands (pipe, ports, files, SSH, SOCKS, exit node, exec, ping)
-- `internal/session` — session state
-- `internal/store` — named keys and network settings
-- `internal/tray` — Open, Hide, Chat, Tunnel, Settings, session count, Quit
-- `frontend/` — Mew Share, Chat, Tunnel, and Settings
-
-The Go module path in `go.mod` is `github.com/mushroom11s/tailcat-box`.
-
-## FAQ
-
-Several rooms at once, several people on one room address, whether a closed address can be used again, and local nicknames and peer remarks, are answered in the [usage FAQ](docs/faq.md).
-
-## Credits
-
-Tailcat Box is a desktop client for [Tailscale Tailcat](https://github.com/tailscale/tailcat).
+To report a vulnerability, please do not post details in a public issue. Open an issue asking for a private contact channel, and the maintainer will follow up.
 
 ## License
 
-Tailcat Box source in this repository is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Non-commercial use is allowed; commercial use requires a separate license from the copyright holder.
+Tailcat Box's own source code is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE). Noncommercial use is permitted; commercial use requires a separate license from the copyright holder.
 
-Embedded and vendored third-party code (notably `github.com/tailscale/tailcat` and other dependencies) remains under its own licenses. This PolyForm Noncommercial license applies to Tailcat Box's own code and does not relicense those dependencies.
+Embedded and vendored third-party code, including `github.com/tailscale/tailcat`, remains under its respective licenses and is not relicensed.
+
+## Acknowledgements
+
+- [Tailcat](https://github.com/tailscale/tailcat) and [Tailscale](https://tailscale.com), which provide the networking this app is built on.
+- [Wails](https://wails.io), [React](https://react.dev), and [WebKitGTK](https://webkitgtk.org).
