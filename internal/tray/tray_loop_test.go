@@ -150,3 +150,13 @@ func nonCommentCode(t *testing.T, name string) string {
 	}
 	return b.String()
 }
+
+func TestDarwinMenuBarUsesColorLogo(t *testing.T) {
+	darwin := nonCommentCode(t, "tray_install_darwin.go")
+	if strings.Contains(darwin, "SetTemplateIcon(") {
+		t.Fatal("darwin menu bar must show the color app logo, not a template")
+	}
+	if !strings.Contains(darwin, "c.bindIcon(icon, systray.SetIcon)") {
+		t.Fatal("darwin must rest on the logo with the red unread dot like Windows/Linux")
+	}
+}

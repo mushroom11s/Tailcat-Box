@@ -293,8 +293,7 @@ func (c *Controller) bindIcon(icon []byte, fn func([]byte)) {
 
 // bindIcons is bindIcon with separate setters. idle shows the resting icon
 // (with or without the unread mark made by mark); frame shows the color
-// scoop frames. macOS rests on a template image but plays the packaged gif
-// in color, so the two setters differ there.
+// scoop frames.
 func (c *Controller) bindIcons(icon []byte, idle, frame func([]byte), mark func([]byte) ([]byte, error)) {
 	if c == nil || idle == nil {
 		return
