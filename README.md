@@ -28,23 +28,12 @@ It is built on [Tailscale Tailcat](https://github.com/tailscale/tailcat): connec
 
 ## Use cases
 
-**Reach your home or office network from anywhere**
-Publish a NAS dashboard, an admin web page, or a development server on a Tailcat address, then open it from your laptop on another network. No public IP or router port forwarding required.
-
-**Show a work-in-progress site to a colleague or client**
-Share the local port your dev server is running on and send the address to everyone who needs it. Several people can connect with the same address at the same time, each through their own Tailcat Box, while you keep coding. Stop the mapping when the demo is over.
-
-**Send large files directly, without a cloud drive**
-Drop files into Mew Share and send the pickup code to one person or several. Recipients download straight from your computer, with no upload step and no third-party storage.
-
-**Help a family member or coworker remotely**
-Talk it through on a voice or video call, ask them to share their screen, and, if they allow it, open a shell on their machine over SSH to fix the problem.
-
-**Keep a private conversation between two machines**
-Chat, voice notes, and calls go between the two Tailcat Box apps through Tailcat, with no chat service account involved.
-
-**Expose a device on your LAN to someone remote**
-Forward the web interface of a printer, an IP camera, a router, or an embedded board that sits on your local network, so remote peers can reach it through your computer, several at once if needed.
+- **Reach your home or office network from anywhere**: publish a NAS dashboard, an admin page, or a dev server on a Tailcat address and open it from another network, with no public IP or router port forwarding.
+- **Show a work-in-progress site to colleagues or clients**: share your dev server's port and send the address; several people can connect at the same time through their own Tailcat Box while you keep coding.
+- **Send large files directly, without a cloud drive**: drop files into Mew Share and send the pickup code to one or more people, who download straight from your computer with no upload step or third-party storage.
+- **Help a family member or coworker remotely**: talk on a voice or video call, have them share their screen, and, if they allow it, open a shell on their machine over SSH to fix the problem.
+- **Keep a private conversation between two machines**: chat, voice notes, and calls travel between the two Tailcat Box apps through Tailcat, with no chat service account involved.
+- **Expose a device on your LAN to someone remote**: forward the web interface of a printer, IP camera, router, or embedded board on your local network so remote peers, several at once if needed, can reach it through your computer.
 
 ## Highlights
 
