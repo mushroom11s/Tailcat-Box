@@ -19,16 +19,11 @@ func runAction(fn func()) {
 	go fn()
 }
 
-func setTemplate(icon []byte) {
-	systray.SetTemplateIcon(icon, icon)
-}
-
 func (c *Controller) install(icon []byte) {
-	// Rest on the template cat head so AppKit tints it for light and dark
-	// menu bars. Unread adds a template dot (a template cannot be red). The
-	// scoop plays the packaged gif frames in color, then returns here.
+	// The menu bar shows the color app logo (not a template), so unread is
+	// the same red dot as Windows/Linux and the scoop frames swap in place.
 	// SetOnClick stays off: it crashes the menu.
-	c.bindIcons(icon, setTemplate, systray.SetIcon, BadgeTemplate)
+	c.bindIcon(icon, systray.SetIcon)
 	c.bindProduct(func(title, tooltip string) {
 		// Icon-only menu bar: tooltip only, no SetTitle text beside the icon.
 		systray.SetTooltip(tooltip)
