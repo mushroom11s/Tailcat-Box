@@ -233,10 +233,10 @@ func TestReceiveProgressAndQueuedPull(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	queued := waitReceive(t, events, second.ID, receiveQueued, nil)
-	if queued.BytesDone != 0 {
-		t.Fatalf("queued progress=%d", queued.BytesDone)
-	}
+	// A second receiver no longer waits: it is served alongside the first.
+	waitReceive(t, events, second.ID, receiveDownloading, func(job ReceiveJob) bool {
+		return job.BytesDone > 0 && job.BytesDone < int64(len(payload))
+	})
 	release()
 	doneFirst := waitReceive(t, events, first.ID, receiveDone, nil)
 	doneSecond := waitReceive(t, events, second.ID, receiveDone, nil)
@@ -1289,30 +1289,31 @@ func TestReceivePersistFlushesByChunkLimit(t *testing.T) {
 	}
 }
 
-func TestThreeReceiversAreAllServedAndListedPerPeer(t *testing.T) {
+func TestTwelveReceiversTenInParallelTwoQueued(t *testing.T) {
 	root := t.TempDir()
 	svc := New(adapter.NewFake(), root)
 	events := collectReceive(t, svc)
-	payload := bytes.Repeat([]byte("b"), chunkSize+32)
+	payload := bytes.Repeat([]byte("p"), chunkSize*2+32)
 	snap, err := svc.Start([]Source{{Name: "big.bin", Data: payload}}, Limits{}, adapter.NetworkOpts{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	release := hookTransfer(t, "chunk")
-	dests := []string{t.TempDir(), t.TempDir(), t.TempDir()}
-	first, err := svc.StartReceive(context.Background(), snap.Payload, dests[0], adapter.NetworkOpts{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	waitReceive(t, events, first.ID, receiveDownloading, func(job ReceiveJob) bool { return job.BytesDone > 0 })
-	ids := []string{first.ID}
-	for _, dest := range dests[1:] {
-		job, err := svc.StartReceive(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+	const n = maxParallelSends + 2
+	dests := make([]string, n)
+	ids := make([]string, n)
+	for i := 0; i < n; i++ {
+		dests[i] = t.TempDir()
+		job, err := svc.StartReceive(context.Background(), snap.Payload, dests[i], adapter.NetworkOpts{})
 		if err != nil {
 			t.Fatal(err)
 		}
-		waitReceive(t, events, job.ID, receiveQueued, nil)
-		ids = append(ids, job.ID)
+		ids[i] = job.ID
+		if i < maxParallelSends {
+			waitReceive(t, events, job.ID, receiveDownloading, func(job ReceiveJob) bool { return job.BytesDone > 0 })
+		} else {
+			waitReceive(t, events, job.ID, receiveQueued, nil)
+		}
 	}
 	var peers []PeerProgress
 	for _, share := range svc.List() {
@@ -1320,11 +1321,22 @@ func TestThreeReceiversAreAllServedAndListedPerPeer(t *testing.T) {
 			peers = share.Peers
 		}
 	}
-	if len(peers) != 3 || peers[0].Status != "sending" || peers[0].BytesDone <= 0 || peers[1].Status != "queued" || peers[2].Status != "queued" || peers[1].BytesDone != 0 {
+	if len(peers) != n {
 		t.Fatalf("peers=%+v", peers)
 	}
-	if peers[0].Addr == peers[1].Addr || peers[1].Addr == peers[2].Addr {
-		t.Fatalf("peers share an address: %+v", peers)
+	seen := map[string]bool{}
+	for i, p := range peers {
+		want := "sending"
+		if i >= maxParallelSends {
+			want = "queued"
+		}
+		if p.Status != want || seen[p.Addr] {
+			t.Fatalf("peer %d=%+v", i, p)
+		}
+		if want == "sending" && (p.BytesDone <= 0 || p.BytesTotal != int64(len(payload))) {
+			t.Fatalf("peer %d=%+v", i, p)
+		}
+		seen[p.Addr] = true
 	}
 	release()
 	for i, id := range ids {
@@ -1337,4 +1349,47 @@ func TestThreeReceiversAreAllServedAndListedPerPeer(t *testing.T) {
 			t.Fatalf("receiver %d saved err=%v", i, err)
 		}
 	}
+	waitShare(t, svc, snap.ID, func(s Snapshot) bool { return len(s.Peers) == 0 && s.Downloads == n })
+}
+
+func waitShare(t *testing.T, svc *Service, id string, ok func(Snapshot) bool) {
+	t.Helper()
+	deadline := time.Now().Add(8 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, s := range svc.List() {
+			if s.ID == id && ok(s) {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("share %s never settled: %+v", id, svc.List())
+}
+
+func TestDownloadLimitCapsParallelSends(t *testing.T) {
+	root := t.TempDir()
+	svc := New(adapter.NewFake(), root)
+	events := collectReceive(t, svc)
+	payload := bytes.Repeat([]byte("q"), chunkSize+32)
+	snap, err := svc.Start([]Source{{Name: "big.bin", Data: payload}}, Limits{MaxDownloads: 2}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := hookTransfer(t, "chunk")
+	var ids []string
+	for i := 0; i < 3; i++ {
+		job, err := svc.StartReceive(context.Background(), snap.Payload, t.TempDir(), adapter.NetworkOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, job.ID)
+		if i < 2 {
+			waitReceive(t, events, job.ID, receiveDownloading, func(job ReceiveJob) bool { return job.BytesDone > 0 })
+		} else {
+			waitReceive(t, events, job.ID, receiveQueued, nil)
+		}
+	}
+	release()
+	waitReceive(t, events, ids[0], receiveDone, nil)
+	waitReceive(t, events, ids[1], receiveDone, nil)
 }

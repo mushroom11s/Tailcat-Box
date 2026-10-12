@@ -56,13 +56,14 @@ func (h *host) notePath(gen int, path adapter.PeerPath) {
 	h.pathMu.Lock()
 	defer h.pathMu.Unlock()
 	h.mu.Lock()
-	if h.ended || !h.sending || h.sendGen != gen || (h.path == kind && h.relaySource == source && h.relayName == name) {
+	a := h.activeLocked(gen)
+	if h.ended || a == nil || (a.path == kind && a.relaySource == source && a.relayName == name) {
 		h.mu.Unlock()
 		return
 	}
-	h.path = kind
-	h.relaySource = source
-	h.relayName = name
+	a.path = kind
+	a.relaySource = source
+	a.relayName = name
 	snap := h.snapshotLocked()
 	h.mu.Unlock()
 	h.publish(snap)

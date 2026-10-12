@@ -1006,52 +1006,84 @@ func validateLimits(lim Limits) error {
 }
 
 type host struct {
-	svc         *Service
-	id          string
-	token       string
-	payload     string
-	address     string
-	dir         string
-	files       []StagedFile
-	byRef       bool
-	warning     string
-	total       int64
-	lim         Limits
-	forever     bool
-	expires     time.Time
-	downloads   int
-	keyJSON     string
-	createdAt   time.Time
-	region      string
-	derpURL     string
-	sess        *session.Session
-	room        adapter.Room
-	cancel      context.CancelFunc
-	ctx         context.Context
-	timer       *time.Timer
-	ready       chan struct{}
-	readySig    *readySignal
-	life        context.Context
-	stopLife    context.CancelFunc
-	mu          sync.Mutex
-	pathMu      sync.Mutex
-	path        string
-	relaySource string
-	relayName   string
-	sentDone    int64
-	sentTotal   int64
-	sentPublish time.Time
-	sendGen     int
-	ended       bool
-	reason      string
-	sending     bool
-	sendReply   string
-	// waiting holds pulls that arrived while another peer was being served,
+	svc       *Service
+	id        string
+	token     string
+	payload   string
+	address   string
+	dir       string
+	files     []StagedFile
+	byRef     bool
+	warning   string
+	total     int64
+	lim       Limits
+	forever   bool
+	expires   time.Time
+	downloads int
+	keyJSON   string
+	createdAt time.Time
+	region    string
+	derpURL   string
+	sess      *session.Session
+	room      adapter.Room
+	cancel    context.CancelFunc
+	ctx       context.Context
+	timer     *time.Timer
+	ready     chan struct{}
+	readySig  *readySignal
+	life      context.Context
+	stopLife  context.CancelFunc
+	mu        sync.Mutex
+	pathMu    sync.Mutex
+	// active holds the sends in progress, oldest first, at most maxParallelSends.
+	active  []*activeSend
+	sendGen int
+	ended   bool
+	reason  string
+	// waiting holds pulls that arrived while every send slot was busy,
 	// oldest first. One entry per reply address.
 	waiting []pendingPull
 	// txMu keeps SetPeer and the send that follows it together, so a queued
 	// notice to one peer cannot redirect another peer's chunk.
 	txMu sync.Mutex
+}
+
+// maxParallelSends is how many receivers one share serves at the same time.
+// Later pulls wait in order and start as slots free up.
+const maxParallelSends = 10
+
+// activeSend is one receiver being served. Its counters belong to that peer only.
+type activeSend struct {
+	gen         int
+	reply       string
+	done        int64
+	total       int64
+	publish     time.Time
+	path        string
+	relaySource string
+	relayName   string
+}
+
+func (h *host) activeLocked(gen int) *activeSend {
+	for _, a := range h.active {
+		if a.gen == gen {
+			return a
+		}
+	}
+	return nil
+}
+
+// slotsLocked reports whether another send may start now. It also keeps the
+// number of in-flight sends within what a download limit still allows.
+func (h *host) slotsLocked() bool {
+	n := len(h.active)
+	if n >= maxParallelSends {
+		return false
+	}
+	if max := h.lim.MaxDownloads; max > 0 && h.downloads+n >= max {
+		return false
+	}
+	return true
 }
 
 type pendingPull struct {
@@ -1108,7 +1140,13 @@ func (h *host) handlePull(token, reply string, resume map[string]int64) {
 		h.mu.Unlock()
 		return
 	}
-	if h.sending {
+	busy := !h.slotsLocked()
+	for _, a := range h.active {
+		if a.reply == reply {
+			busy = true
+		}
+	}
+	if busy {
 		match := subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) == 1
 		if !match {
 			h.mu.Unlock()
@@ -1132,14 +1170,15 @@ func (h *host) handlePull(token, reply string, resume map[string]int64) {
 		h.notifyQueued(reply)
 		return
 	}
-	h.sending = true
-	h.sendReply = reply
+	h.sendGen++
+	gen := h.sendGen
+	h.active = append(h.active, &activeSend{gen: gen, reply: reply})
 	room := h.room
 	match := subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) == 1
 	files := append([]StagedFile(nil), h.files...)
 	h.mu.Unlock()
 
-	defer h.finishSend()
+	defer h.finishSend(gen)
 	if room == nil || !strings.HasPrefix(reply, "tc") {
 		return
 	}
@@ -1147,7 +1186,7 @@ func (h *host) handlePull(token, reply string, resume map[string]int64) {
 		h.sendDeny(reply, "bad-token")
 		return
 	}
-	if err := h.sendPackage(reply, files, resume); err != nil {
+	if err := h.sendPackage(gen, reply, files, resume); err != nil {
 		if errors.Is(err, ErrOriginGone) {
 			h.noteOriginGone()
 			h.sendDeny(reply, "origin")
@@ -1173,23 +1212,32 @@ func (h *host) handlePull(token, reply string, resume map[string]int64) {
 	}
 }
 
-func (h *host) finishSend() {
+func (h *host) finishSend(gen int) {
 	h.pathMu.Lock()
 	h.mu.Lock()
-	h.sending = false
-	h.sendGen++
-	h.path = ""
-	h.relaySource = ""
-	h.relayName = ""
-	h.sentDone = 0
-	h.sentTotal = 0
-	h.sentPublish = time.Time{}
-	h.sendReply = ""
-	var next pendingPull
-	queued := len(h.waiting) > 0
-	if queued {
-		next = h.waiting[0]
+	kept := h.active[:0]
+	for _, a := range h.active {
+		if a.gen != gen {
+			kept = append(kept, a)
+		}
+	}
+	for i := len(kept); i < len(h.active); i++ {
+		h.active[i] = nil
+	}
+	h.active = kept
+	// Start as many waiting pulls as there are free slots. Each one is moved
+	// out of the queue here so the next finishSend cannot start it twice.
+	var next []pendingPull
+	free := maxParallelSends - len(h.active)
+	if max := h.lim.MaxDownloads; max > 0 {
+		if left := max - h.downloads - len(h.active); left < free {
+			free = left
+		}
+	}
+	for free > 0 && len(h.waiting) > 0 && !h.ended {
+		next = append(next, h.waiting[0])
 		h.waiting = append([]pendingPull(nil), h.waiting[1:]...)
+		free--
 	}
 	ended := h.ended
 	snap := h.snapshotLocked()
@@ -1198,8 +1246,8 @@ func (h *host) finishSend() {
 		h.publish(snap)
 	}
 	h.pathMu.Unlock()
-	if queued && !ended {
-		go h.handlePull(next.token, next.reply, next.resume)
+	for _, pull := range next {
+		go h.handlePull(pull.token, pull.reply, pull.resume)
 	}
 }
 
@@ -1238,6 +1286,14 @@ func (h *host) sendFrame(ctx context.Context, reply string, frame []byte) error 
 	if room == nil {
 		return fmt.Errorf("room closed")
 	}
+	if ps, ok := room.(adapter.PeerSender); ok {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		cctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+		defer cancel()
+		return ps.SendEnvelopeTo(cctx, reply, portMiao, frame)
+	}
 	h.txMu.Lock()
 	defer h.txMu.Unlock()
 	if err := room.SetPeer(reply); err != nil {
@@ -1258,14 +1314,12 @@ func (h *host) noteOriginGone() {
 	h.publish(snap)
 }
 
-func (h *host) sendPackage(reply string, files []StagedFile, resume map[string]int64) error {
+func (h *host) sendPackage(gen int, reply string, files []StagedFile, resume map[string]int64) error {
 	defer func() {
 		callTransferHook("sent")
 	}()
 	h.mu.Lock()
 	room := h.room
-	h.sendGen++
-	gen := h.sendGen
 	base := h.ctx
 	h.mu.Unlock()
 	if base == nil {
@@ -1430,6 +1484,11 @@ func (h *host) snapshotLocked() Snapshot {
 	if addr == "" && h.sess != nil {
 		addr = h.sess.Address
 	}
+	// The single-peer fields describe the oldest send, for older UIs.
+	lead := &activeSend{}
+	if len(h.active) > 0 {
+		lead = h.active[0]
+	}
 	created := ""
 	if !h.createdAt.IsZero() {
 		created = h.createdAt.UTC().Format(time.RFC3339)
@@ -1452,19 +1511,19 @@ func (h *host) snapshotLocked() Snapshot {
 		Listening:    h.room != nil && h.address != "",
 		ByRef:        h.byRef,
 		Warning:      h.warning,
-		PeerPath:     h.path,
-		RelaySource:  h.relaySource,
-		RelayName:    h.relayName,
-		BytesDone:    h.sentDone,
-		BytesTotal:   h.sentTotal,
+		PeerPath:     lead.path,
+		RelaySource:  lead.relaySource,
+		RelayName:    lead.relayName,
+		BytesDone:    lead.done,
+		BytesTotal:   lead.total,
 		Peers:        h.peersLocked(),
 	}
 }
 
 func (h *host) peersLocked() []PeerProgress {
 	var peers []PeerProgress
-	if h.sending && h.sendReply != "" {
-		peers = append(peers, PeerProgress{Addr: h.sendReply, Status: "sending", BytesDone: h.sentDone, BytesTotal: h.sentTotal})
+	for _, a := range h.active {
+		peers = append(peers, PeerProgress{Addr: a.reply, Status: "sending", BytesDone: a.done, BytesTotal: a.total})
 	}
 	for _, w := range h.waiting {
 		peers = append(peers, PeerProgress{Addr: w.reply, Status: "queued"})
@@ -1498,19 +1557,20 @@ func (h *host) noteSendProgress(gen int, done, total int64, force bool) {
 	h.pathMu.Lock()
 	defer h.pathMu.Unlock()
 	h.mu.Lock()
-	if h.ended || !h.sending || h.sendGen != gen {
+	a := h.activeLocked(gen)
+	if h.ended || a == nil {
 		h.mu.Unlock()
 		return
 	}
 	now := time.Now()
-	due := force || h.sentPublish.IsZero() || now.Sub(h.sentPublish) >= sendProgressEvery
-	h.sentDone = done
-	h.sentTotal = total
+	due := force || a.publish.IsZero() || now.Sub(a.publish) >= sendProgressEvery
+	a.done = done
+	a.total = total
 	if !due {
 		h.mu.Unlock()
 		return
 	}
-	h.sentPublish = now
+	a.publish = now
 	snap := h.snapshotLocked()
 	h.mu.Unlock()
 	h.publish(snap)

@@ -40,6 +40,12 @@ type Room interface {
 	Close() error
 }
 
+// PeerSender is a Room that can send to one peer without changing SetPeer.
+// Concurrent sends to different peers through it never cross.
+type PeerSender interface {
+	SendEnvelopeTo(ctx context.Context, peer string, port uint16, frame []byte) error
+}
+
 type ChatAdapter interface {
 	StartRoom(ctx context.Context, opts RoomOpts) (Room, error)
 }
