@@ -183,6 +183,12 @@ func (r *realRoom) peerClient(peer string) (*tailcat.Client, error) {
 func (r *realRoom) SendEnvelope(ctx context.Context, port uint16, frame []byte) error {
 	r.mu.Lock()
 	peer := r.peer
+	r.mu.Unlock()
+	return r.SendEnvelopeTo(ctx, peer, port, frame)
+}
+
+func (r *realRoom) SendEnvelopeTo(ctx context.Context, peer string, port uint16, frame []byte) error {
+	r.mu.Lock()
 	done := r.done
 	r.mu.Unlock()
 	if done {

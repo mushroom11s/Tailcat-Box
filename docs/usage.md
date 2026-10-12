@@ -72,7 +72,7 @@ Click a record to start the same kind of call again.
 
 - Drop one or more files to create a share. Several shares can run at the same time, each with its own pickup code and QR code.
 - Shares up to 300 MiB are copied into the app. Larger shares are served from their original location, so do not move or delete those files while the share is active.
-- One pickup code can be used by several recipients. Each completed download counts toward the share's download limit, and the share ends when the limit is reached. Transfers are served one at a time.
+- One pickup code can be used by several recipients. Each completed download counts toward the share's download limit, and the share ends when the limit is reached. Up to 10 recipients download at the same time; anyone beyond that is shown as Queued and starts, in arrival order, as a slot frees up.
 - Each share can expire after 1, 7, or 15 days, a custom number of days, or only when you end it, and can limit the number of downloads.
 - Recipients paste a pickup code or scan a QR code (camera, image file, or clipboard). Transfers run over Tailcat between two Tailcat Box instances; the sender must stay online.
 - Active shares come back with the same code after the app restarts.

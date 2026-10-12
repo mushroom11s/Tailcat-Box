@@ -45,7 +45,7 @@ One-to-one rooms for text, files, and voice notes, with voice and video calls an
 
 ### Share files: Mew Share
 Peer-to-peer file sharing with a pickup code or QR code.
-- One pickup code can be used by several recipients, up to the download limit you set (transfers are served one at a time)
+- One pickup code can be used by several recipients, up to the download limit you set (up to 10 download at the same time; others wait in line)
 - Run several shares at once, each with its own expiry
 - Large shares are served from their original location instead of being copied
 - Shares resume with the same code after the app restarts

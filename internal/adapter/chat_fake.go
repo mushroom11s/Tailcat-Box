@@ -159,6 +159,12 @@ func (r *fakeRoom) SetPeer(addr string) error {
 func (r *fakeRoom) SendEnvelope(ctx context.Context, port uint16, frame []byte) error {
 	r.owner.mu.Lock()
 	peer := r.peer
+	r.owner.mu.Unlock()
+	return r.SendEnvelopeTo(ctx, peer, port, frame)
+}
+
+func (r *fakeRoom) SendEnvelopeTo(ctx context.Context, peer string, port uint16, frame []byte) error {
+	r.owner.mu.Lock()
 	closed := r.events == nil
 	r.owner.mu.Unlock()
 	if closed {
