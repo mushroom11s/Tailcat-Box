@@ -37,7 +37,38 @@ export type MiaoShare = {
   // Bytes of the pull in progress. Zero when no peer is downloading.
   bytesDone?: number;
   bytesTotal?: number;
+  // Every receiver right now: the one being sent to first, then those waiting.
+  peers?: MiaoSharePeer[];
 };
+
+export type MiaoSharePeer = {
+  addr: string;
+  status: "sending" | "queued";
+  bytesDone: number;
+  bytesTotal: number;
+};
+
+function asSharePeers(raw: unknown): MiaoSharePeer[] | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const out: MiaoSharePeer[] = [];
+  for (const item of raw) {
+    const value = asRecord(item, () => true);
+    if (!value) {
+      continue;
+    }
+    const total = asCount(readField(value, "bytesTotal", "BytesTotal"));
+    const done = Math.min(asCount(readField(value, "bytesDone", "BytesDone")), total);
+    out.push({
+      addr: readString(value, "addr", "Addr"),
+      status: readString(value, "status", "Status") === "sending" ? "sending" : "queued",
+      bytesDone: done,
+      bytesTotal: total,
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
 
 export type MiaoSavedFile = {
   name: string;
@@ -322,6 +353,7 @@ export function parseShare(raw: unknown): MiaoShare | null {
     relayName: asRelayName(readField(value, "relayName", "RelayName")),
     bytesDone: asCount(readField(value, "bytesDone", "BytesDone")),
     bytesTotal: asCount(readField(value, "bytesTotal", "BytesTotal")),
+    peers: asSharePeers(readField(value, "peers", "Peers")),
   };
 }
 

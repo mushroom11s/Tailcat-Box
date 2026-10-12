@@ -45,6 +45,7 @@ import {
   TRANSFER_RATE_MIN_MS,
   TRANSFER_RATE_STALE_MS,
   type MiaoShare,
+  type MiaoSharePeer,
   type RateState,
   type ReceiveJob,
   type Remaining,
@@ -202,6 +203,62 @@ function TransferRate({ active, rate }: { active: boolean; rate: number | null }
   return <span className="miao-rate">{`· ${formatTransferRate(rate)}`}</span>;
 }
 
+function sharePeerList(share: MiaoShare): MiaoSharePeer[] {
+  if (share.peers && share.peers.length > 0) {
+    return share.peers;
+  }
+  // Older backends report only the peer being sent to.
+  const total = share.bytesTotal ?? 0;
+  return total > 0 ? [{ addr: "", status: "sending", bytesDone: share.bytesDone ?? 0, bytesTotal: total }] : [];
+}
+
+function shortPeer(addr: string): string {
+  return addr.length > 14 ? `${addr.slice(0, 12)}…` : addr;
+}
+
+// One receiver. Keyed by address, so its speed is sampled from its own bytes only.
+function SharePeerRow({ peer }: { peer: MiaoSharePeer }) {
+  const { t } = useI18n();
+  const sending = peer.status === "sending" && peer.bytesTotal > 0;
+  const rate = useTransferRate(sending, peer.bytesDone);
+  return (
+    <p className="chat-quiet miao-receive-bytes miao-share-peer">
+      {peer.addr ? <span className="miao-peer-addr" title={peer.addr}>{shortPeer(peer.addr)} </span> : null}
+      {sending ? (
+        <>
+          {formatBytes(peer.bytesDone)} / {formatBytes(peer.bytesTotal)}
+          <TransferRate active rate={rate} />
+        </>
+      ) : (
+        <span>{t("miaoStatusQueued")}</span>
+      )}
+    </p>
+  );
+}
+
+function SharePeers({ share }: { share: MiaoShare }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const peers = sharePeerList(share);
+  if (peers.length === 0) {
+    return null;
+  }
+  const rest = peers.length - 1;
+  const shown = open ? peers : peers.slice(0, 1);
+  return (
+    <div className="miao-share-peers">
+      {shown.map((peer, i) => (
+        <SharePeerRow key={peer.addr || `peer-${i}`} peer={peer} />
+      ))}
+      {rest > 0 ? (
+        <button type="button" className="btn btn-ghost miao-peers-toggle" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? t("miaoPeersCollapse") : t("miaoPeersExpand").replace("{n}", String(rest))}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function showRunningCat(status: ReceiveJob["status"]): boolean {
   return status === "connecting" || status === "queued" || status === "downloading";
 }
@@ -241,8 +298,6 @@ function ShareCard({
   const [copyNote, setCopyNote] = useState("");
   const [copyError, setCopyError] = useState("");
   const left = downloadsLeft(share.maxDownloads, share.downloads);
-  const sending = (share.bytesTotal ?? 0) > 0;
-  const rate = useTransferRate(sending, share.bytesDone ?? 0);
   const ttl = remainingTTL(share.expiresAt, share.forever, now);
   const expiring = expiresSoon(share.expiresAt, share.forever, now);
   const offlineShare = share.listening === false;
@@ -307,12 +362,7 @@ function ShareCard({
           <p className="chat-quiet">
             {t("miaoTotal")} {formatBytes(share.total)}
           </p>
-          {sending ? (
-            <p className="chat-quiet miao-receive-bytes">
-              {formatBytes(share.bytesDone ?? 0)} / {formatBytes(share.bytesTotal ?? 0)}
-              <TransferRate active rate={rate} />
-            </p>
-          ) : null}
+          <SharePeers share={share} />
           <p className="chat-quiet">
             {t("miaoRemaining")} {ttlLabel(ttl, t)}
           </p>

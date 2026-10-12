@@ -132,6 +132,18 @@ type Snapshot struct {
 	// BytesDone and BytesTotal describe the pull in progress. Both are zero when idle.
 	BytesDone  int64 `json:"bytesDone,omitempty"`
 	BytesTotal int64 `json:"bytesTotal,omitempty"`
+	// Peers lists every receiver right now: the one being sent to first, then
+	// the ones waiting their turn. Empty when nobody is pulling.
+	Peers []PeerProgress `json:"peers,omitempty"`
+}
+
+// PeerProgress is one receiver of a share. Status is sending or queued.
+// Byte counts belong to this peer only and are zero while queued.
+type PeerProgress struct {
+	Addr       string `json:"addr"`
+	Status     string `json:"status"`
+	BytesDone  int64  `json:"bytesDone"`
+	BytesTotal int64  `json:"bytesTotal"`
 }
 
 // FileInfo is a display row. It does not include the storage path.
@@ -1033,10 +1045,19 @@ type host struct {
 	ended       bool
 	reason      string
 	sending     bool
-	queued      bool
-	qToken      string
-	qReply      string
-	qResume     map[string]int64
+	sendReply   string
+	// waiting holds pulls that arrived while another peer was being served,
+	// oldest first. One entry per reply address.
+	waiting []pendingPull
+	// txMu keeps SetPeer and the send that follows it together, so a queued
+	// notice to one peer cannot redirect another peer's chunk.
+	txMu sync.Mutex
+}
+
+type pendingPull struct {
+	token  string
+	reply  string
+	resume map[string]int64
 }
 
 func (h *host) readLoop() {
@@ -1094,15 +1115,25 @@ func (h *host) handlePull(token, reply string, resume map[string]int64) {
 			h.sendDeny(reply, "bad-token")
 			return
 		}
-		h.queued = true
-		h.qToken = token
-		h.qReply = reply
-		h.qResume = cloneOffsets(resume)
+		next := pendingPull{token: token, reply: reply, resume: cloneOffsets(resume)}
+		replaced := false
+		for i := range h.waiting {
+			if h.waiting[i].reply == reply {
+				h.waiting[i] = next
+				replaced = true
+			}
+		}
+		if !replaced {
+			h.waiting = append(h.waiting, next)
+		}
+		snap := h.snapshotLocked()
 		h.mu.Unlock()
+		h.publish(snap)
 		h.notifyQueued(reply)
 		return
 	}
 	h.sending = true
+	h.sendReply = reply
 	room := h.room
 	match := subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) == 1
 	files := append([]StagedFile(nil), h.files...)
@@ -1153,11 +1184,13 @@ func (h *host) finishSend() {
 	h.sentDone = 0
 	h.sentTotal = 0
 	h.sentPublish = time.Time{}
-	queued := h.queued
-	token, reply := h.qToken, h.qReply
-	resume := h.qResume
-	h.queued = false
-	h.qResume = nil
+	h.sendReply = ""
+	var next pendingPull
+	queued := len(h.waiting) > 0
+	if queued {
+		next = h.waiting[0]
+		h.waiting = append([]pendingPull(nil), h.waiting[1:]...)
+	}
 	ended := h.ended
 	snap := h.snapshotLocked()
 	h.mu.Unlock()
@@ -1166,7 +1199,7 @@ func (h *host) finishSend() {
 	}
 	h.pathMu.Unlock()
 	if queued && !ended {
-		go h.handlePull(token, reply, resume)
+		go h.handlePull(next.token, next.reply, next.resume)
 	}
 }
 
@@ -1205,6 +1238,8 @@ func (h *host) sendFrame(ctx context.Context, reply string, frame []byte) error 
 	if room == nil {
 		return fmt.Errorf("room closed")
 	}
+	h.txMu.Lock()
+	defer h.txMu.Unlock()
 	if err := room.SetPeer(reply); err != nil {
 		return err
 	}
@@ -1422,7 +1457,19 @@ func (h *host) snapshotLocked() Snapshot {
 		RelayName:    h.relayName,
 		BytesDone:    h.sentDone,
 		BytesTotal:   h.sentTotal,
+		Peers:        h.peersLocked(),
 	}
+}
+
+func (h *host) peersLocked() []PeerProgress {
+	var peers []PeerProgress
+	if h.sending && h.sendReply != "" {
+		peers = append(peers, PeerProgress{Addr: h.sendReply, Status: "sending", BytesDone: h.sentDone, BytesTotal: h.sentTotal})
+	}
+	for _, w := range h.waiting {
+		peers = append(peers, PeerProgress{Addr: w.reply, Status: "queued"})
+	}
+	return peers
 }
 
 func resumeOffset(file StagedFile, resume map[string]int64) int64 {

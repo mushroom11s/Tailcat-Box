@@ -497,6 +497,8 @@ export const en = {
   miaoPacking: "Packing…",
   miaoActive: "Active shares",
   miaoFiles: "Files",
+  miaoPeersExpand: "Show {n} more",
+  miaoPeersCollapse: "Show less",
   miaoTotal: "Total",
   miaoToken: "Share code",
   miaoCopyCode: "Copy code",
