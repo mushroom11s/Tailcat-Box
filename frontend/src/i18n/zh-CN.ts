@@ -494,6 +494,8 @@ export const zhCN = {
   miaoPacking: "正在打包…",
   miaoActive: "进行中的分享",
   miaoFiles: "文件",
+  miaoPeersExpand: "展开其余 {n} 个",
+  miaoPeersCollapse: "收起",
   miaoTotal: "合计",
   miaoToken: "分享口令",
   miaoCopyCode: "复制口令",

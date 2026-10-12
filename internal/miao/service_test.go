@@ -1288,3 +1288,53 @@ func TestReceivePersistFlushesByChunkLimit(t *testing.T) {
 		t.Fatalf("persists=%d want at least 2 (chunk-limit flushes)", n)
 	}
 }
+
+func TestThreeReceiversAreAllServedAndListedPerPeer(t *testing.T) {
+	root := t.TempDir()
+	svc := New(adapter.NewFake(), root)
+	events := collectReceive(t, svc)
+	payload := bytes.Repeat([]byte("b"), chunkSize+32)
+	snap, err := svc.Start([]Source{{Name: "big.bin", Data: payload}}, Limits{}, adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	release := hookTransfer(t, "chunk")
+	dests := []string{t.TempDir(), t.TempDir(), t.TempDir()}
+	first, err := svc.StartReceive(context.Background(), snap.Payload, dests[0], adapter.NetworkOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitReceive(t, events, first.ID, receiveDownloading, func(job ReceiveJob) bool { return job.BytesDone > 0 })
+	ids := []string{first.ID}
+	for _, dest := range dests[1:] {
+		job, err := svc.StartReceive(context.Background(), snap.Payload, dest, adapter.NetworkOpts{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitReceive(t, events, job.ID, receiveQueued, nil)
+		ids = append(ids, job.ID)
+	}
+	var peers []PeerProgress
+	for _, share := range svc.List() {
+		if share.ID == snap.ID {
+			peers = share.Peers
+		}
+	}
+	if len(peers) != 3 || peers[0].Status != "sending" || peers[0].BytesDone <= 0 || peers[1].Status != "queued" || peers[2].Status != "queued" || peers[1].BytesDone != 0 {
+		t.Fatalf("peers=%+v", peers)
+	}
+	if peers[0].Addr == peers[1].Addr || peers[1].Addr == peers[2].Addr {
+		t.Fatalf("peers share an address: %+v", peers)
+	}
+	release()
+	for i, id := range ids {
+		done := waitReceive(t, events, id, receiveDone, nil)
+		if done.BytesDone != int64(len(payload)) {
+			t.Fatalf("receiver %d done=%d", i, done.BytesDone)
+		}
+		body, err := os.ReadFile(filepath.Join(dests[i], "big.bin"))
+		if err != nil || !bytes.Equal(body, payload) {
+			t.Fatalf("receiver %d saved err=%v", i, err)
+		}
+	}
+}

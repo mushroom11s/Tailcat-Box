@@ -1064,6 +1064,81 @@ describe("Mew Share page", () => {
     expect(shareCard.querySelector(".miao-receive-bytes")?.textContent).toContain("1.0 MB / 4.0 MB");
   });
 
+  it("shows one receiver per row, the rest folded, each with its own speed", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-27T00:00:00Z"));
+    localStorage.setItem("tailcat-locale", "en");
+    renderPage();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "Share" }));
+    const mb = 1024 * 1024;
+    const share = {
+      id: "share-peers",
+      status: "active",
+      payload: "",
+      files: [{ name: "multi.bin", size: 4 * mb }],
+      total: 4 * mb,
+      forever: true,
+      bytesDone: 3 * mb,
+      bytesTotal: 4 * mb,
+      peerPath: "direct",
+      peers: [
+        { addr: "tcpeeraaaaaaaaaaaaa", status: "sending", bytesDone: 3 * mb, bytesTotal: 4 * mb },
+        { addr: "tcpeerbbbbbbbbbbbbb", status: "queued", bytesDone: 0, bytesTotal: 0 },
+        { addr: "tcpeerccccccccccccc", status: "queued", bytesDone: 0, bytesTotal: 0 },
+      ],
+    };
+    await act(async () => {
+      emitBrowserEvent({ SessionID: share.id, Kind: "miao", Data: JSON.stringify(share) });
+    });
+    const card = screen.getByRole("article", { name: "multi.bin" });
+    expect(card.querySelectorAll(".miao-share-peer")).toHaveLength(1);
+    const toggle = within(card).getByRole("button", { name: "Show 2 more" });
+    fireEvent.click(toggle);
+    expect(card.querySelectorAll(".miao-share-peer")).toHaveLength(3);
+    expect(within(card).getAllByText("Queued").length).toBe(2);
+
+    // First peer finishes; the next one starts from zero. Its speed must not
+    // be computed against the previous peer's bytes.
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      emitBrowserEvent({
+        SessionID: share.id,
+        Kind: "miao",
+        Data: JSON.stringify({
+          ...share,
+          bytesDone: 0,
+          peers: [
+            { addr: "tcpeerbbbbbbbbbbbbb", status: "sending", bytesDone: 0, bytesTotal: 4 * mb },
+            { addr: "tcpeerccccccccccccc", status: "queued", bytesDone: 0, bytesTotal: 0 },
+          ],
+        }),
+      });
+    });
+    const rows = card.querySelectorAll(".miao-share-peer");
+    expect(rows[0]?.textContent).toContain("0 B / 4.0 MB");
+    expect(rows[0]?.textContent).toContain("· —");
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+      emitBrowserEvent({
+        SessionID: share.id,
+        Kind: "miao",
+        Data: JSON.stringify({
+          ...share,
+          peers: [
+            { addr: "tcpeerbbbbbbbbbbbbb", status: "sending", bytesDone: mb, bytesTotal: 4 * mb },
+            { addr: "tcpeerccccccccccccc", status: "queued", bytesDone: 0, bytesTotal: 0 },
+          ],
+        }),
+      });
+    });
+    expect(card.querySelectorAll(".miao-share-peer")[0]?.textContent).toContain("· 2.0 MB/s");
+    fireEvent.click(within(card).getByRole("button", { name: "Show less" }));
+    expect(card.querySelectorAll(".miao-share-peer")).toHaveLength(1);
+  });
+
   it("shows an offline notice without hiding the share page", () => {
     localStorage.setItem("tailcat-locale", "en");
     const desc = Object.getOwnPropertyDescriptor(Navigator.prototype, "onLine");

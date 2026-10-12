@@ -57,3 +57,18 @@
     border: none;
     background-color: rgba(255, 255, 255, 1);
 }
+.miao-share-peers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.miao-peer-addr {
+  font-family: var(--font-mono, monospace);
+}
+
+.miao-peers-toggle {
+  align-self: flex-start;
+  padding: 2px 8px;
+  font-size: 12px;
+}
