@@ -9,23 +9,24 @@ package tray
 
 extern void trayMenuBegan(void);
 
-// trayWatchMenu hears the status menu open. Darwin cannot SetOnClick: that
-// path tears the NSMenu down and crashes. Clicking the tray icon opens this
-// menu, so menu-begin is the click.
+// trayWatchMenu makes the menu-bar icon behave like the Windows tray: a
+// plain left click opens the app, right/ctrl-click shows the menu. The menu
+// stays permanently attached (SetOnClick tears it down and crashes), so a
+// local event monitor swallows plain left mouse-downs on our status bar
+// window before the button can open the menu. Right-click and ctrl-click
+// pass through and AppKit shows the attached menu as before.
 static void trayWatchMenu(void) {
-	[[NSNotificationCenter defaultCenter]
-		addObserverForName:NSMenuDidBeginTrackingNotification
-		            object:nil
-		             queue:nil
-		         usingBlock:^(NSNotification *note) {
-		NSMenu *menu = (NSMenu *)note.object;
-		if (![menu isKindOfClass:[NSMenu class]] || [menu numberOfItems] < 1) {
-			return;
+	Class bar = NSClassFromString(@"NSStatusBarWindow");
+	[NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown
+	                                      handler:^NSEvent *(NSEvent *event) {
+		if (bar == nil || ![event.window isKindOfClass:bar]) {
+			return event;
 		}
-		NSString *title = [[menu itemAtIndex:0] title];
-		if ([title isEqualToString:@"Open"] || [title isEqualToString:@"打开"]) {
-			trayMenuBegan();
+		if (event.modifierFlags & NSEventModifierFlagControl) {
+			return event;
 		}
+		trayMenuBegan();
+		return nil;
 	}];
 }
 */

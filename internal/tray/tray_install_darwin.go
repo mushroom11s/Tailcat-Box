@@ -34,7 +34,8 @@ func (c *Controller) install(icon []byte) {
 	// shows the menu only via show_menu: attach -> performClick -> setMenu:nil
 	// immediately. That tear-down races AppKit menu tracking and errors when
 	// opening the menu or choosing an item. Permanently attach with
-	// CreateMenu instead (standard macOS menu-bar UX: click shows the menu).
+	// CreateMenu instead (right/ctrl-click shows it; tray_click_darwin.go turns a plain
+	// left click into Open, matching the Windows tray).
 	// Do not SetOnClick/SetOnRClick: those re-enable the broken path.
 	//
 	// Menu *actions* must not use invokeMenu/syncCall: Click already runs on
@@ -90,6 +91,10 @@ func (c *Controller) install(icon []byte) {
 		})
 	})
 	systray.CreateMenu()
-	watchTrayClicks(c.Scoop)
+	// Left click opens the app (like Windows); right/ctrl-click shows the menu.
+	watchTrayClicks(func() {
+		c.Scoop()
+		c.Open()
+	})
 	c.Refresh()
 }
