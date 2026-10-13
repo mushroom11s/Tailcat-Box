@@ -22,7 +22,7 @@ func trayMenuBegan() {
 	if fn == nil {
 		return
 	}
-	// The notification runs on the AppKit main thread. Scoop's icon swap
+	// The click monitor runs on the AppKit main thread. Scoop's icon swap
 	// waits for that thread, so start it only after this callback returns.
 	go func() {
 		time.Sleep(30 * time.Millisecond)
