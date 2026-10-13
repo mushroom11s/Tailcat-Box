@@ -17,6 +17,10 @@
 </p>
 
 <p align="center">
+  <a href="https://www.producthunt.com/products/tailcatbox?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-tailcatbox" target="_blank" rel="noopener noreferrer"><img alt="TailcatBox - Connect computers peer-to-peer with one short code ⭐ | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1278444&amp;theme=light&amp;t=1791860669431"></a>
+</p>
+
+<p align="center">
   <a href="README.md">English</a> | 简体中文
 </p>
 
