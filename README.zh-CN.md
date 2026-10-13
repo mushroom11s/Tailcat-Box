@@ -43,6 +43,23 @@
 - 可以同时开多个房间，随时切换
 - 对方共享的屏幕可以单独开一个窗口，按原始分辨率查看
 
+<table>
+  <tr>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/chat.png" alt="聊天房间里的文字、语音消息和通话记录" width="100%" /><br />
+      <sub>文字、语音消息与通话记录</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/call.png" alt="聊天房间里的视频通话" width="100%" /><br />
+      <sub>视频通话与对话同屏</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/screen.png" alt="正在查看对方共享的屏幕" width="100%" /><br />
+      <sub>屏幕共享，可放大到原始分辨率</sub>
+    </td>
+  </tr>
+</table>
+
 ### 文件传输：喵传
 用取件码或二维码点对点传文件。
 - 一个取件码可以给多人使用，总次数不超过你设定的下载次数（最多 10 人同时下载，其余排队等候）

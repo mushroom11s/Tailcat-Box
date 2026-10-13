@@ -43,6 +43,23 @@ One-to-one rooms for text, files, and voice notes, with voice and video calls an
 - Keep several rooms open and switch between them
 - Open a shared screen in its own window at full resolution
 
+<table>
+  <tr>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/en/chat.png" alt="Chat room with text, voice notes, and a call record" width="100%" /><br />
+      <sub>Text, voice notes, and call records</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/en/call.png" alt="Video call in a chat room" width="100%" /><br />
+      <sub>Video calls stay next to the conversation</sub>
+    </td>
+    <td align="center" valign="top" width="33%">
+      <img src="docs/assets/demo/en/screen.png" alt="Receiving a shared screen" width="100%" /><br />
+      <sub>Shared screen, expandable to full resolution</sub>
+    </td>
+  </tr>
+</table>
+
 ### Share files: Mew Share
 Peer-to-peer file sharing with a pickup code or QR code.
 - One pickup code can be used by several recipients, up to the download limit you set (up to 10 download at the same time; others wait in line)
