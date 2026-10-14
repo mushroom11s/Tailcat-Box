@@ -438,12 +438,12 @@ func TestApplicationMenuLocalizesActions(t *testing.T) {
 	t.Setenv("TAILCAT_SETTINGS_DIR", t.TempDir())
 	a := NewApp()
 	a.SetUILocale("zh-CN")
-	if got := menuActionLabels(a.applicationMenu(productTitle("zh-CN"))); !reflect.DeepEqual(got, []string{"打开", "隐藏", "聊天", "穿透", "设置", "退出"}) {
+	if got := menuActionLabels(a.applicationMenu(productTitle("zh-CN"))); !reflect.DeepEqual(got, []string{"打开", "隐藏", "关闭窗口", "聊天", "穿透", "设置", "退出"}) {
 		t.Fatalf("zh=%v", got)
 	}
 	a.SetUILocale("en")
 	m := a.applicationMenu(productTitle("en"))
-	if got := menuActionLabels(m); !reflect.DeepEqual(got, []string{"Open", "Hide", "Chat", "Tunnel", "Settings", "Quit"}) {
+	if got := menuActionLabels(m); !reflect.DeepEqual(got, []string{"Open", "Hide", "Close Window", "Chat", "Tunnel", "Settings", "Quit"}) {
 		t.Fatalf("en=%v", got)
 	}
 	clickMenu(m)
@@ -484,27 +484,32 @@ func TestViewMenuFullscreenLabels(t *testing.T) {
 	if title != "视图" || item != "退出全屏" {
 		t.Fatalf("zh exit=%q %q", title, item)
 	}
+	winTitle, minLabel := windowMenuLabels("en")
+	if winTitle != "Window" || minLabel != "Minimize" {
+		t.Fatalf("en window=%q %q", winTitle, minLabel)
+	}
 
 	m := a.applicationMenu(productTitle("en"))
-	view := viewMenuItem(t, m)
-	if view.Label != "View" {
-		t.Fatalf("menu=%q", view.Label)
+	win := windowMenuItem(t, m)
+	if win.Label != "Window" {
+		t.Fatalf("menu=%q", win.Label)
 	}
-	if got := menuActionLabelsOf(view.SubMenu); !reflect.DeepEqual(got, []string{"Enter Full Screen"}) {
+	if got := menuActionLabelsOf(win.SubMenu); !reflect.DeepEqual(got, []string{"Minimize", "Enter Full Screen"}) {
 		t.Fatalf("enter=%v", got)
 	}
-	acc := view.SubMenu.Items[0].Accelerator
+	fs := win.SubMenu.Items[2]
+	acc := fs.Accelerator
 	if acc == nil || acc.Key != "f" || len(acc.Modifiers) != 2 || string(acc.Modifiers[0]) != "ctrl" || string(acc.Modifiers[1]) != "cmdorctrl" {
 		t.Fatalf("accelerator=%+v", acc)
 	}
 
 	a.uiLocale = "zh-CN"
 	a.windowFullscreen = true
-	view = viewMenuItem(t, a.applicationMenu(productTitle("zh-CN")))
-	if view.Label != "视图" {
-		t.Fatalf("zh menu=%q", view.Label)
+	win = windowMenuItem(t, a.applicationMenu(productTitle("zh-CN")))
+	if win.Label != "窗口" {
+		t.Fatalf("zh menu=%q", win.Label)
 	}
-	if got := menuActionLabelsOf(view.SubMenu); !reflect.DeepEqual(got, []string{"退出全屏"}) {
+	if got := menuActionLabelsOf(win.SubMenu); !reflect.DeepEqual(got, []string{"最小化", "退出全屏"}) {
 		t.Fatalf("exit=%v", got)
 	}
 
@@ -529,15 +534,47 @@ func TestApplicationMenuIncludesEditRole(t *testing.T) {
 	if m.Items[1].Role != menu.EditMenuRole {
 		t.Fatalf("edit role=%d", m.Items[1].Role)
 	}
-	if m.Items[2].Label != "View" || m.Items[2].SubMenu == nil {
-		t.Fatalf("view label=%q submenu=%v", m.Items[2].Label, m.Items[2].SubMenu != nil)
+	if m.Items[2].Label != "Window" || m.Items[2].SubMenu == nil {
+		t.Fatalf("window label=%q submenu=%v", m.Items[2].Label, m.Items[2].SubMenu != nil)
 	}
-	if got := menuActionLabels(m); !reflect.DeepEqual(got, []string{"Open", "Hide", "Chat", "Tunnel", "Settings", "Quit"}) {
+	if got := menuActionLabels(m); !reflect.DeepEqual(got, []string{"Open", "Hide", "Close Window", "Chat", "Tunnel", "Settings", "Quit"}) {
 		t.Fatalf("app actions=%v", got)
 	}
 }
 
-func viewMenuItem(t *testing.T, m *menu.Menu) *menu.MenuItem {
+func TestApplicationMenuMacAccelerators(t *testing.T) {
+	t.Setenv("TAILCAT_ADAPTER", "fake")
+	t.Setenv("TAILCAT_KEYS_DIR", t.TempDir())
+	t.Setenv("TAILCAT_SETTINGS_DIR", t.TempDir())
+	a := NewApp()
+	m := a.applicationMenu(productTitle("en"))
+	app := m.Items[0].SubMenu
+	want := map[string]string{
+		"Hide":         "h",
+		"Close Window": "w",
+		"Quit":         "q",
+	}
+	for _, item := range app.Items {
+		key, ok := want[item.Label]
+		if !ok {
+			continue
+		}
+		if item.Accelerator == nil || item.Accelerator.Key != key || len(item.Accelerator.Modifiers) != 1 || string(item.Accelerator.Modifiers[0]) != "cmdorctrl" {
+			t.Fatalf("%s accelerator=%+v", item.Label, item.Accelerator)
+		}
+		delete(want, item.Label)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing accelerators=%v", want)
+	}
+	win := windowMenuItem(t, m)
+	min := win.SubMenu.Items[0]
+	if min.Label != "Minimize" || min.Accelerator == nil || min.Accelerator.Key != "m" {
+		t.Fatalf("minimize=%q acc=%+v", min.Label, min.Accelerator)
+	}
+}
+
+func windowMenuItem(t *testing.T, m *menu.Menu) *menu.MenuItem {
 	t.Helper()
 	if m == nil || len(m.Items) < 2 {
 		t.Fatalf("menu items=%d", len(m.Items))
@@ -548,7 +585,7 @@ func viewMenuItem(t *testing.T, m *menu.Menu) *menu.MenuItem {
 		}
 		return item
 	}
-	t.Fatal("view menu missing submenu")
+	t.Fatal("window menu missing submenu")
 	return nil
 }
 

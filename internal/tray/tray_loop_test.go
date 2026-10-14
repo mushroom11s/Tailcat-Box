@@ -61,8 +61,9 @@ func TestDarwinTrayStartsOnMainThread(t *testing.T) {
 	if !strings.Contains(darwin, "CreateMenu()") {
 		t.Fatal("darwin must CreateMenu so the status item has a permanent NSMenu")
 	}
-	if !strings.Contains(darwin, "watchTrayClicks(c.Scoop)") {
-		t.Fatal("darwin tray click (menu open) must play the litter scoop")
+	// Left click scoops then opens (matches Windows); right/ctrl-click shows the menu.
+	if !strings.Contains(darwin, "watchTrayClicks(func() {") || !strings.Contains(darwin, "c.Scoop()") || !strings.Contains(darwin, "c.Open()") {
+		t.Fatal("darwin left-click must scoop then Open; right-click keeps the menu")
 	}
 	// Click handlers already run on the AppKit main thread. Wrapping Wails
 	// Open/Navigate/Quit in invokeMenu runs them inline during menu tracking

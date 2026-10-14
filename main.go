@@ -110,12 +110,22 @@ func (a *App) applicationMenu(title string) *menu.Menu {
 	if a != nil {
 		labels = tray.LabelsForLocale(a.uiLocale)
 	}
+	locale := ""
+	if a != nil {
+		locale = a.menuLocale()
+	}
 	m := menu.NewMenu()
 	appMenu := m.AddSubmenu(title)
 	appMenu.AddText(labels.Open, nil, func(_ *menu.CallbackData) {
 		a.showWindow()
 	})
-	appMenu.AddText(labels.Hide, nil, func(_ *menu.CallbackData) {
+	// Cmd+H must hide the application (NSApp hide), not only orderOut the window.
+	appMenu.AddText(labels.Hide, keys.CmdOrCtrl("h"), func(_ *menu.CallbackData) {
+		a.hideApp()
+	})
+	appMenu.AddText(closeWindowLabel(locale), keys.CmdOrCtrl("w"), func(_ *menu.CallbackData) {
+		// Same idea as the red traffic light with HideWindowOnClose: leave the
+		// menu-bar tray running. WindowHide keeps the process alive.
 		a.hideWindow()
 	})
 	appMenu.AddSeparator()
@@ -129,7 +139,9 @@ func (a *App) applicationMenu(title string) *menu.Menu {
 		a.navigate(tray.PageSettings)
 	})
 	appMenu.AddSeparator()
-	appMenu.AddText(labels.Quit, nil, func(_ *menu.CallbackData) {
+	// Cmd+Q must fully quit. A custom app menu replaces Wails' AppMenu role,
+	// so without this accelerator macOS has nothing bound to Quit.
+	appMenu.AddText(labels.Quit, keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
 		a.quitApp()
 	})
 
@@ -138,10 +150,15 @@ func (a *App) applicationMenu(title string) *menu.Menu {
 	// https://wails.io/docs/reference/menus
 	m.Append(menu.EditMenu())
 
-	viewTitle, fullscreenLabel := viewMenuLabels(a.menuLocale(), a.windowFullscreen)
-	viewMenu := m.AddSubmenu(viewTitle)
+	winTitle, minLabel := windowMenuLabels(locale)
+	_, fullscreenLabel := viewMenuLabels(locale, a != nil && a.windowFullscreen)
+	winMenu := m.AddSubmenu(winTitle)
+	winMenu.AddText(minLabel, keys.CmdOrCtrl("m"), func(_ *menu.CallbackData) {
+		a.minimiseWindow()
+	})
+	winMenu.AddSeparator()
 	// Control-Command-F is the macOS shortcut for Enter/Exit Full Screen.
-	viewMenu.AddText(fullscreenLabel, keys.Combo("f", keys.ControlKey, keys.CmdOrCtrlKey), func(_ *menu.CallbackData) {
+	winMenu.AddText(fullscreenLabel, keys.Combo("f", keys.ControlKey, keys.CmdOrCtrlKey), func(_ *menu.CallbackData) {
 		a.toggleFullscreen()
 	})
 	return m
@@ -163,6 +180,24 @@ func (a *App) menuLocale() string {
 		return ""
 	}
 	return a.uiLocale
+}
+
+func closeWindowLabel(locale string) string {
+	switch strings.ToLower(strings.TrimSpace(locale)) {
+	case "zh-cn", "zh":
+		return "关闭窗口"
+	default:
+		return "Close Window"
+	}
+}
+
+func windowMenuLabels(locale string) (title, minimize string) {
+	switch strings.ToLower(strings.TrimSpace(locale)) {
+	case "zh-cn", "zh":
+		return "窗口", "最小化"
+	default:
+		return "Window", "Minimize"
+	}
 }
 
 func viewMenuLabels(locale string, fullscreen bool) (title, item string) {

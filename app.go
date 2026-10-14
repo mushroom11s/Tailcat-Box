@@ -339,6 +339,8 @@ func (a *App) showWindow() {
 	if a.ctx == nil {
 		return
 	}
+	// ShowApplication undoes Cmd+H / NSApp hide; WindowShow alone is not enough.
+	runtime.Show(a.ctx)
 	runtime.WindowShow(a.ctx)
 }
 
@@ -361,6 +363,21 @@ func (a *App) hideWindow() {
 		return
 	}
 	runtime.WindowHide(a.ctx)
+}
+
+// hideApp is Cmd+H: hide the whole application (dock stays, windows leave the screen).
+func (a *App) hideApp() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.Hide(a.ctx)
+}
+
+func (a *App) minimiseWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowMinimise(a.ctx)
 }
 
 // navigate shows the window and asks the frontend to open page.
