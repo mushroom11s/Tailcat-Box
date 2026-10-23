@@ -102,7 +102,7 @@ describe("Mew Share page", () => {
     expect(screen.queryByRole("tab", { name: "接收" })).toBeNull();
   });
 
-  it("turns the drop zone into the packing-cat litter box while files are dragged over it", () => {
+  it("turns the drop zone into the sized litter-box scoop animation while files are dragged over it", () => {
     renderPage();
     const drop = document.querySelector(".miao-drop") as HTMLElement;
     expect(drop).toBeTruthy();
@@ -115,8 +115,10 @@ describe("Mew Share page", () => {
     expect(drop.classList.contains("drag")).toBe(true);
     expect(drop.querySelector(".miao-drop-idle")?.hasAttribute("hidden")).toBe(true);
     expect(drop.querySelector(".miao-drop-scoop")?.getAttribute("aria-hidden")).toBe("false");
-    expect(drop.querySelector(".miao-drop-scoop .loading-cat")).toBeTruthy();
-    expect(drop.querySelector(".miao-drop-scoop img")?.getAttribute("src") ?? "").toContain("loading-cat");
+    expect(drop.querySelector(".miao-drop-scoop .miao-drop-scoop-art")).toBeTruthy();
+    expect(drop.querySelector(".miao-drop-scoop img")?.getAttribute("src") ?? "").toContain("miao-drop-scoop");
+    expect(drop.querySelector(".miao-drop-scoop img")?.getAttribute("width")).toBe("640");
+    expect(drop.querySelector(".miao-drop-scoop img")?.getAttribute("height")).toBe("180");
     expect(drop.querySelector(".miao-drop-idle")?.textContent).toContain("Drop files here");
     expect(screen.queryByText("Packing…")).toBeNull();
 

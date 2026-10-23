@@ -8,6 +8,8 @@ import { useI18n, type MessageKey } from "../i18n";
 import miaoQrMark from "../assets/miao-qr-cat.png?inline";
 import runningCatGif from "../assets/running-cat.gif";
 import runningCatWebp from "../assets/running-cat.webp";
+import miaoDropScoopGif from "../assets/miao-drop-scoop.gif";
+import miaoDropScoopWebp from "../assets/miao-drop-scoop.webp";
 import doneCat from "../assets/done-cat.png";
 import { useClipboardFieldPaste, type PasteFailure } from "../lib/clipboardPaste";
 import { copyQrImage } from "../lib/copyQrImage";
@@ -1214,7 +1216,17 @@ export default function MiaoPage() {
               <span className="chat-quiet">{t("miaoDropHint")}</span>
             </span>
             <span className="miao-drop-scoop" aria-hidden={!(dragOver || busy === "pack")}>
-              <LoadingCat size="lg" layout="block" label={busy === "pack" ? t("miaoPacking") : undefined} />
+              <picture className="miao-drop-scoop-art">
+                <source srcSet={miaoDropScoopWebp} type="image/webp" />
+                <img
+                  src={miaoDropScoopGif}
+                  alt=""
+                  width={640}
+                  height={180}
+                  draggable={false}
+                />
+              </picture>
+              {busy === "pack" ? <span className="miao-drop-scoop-label">{t("miaoPacking")}</span> : null}
             </span>
           </button>
           <input
