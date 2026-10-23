@@ -102,6 +102,36 @@ describe("Mew Share page", () => {
     expect(screen.queryByRole("tab", { name: "接收" })).toBeNull();
   });
 
+  it("turns the drop zone into the packing-cat litter box while files are dragged over it", () => {
+    renderPage();
+    const drop = document.querySelector(".miao-drop") as HTMLElement;
+    expect(drop).toBeTruthy();
+    expect(drop.classList.contains("drag")).toBe(false);
+    expect(drop.querySelector(".miao-drop-idle")?.hasAttribute("hidden")).toBe(false);
+    expect(drop.querySelector(".miao-drop-scoop")?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText("Drop files here, or click to choose.")).toBeTruthy();
+
+    fireEvent.dragEnter(drop);
+    expect(drop.classList.contains("drag")).toBe(true);
+    expect(drop.querySelector(".miao-drop-idle")?.hasAttribute("hidden")).toBe(true);
+    expect(drop.querySelector(".miao-drop-scoop")?.getAttribute("aria-hidden")).toBe("false");
+    expect(drop.querySelector(".miao-drop-scoop .loading-cat")).toBeTruthy();
+    expect(drop.querySelector(".miao-drop-scoop img")?.getAttribute("src") ?? "").toContain("loading-cat");
+    expect(drop.querySelector(".miao-drop-idle")?.textContent).toContain("Drop files here");
+    expect(screen.queryByText("Packing…")).toBeNull();
+
+    expect(css).toMatch(/\.miao-drop\.drag,\s*\.miao-drop\.packing\s*\{[^}]*#d6b896/s);
+    expect(css).toMatch(/\.miao-send \.miao-drop\.drag,\s*\.miao-send \.miao-drop\.packing\s*\{[^}]*min-height:\s*180px/s);
+    expect(css).toMatch(/\.miao-drop\.drag \.miao-drop-scoop,\s*\.miao-drop\.packing \.miao-drop-scoop\s*\{[^}]*display:\s*flex/s);
+    expect(css).not.toContain(".miao-send .miao-drop:has(.loading-cat.lg)");
+
+    fireEvent.dragLeave(drop);
+    expect(drop.classList.contains("drag")).toBe(false);
+    expect(drop.querySelector(".miao-drop-idle")?.hasAttribute("hidden")).toBe(false);
+    expect(drop.querySelector(".miao-drop-scoop")?.getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByText("Drop files here, or click to choose.")).toBeTruthy();
+  });
+
   it("restores the share list on the Share tab after restart", async () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     installGoApp({

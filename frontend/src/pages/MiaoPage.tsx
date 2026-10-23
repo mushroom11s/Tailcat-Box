@@ -1182,7 +1182,7 @@ export default function MiaoPage() {
           </div>
           <button
             type="button"
-            className={`miao-drop${dragOver ? " drag" : ""}`}
+            className={`miao-drop${dragOver ? " drag" : ""}${busy === "pack" ? " packing" : ""}`}
             data-guide="miao-drop"
             disabled={busy !== ""}
             onClick={() => {
@@ -1200,17 +1200,22 @@ export default function MiaoPage() {
               ev.preventDefault();
               setDragOver(true);
             }}
-            onDragLeave={() => setDragOver(false)}
+            onDragLeave={(ev) => {
+              const next = ev.relatedTarget as Node | null;
+              if (next && ev.currentTarget.contains(next)) {
+                return;
+              }
+              setDragOver(false);
+            }}
             onDrop={onDrop}
           >
-            {busy === "pack" ? (
-              <LoadingCat size="lg" layout="block" label={t("miaoPacking")} />
-            ) : (
-              <span>
-                <strong>{t("miaoDrop")}</strong>
-                <span className="chat-quiet">{t("miaoDropHint")}</span>
-              </span>
-            )}
+            <span className="miao-drop-idle" hidden={dragOver || busy === "pack"}>
+              <strong>{t("miaoDrop")}</strong>
+              <span className="chat-quiet">{t("miaoDropHint")}</span>
+            </span>
+            <span className="miao-drop-scoop" aria-hidden={!(dragOver || busy === "pack")}>
+              <LoadingCat size="lg" layout="block" label={busy === "pack" ? t("miaoPacking") : undefined} />
+            </span>
           </button>
           <input
             ref={inputRef}
