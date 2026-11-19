@@ -212,7 +212,7 @@ describe("shell scroll", () => {
       expect(screen.getByRole("heading", { name: "喵传" })).toBeTruthy();
       expect(document.querySelector(".chat-lobby")).toBeNull();
 
-      for (const name of ["喵传", "聊天", "穿透", "设置"]) {
+      for (const name of ["喵传", "聊天", "穿透", "远程控制", "设置"]) {
         const button = screen.getByRole("button", { name });
         const glyph = button.querySelector(".nav-glyph") as HTMLElement;
         const label = button.querySelector(".nav-label") as HTMLElement;

@@ -5,6 +5,7 @@ import { ToastProvider, useToasts } from "./components/toasts";
 import ChatPage, { type ChatMessage } from "./pages/ChatPage";
 import LobbyPage from "./pages/LobbyPage";
 import MiaoPage from "./pages/MiaoPage";
+import RemotePage from "./pages/RemotePage";
 import SettingsPage from "./pages/SettingsPage";
 import type { SSHShell } from "./components/SSHDesk";
 import TunnelPage from "./pages/TunnelPage";
@@ -78,16 +79,17 @@ import {
   type UpdateStatus,
 } from "./lib/wails";
 
-type Page = "miao" | "chat" | "tunnel" | "settings";
+type Page = "miao" | "chat" | "tunnel" | "remote" | "settings";
 type Theme = "system" | "light" | "dark";
 
 const THEME_KEY = "tailcat-theme";
 const CHAT_KINDS = new Set(["room-ready", "peer", "message", "transfer", "discard"]);
 const TUNNEL_KINDS = new Set(["port_serve", "forward"]);
 
-const NAV: Array<{ id: Exclude<Page, "settings">; labelKey: "navChat" | "navTunnel" }> = [
+const NAV: Array<{ id: Exclude<Page, "settings" | "miao">; labelKey: "navChat" | "navTunnel" | "navRemote" }> = [
   { id: "chat", labelKey: "navChat" },
   { id: "tunnel", labelKey: "navTunnel" },
+  { id: "remote", labelKey: "navRemote" },
 ];
 
 function applyTheme(theme: Theme): void {
@@ -1217,7 +1219,7 @@ function AppShell() {
             <span className="nav-label">{t("navMiao")}</span>
           </button>
           {NAV.map((item) =>
-            item.id === "tunnel" ? (
+            item.id !== "chat" ? (
               <button
                 key={item.id}
                 type="button"
@@ -1385,6 +1387,8 @@ function AppShell() {
               notifyNote={notifyDenied ? t("chatNotifyDenied") : ""}
             />
           )
+        ) : page === "remote" ? (
+          <RemotePage />
         ) : page === "tunnel" ? (
           <TunnelPage
             mappings={mappings}
@@ -1569,7 +1573,7 @@ function showUpdateBadge(status: UpdateStatus | null): boolean {
   return status.Status !== "error" && status.Status !== "unsupported";
 }
 
-function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "settings" }) {
+function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "remote" | "settings" }) {
   const d =
     name === "miao"
       ? "M7 4.5h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2zM12 8v5.5M9.6 11.2 12 13.6l2.4-2.4"
@@ -1577,7 +1581,9 @@ function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "settings" }) {
       ? "M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H9l-3.5 3V6.5z"
       : name === "tunnel"
         ? "M9 8H7a4 4 0 0 0 0 8h2M15 8h2a4 4 0 0 1 0 8h-2M8 12h8"
-        : "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM12 3.5v2.1M12 18.4v2.1M4.8 6.2l1.5 1.5M17.7 16.3l1.5 1.5M3.5 12h2.1M18.4 12h2.1M4.8 17.8l1.5-1.5M17.7 7.7l1.5-1.5";
+        : name === "remote"
+          ? "M4.5 6h15a1 1 0 0 1 1 1v8.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM8 19.5h8M12 16.5v3M14 9.2l2.1 2.1L14 13.4"
+          : "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM12 3.5v2.1M12 18.4v2.1M4.8 6.2l1.5 1.5M17.7 16.3l1.5 1.5M3.5 12h2.1M18.4 12h2.1M4.8 17.8l1.5-1.5M17.7 7.7l1.5-1.5";
   return (
     <svg className="nav-glyph" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" d={d} />

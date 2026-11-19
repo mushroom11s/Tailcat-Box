@@ -241,7 +241,8 @@ describe("phase 4 live media dock", () => {
     expect(names[0]).toBe("Mew Share");
     expect(names[1]).toBe("Chat");
     expect(names[2]).toBe("+ New room");
-    expect(names.at(-2)).toBe("Tunnel");
+    expect(names.at(-3)).toBe("Tunnel");
+    expect(names.at(-2)).toBe("Remote");
     expect(names.at(-1)).toBe("Settings");
     expect(screen.queryByRole("heading", { name: "Services" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Start SSH serve" })).toBeNull();
