@@ -1,12 +1,15 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
+import { emitBrowserEvent } from "../lib/wails";
 import RemotePage, { forgetRemote, rememberRemote } from "./RemotePage";
 
 afterEach(() => {
   localStorage.removeItem("tailcat-remote-recent");
+  localStorage.removeItem("tailcat-remote-trust");
   localStorage.removeItem("tailcat-locale");
+  delete (window as { go?: unknown }).go;
   cleanup();
 });
 
@@ -57,5 +60,36 @@ describe("remote control menu", () => {
 
     await user.click(screen.getByRole("button", { name: "移除" }));
     expect(screen.getByText("还没有记过的设备。")).toBeTruthy();
+  });
+
+  it("allows a trusted computer without another click", async () => {
+    const allow = vi.fn().mockResolvedValue(undefined);
+    Object.assign(window, { go: { main: { App: { AllowRemote: allow } } } });
+    localStorage.setItem("tailcat-locale", "zh-CN");
+    localStorage.setItem("tailcat-remote-trust", JSON.stringify(["tc:home"]));
+    renderPage();
+    emitBrowserEvent({
+      SessionID: "remote",
+      Kind: "remote",
+      Data: JSON.stringify({ role: "host", state: "incoming", peer: "tc:home", mode: "assist" }),
+    });
+    await waitFor(() => {
+      expect(allow).toHaveBeenCalledOnce();
+    });
+    expect(screen.queryByRole("button", { name: "允许" })).toBeNull();
+  });
+
+  it("asks before a computer that is only remembered", async () => {
+    const allow = vi.fn().mockResolvedValue(undefined);
+    Object.assign(window, { go: { main: { App: { AllowRemote: allow } } } });
+    localStorage.setItem("tailcat-locale", "zh-CN");
+    renderPage();
+    emitBrowserEvent({
+      SessionID: "remote",
+      Kind: "remote",
+      Data: JSON.stringify({ role: "host", state: "incoming", peer: "tc:new", mode: "desk" }),
+    });
+    expect(await screen.findByRole("button", { name: "允许" })).toBeTruthy();
+    expect(allow).not.toHaveBeenCalled();
   });
 });

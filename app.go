@@ -21,6 +21,7 @@ import (
 	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
 	"github.com/mushroom11s/tailcat-box/internal/miao"
 	"github.com/mushroom11s/tailcat-box/internal/notify"
+	"github.com/mushroom11s/tailcat-box/internal/remote"
 	"github.com/mushroom11s/tailcat-box/internal/service"
 	"github.com/mushroom11s/tailcat-box/internal/session"
 	"github.com/mushroom11s/tailcat-box/internal/settings"
@@ -61,6 +62,7 @@ type App struct {
 	svcAdapter adapter.TailcatAdapter
 	rooms      *chat.Manager
 	miao       *miao.Service
+	remote     *remote.Service
 	keys       *store.Store
 	tray       *tray.Controller
 	trayIcon   []byte
@@ -236,6 +238,7 @@ func NewApp() *App {
 	}
 	rooms := chat.NewManager(chatAd, chatDataDir())
 	shares := miao.New(chatAd, miaoDataDir())
+	desk := remote.New(chatAd)
 	settingsStore := newSettingsStore()
 	if n := settingsStore.ChunkStreams(); n > 0 {
 		miao.SetChunkStreams(n)
@@ -245,6 +248,7 @@ func NewApp() *App {
 		svcAdapter: ad,
 		rooms:      rooms,
 		miao:       shares,
+		remote:     desk,
 		keys:       keys,
 		settings:   settingsStore,
 		ssh:        newSSHStore(),
@@ -430,6 +434,13 @@ func (a *App) forwardEvents() {
 	if a.miao != nil {
 		go func() {
 			for ev := range a.miao.Events() {
+				emit(ev)
+			}
+		}()
+	}
+	if a.remote != nil {
+		go func() {
+			for ev := range a.remote.Events() {
 				emit(ev)
 			}
 		}()
@@ -805,6 +816,67 @@ func (a *App) StartMiaoShare(files []MiaoFileInput, ttlDays int, forever bool, m
 		net = a.svc.NetworkOpts()
 	}
 	return a.miao.Start(sources, lim, net)
+}
+
+// StartRemoteHost listens so another Tailcat Box can ask to control this screen.
+func (a *App) StartRemoteHost() (remote.View, error) {
+	if a.remote == nil {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	if a.svc != nil {
+		a.remote.SetNetwork(a.svc.NetworkOpts())
+	}
+	return a.remote.StartHost()
+}
+
+// ConnectRemote asks the computer at address for control.
+func (a *App) ConnectRemote(address, mode string) (remote.View, error) {
+	if a.remote == nil {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	if a.svc != nil {
+		a.remote.SetNetwork(a.svc.NetworkOpts())
+	}
+	return a.remote.Connect(address, mode)
+}
+
+// AllowRemote lets the current request see this screen and use the keyboard and mouse.
+func (a *App) AllowRemote() error {
+	if a.remote == nil {
+		return fmt.Errorf("remote control is not available")
+	}
+	return a.remote.Allow()
+}
+
+// DenyRemote refuses the current request.
+func (a *App) DenyRemote() error {
+	if a.remote == nil {
+		return fmt.Errorf("remote control is not available")
+	}
+	return a.remote.Deny()
+}
+
+// EndRemote stops the session from either side.
+func (a *App) EndRemote() {
+	if a.remote != nil {
+		a.remote.End()
+	}
+}
+
+// SendRemoteSignal forwards one WebRTC signal to the other computer.
+func (a *App) SendRemoteSignal(metaJSON string) error {
+	if a.remote == nil {
+		return fmt.Errorf("remote control is not available")
+	}
+	return a.remote.SendSignal(metaJSON)
+}
+
+// SendRemoteInput sends one pointer or key event to the computer being controlled.
+func (a *App) SendRemoteInput(input remote.Input) error {
+	if a.remote == nil {
+		return fmt.Errorf("remote control is not available")
+	}
+	return a.remote.SendInput(input)
 }
 
 // EndMiaoShare stops the share and deletes its temp copies.

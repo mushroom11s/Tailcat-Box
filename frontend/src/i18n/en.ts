@@ -618,6 +618,22 @@ export const en = {
   remoteRecentEmpty: "No devices kept yet.",
   remoteForget: "Remove",
   remoteBadAddress: "That is not a Tailcat address.",
+  remoteHost: "Share this computer",
+  remoteGuest: "Control another",
+  remoteHostHelp: "Send this Tailcat address to the other computer.",
+  remoteIncoming: "{peer} wants to control this computer.",
+  remoteAllow: "Allow",
+  remoteDeny: "Deny",
+  remoteWaiting: "Waiting for them to allow this.",
+  remoteLive: "Connected. Keys and the pointer go to their screen.",
+  remoteEnd: "End",
+  remoteDenied: "They declined.",
+  remoteUnreachable: "Could not reach the other computer.",
+  remoteTrust: "Trust",
+  remoteUntrust: "Stop trusting",
+  remoteTrusted: "Trusted",
+  remoteScreenFailed: "Screen sharing did not start.",
+  remoteInputFailed: "This computer could not apply the remote keyboard and mouse.",
 } as const;
 
 export type MessageKey = keyof typeof en;
