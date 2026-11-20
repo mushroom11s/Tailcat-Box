@@ -273,13 +273,13 @@ describe("tunnel page", () => {
     await user.click(screen.getByRole("button", { name: "+ 新映射" }));
     expect(screen.getByRole("radio", { name: "端口监听" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "本地转发" })).toBeTruthy();
-    expect(screen.getByRole("checkbox", { name: "随软件启动自动开始" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "打开猫砂盆时自动启动" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "保存映射" })).toBeTruthy();
     await user.click(screen.getByRole("radio", { name: "本地转发" }));
-    expect(screen.getByRole("checkbox", { name: "用浏览器打开" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "在浏览器中打开" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "浏览" })).toBeNull();
     expect(screen.queryByRole("button", { name: "打开对方 80 端口" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "开 SSH" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "启动 SSH" })).toBeNull();
     await user.type(screen.getByLabelText("地址"), "tc:zh-key");
     await user.click(screen.getByRole("button", { name: "保存映射" }));
     const key = document.querySelector(".tunnel-detail code.tunnel-key");

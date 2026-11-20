@@ -15,7 +15,24 @@ type Props = {
   invalidKey?: MessageKey;
   /** Turns clipboard text into the value accept() expects. Empty means the text is not usable. */
   normalizePastedText?: (text: string) => string;
+  /** Render as a compact icon that sits inside an input box. */
+  iconOnly?: boolean;
 };
+
+function ScanIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path
+        d="M3 7V5a2 2 0 0 1 2-2h2M13 3h2a2 2 0 0 1 2 2v2M17 13v2a2 2 0 0 1-2 2h-2M7 17H5a2 2 0 0 1-2-2v-2M3.5 10h13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export default function QrScanButton({
   onAccept,
@@ -24,6 +41,7 @@ export default function QrScanButton({
   accept = acceptScannedText,
   invalidKey = "qrInvalid",
   normalizePastedText,
+  iconOnly = false,
 }: Props) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -244,16 +262,18 @@ export default function QrScanButton({
   return (
     <>
       <button
-        className="btn btn-ghost"
+        className={iconOnly ? "qr-icon-btn" : "btn btn-ghost"}
         type="button"
         disabled={disabled}
+        aria-label={iconOnly ? t("qrScan") : undefined}
+        title={iconOnly ? t("qrScan") : undefined}
         onClick={(ev) => {
           ev.stopPropagation();
           setError("");
           setOpen(true);
         }}
       >
-        {t("qrScan")}
+        {iconOnly ? <ScanIcon /> : t("qrScan")}
       </button>
       {open ? (
         <QrDialog titleId="qr-scan-title" title={t("qrScanTitle")} onClose={close}>

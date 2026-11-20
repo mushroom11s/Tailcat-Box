@@ -28,7 +28,7 @@ func TestCreateListDelete(t *testing.T) {
 	if len(keys) != 1 {
 		t.Fatalf("len=%d", len(keys))
 	}
-	if keys[0].Name != "home" || keys[0].Address != addr || keys[0].Client {
+	if keys[0].Name != "home" || keys[0].Address != addr || keys[0].Client || keys[0].Region != "nyc" {
 		t.Fatalf("%+v", keys[0])
 	}
 	if _, err := os.Stat(filepath.Join(dir, "home.private.json")); err != nil {
@@ -44,6 +44,32 @@ func TestCreateListDelete(t *testing.T) {
 	}
 	if len(keys) != 0 {
 		t.Fatalf("after delete %+v", keys)
+	}
+}
+
+func TestRenameKeepsRegion(t *testing.T) {
+	s := store.New(t.TempDir())
+	if _, err := s.Create("home", store.CreateOpts{Region: "hkg"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename("home", "studio"); err != nil {
+		t.Fatal(err)
+	}
+	keys, err := s.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || keys[0].Name != "studio" || keys[0].Region != "hkg" {
+		t.Fatalf("%+v", keys)
+	}
+	if err := s.Rename("studio", "home"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create("taken", store.CreateOpts{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename("home", "taken"); err == nil {
+		t.Fatal("expected duplicate name to fail")
 	}
 }
 
@@ -119,8 +145,27 @@ func TestSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != want {
+	if got.Region != want.Region || got.DERPMapURL != want.DERPMapURL {
 		t.Fatalf("got=%+v want=%+v", got, want)
+	}
+}
+
+func TestEnsureRemoteTokenStaysWithTheKey(t *testing.T) {
+	s := store.New(t.TempDir())
+	if _, err := s.Create("home", store.CreateOpts{PrivateKeyJSON: `{"fake":"abc"}`}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := s.EnsureRemoteToken("home", "token-a")
+	if err != nil || first != "token-a" {
+		t.Fatalf("first=%q err=%v", first, err)
+	}
+	again, err := s.EnsureRemoteToken("home", "token-b")
+	if err != nil || again != "token-a" {
+		t.Fatalf("again=%q err=%v", again, err)
+	}
+	raw, err := s.ReadRaw("home")
+	if err != nil || !strings.Contains(string(raw), "abc") || !strings.Contains(string(raw), "token-a") {
+		t.Fatalf("raw=%s err=%v", raw, err)
 	}
 }
 

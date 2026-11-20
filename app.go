@@ -11,15 +11,20 @@ import (
 	"sync"
 	"time"
 
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 
 	"github.com/mushroom11s/tailcat-box/internal/adapter"
 	"github.com/mushroom11s/tailcat-box/internal/appinfo"
 	"github.com/mushroom11s/tailcat-box/internal/autostart"
 	"github.com/mushroom11s/tailcat-box/internal/chat"
+	"github.com/mushroom11s/tailcat-box/internal/derpscan"
+	"github.com/mushroom11s/tailcat-box/internal/hotkey"
 	"github.com/mushroom11s/tailcat-box/internal/linuxwebview"
 	"github.com/mushroom11s/tailcat-box/internal/miao"
+	"github.com/mushroom11s/tailcat-box/internal/migrate"
 	"github.com/mushroom11s/tailcat-box/internal/notify"
 	"github.com/mushroom11s/tailcat-box/internal/remote"
 	"github.com/mushroom11s/tailcat-box/internal/service"
@@ -30,6 +35,7 @@ import (
 	"github.com/mushroom11s/tailcat-box/internal/sysinfo"
 	"github.com/mushroom11s/tailcat-box/internal/tray"
 	"github.com/mushroom11s/tailcat-box/internal/update"
+	"github.com/mushroom11s/tailcat-box/internal/winchrome"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -63,12 +69,18 @@ type App struct {
 	rooms      *chat.Manager
 	miao       *miao.Service
 	remote     *remote.Service
+	derp       *derpscan.Manager
 	keys       *store.Store
 	tray       *tray.Controller
 	trayIcon   []byte
 	settings   *settings.Store
+	hotkeys    *hotkey.Hook
 	ssh        *sshdesk.Store
 	sshMu      sync.Mutex
+	remoteMu   sync.Mutex
+	// remoteKey is the saved key currently hosting remote control.
+	// A named key can listen in only one place at a time.
+	remoteKey  string
 	sshSession string
 	// portKeys tracks named keys currently listening on port-serve sessions
 	// so chat rooms and port serves cannot share the same key at once.
@@ -233,9 +245,6 @@ func NewApp() *App {
 	keys := newKeyStore()
 	ad, chatAd := newAdapters()
 	svc := service.New(ad)
-	if settings, err := keys.LoadSettings(); err == nil {
-		svc.SetNetworkOpts(adapter.NetworkOpts{Region: settings.Region, DERPMapURL: settings.DERPMapURL})
-	}
 	rooms := chat.NewManager(chatAd, chatDataDir())
 	shares := miao.New(chatAd, miaoDataDir())
 	desk := remote.New(chatAd)
@@ -243,7 +252,7 @@ func NewApp() *App {
 	if n := settingsStore.ChunkStreams(); n > 0 {
 		miao.SetChunkStreams(n)
 	}
-	return &App{
+	a := &App{
 		svc:        svc,
 		svcAdapter: ad,
 		rooms:      rooms,
@@ -256,6 +265,9 @@ func NewApp() *App {
 		trayIcon:   tray.DefaultIcon,
 		startedAt:  time.Now(),
 	}
+	a.derp = a.newDERPScanner()
+	a.applyNet()
+	return a
 }
 
 func newSSHStore() *sshdesk.Store {
@@ -309,12 +321,22 @@ func (a *App) startup(ctx context.Context) {
 		a.syncApplicationMenu(title)
 	}
 	a.tray.Start(a.trayIcon)
+	winchrome.RoundCorners(windowTitle)
 	go a.forwardEvents()
+	a.startWindowHotkeys()
 	go a.maybeRecordDailyUpdateCheck()
 	go a.restoreSSH()
+	go a.restoreRemote()
+	go a.runDERPScanner(ctx)
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	if a.hotkeys != nil {
+		a.hotkeys.Stop()
+	}
+	if a.derp != nil {
+		a.derp.Close()
+	}
 	if a.miao != nil {
 		a.miao.Close()
 	}
@@ -339,6 +361,88 @@ func (a *App) maybeRecordDailyUpdateCheck() {
 	_, _ = a.CheckForUpdate()
 }
 
+// WindowHotkeys is the pair that shows the window and hides it to the tray.
+type WindowHotkeys struct {
+	Wake  string
+	Close string
+}
+
+func (a *App) startWindowHotkeys() {
+	a.hotkeys = hotkey.Start(a.wakeWindow, a.hideWindow, a.toggleWindow)
+	wake, close := a.effectiveWindowHotkeys()
+	if err := a.hotkeys.Set(wake, close); err != nil && (wake != hotkey.DefaultWake || close != hotkey.DefaultClose) {
+		_ = a.hotkeys.Set(hotkey.DefaultWake, hotkey.DefaultClose)
+	}
+}
+
+func (a *App) effectiveWindowHotkeys() (string, string) {
+	wake, close := hotkey.DefaultWake, hotkey.DefaultClose
+	if a.settings == nil {
+		return wake, close
+	}
+	savedWake, savedClose := a.settings.WindowHotkeys()
+	if savedWake != "" {
+		wake = savedWake
+	}
+	if savedClose != "" {
+		close = savedClose
+	}
+	if wake == "Ctrl+Alt+Shift+T" && close == hotkey.DefaultClose {
+		wake = hotkey.DefaultWake
+	}
+	if _, _, err := hotkey.Normalize(wake, close); err != nil {
+		return hotkey.DefaultWake, hotkey.DefaultClose
+	}
+	return wake, close
+}
+
+// GetWindowHotkeys returns the chords used to show and hide the window.
+func (a *App) GetWindowHotkeys() WindowHotkeys {
+	wake, close := a.effectiveWindowHotkeys()
+	return WindowHotkeys{Wake: wake, Close: close}
+}
+
+// SetWindowHotkeys stores a wake/close pair that does not collide with the menu or the system.
+func (a *App) SetWindowHotkeys(wake, close string) error {
+	wake, close, err := hotkey.Normalize(wake, close)
+	if err != nil {
+		return err
+	}
+	if a.hotkeys != nil {
+		if err := a.hotkeys.Set(wake, close); err != nil {
+			return err
+		}
+	}
+	if a.settings != nil {
+		return a.settings.SetWindowHotkeys(wake, close)
+	}
+	return nil
+}
+
+// HoldWindowHotkeys unregisters the chords while a new one is being captured.
+func (a *App) HoldWindowHotkeys(hold bool) error {
+	if a.hotkeys == nil {
+		return nil
+	}
+	return a.hotkeys.Hold(hold)
+}
+
+func (a *App) wakeWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowUnminimise(a.ctx)
+	a.showWindow()
+}
+
+func (a *App) toggleWindow() {
+	if hotkey.WindowShown(windowTitle) {
+		a.hideWindow()
+		return
+	}
+	a.wakeWindow()
+}
+
 func (a *App) showWindow() {
 	if a.ctx == nil {
 		return
@@ -346,6 +450,7 @@ func (a *App) showWindow() {
 	// ShowApplication undoes Cmd+H / NSApp hide; WindowShow alone is not enough.
 	runtime.Show(a.ctx)
 	runtime.WindowShow(a.ctx)
+	hotkey.NoteShown(true)
 }
 
 // onNotification brings the window forward and opens the view stored on the notice.
@@ -367,6 +472,7 @@ func (a *App) hideWindow() {
 		return
 	}
 	runtime.WindowHide(a.ctx)
+	hotkey.NoteShown(false)
 }
 
 // hideApp is Cmd+H: hide the whole application (dock stays, windows leave the screen).
@@ -449,6 +555,10 @@ func (a *App) forwardEvents() {
 		return
 	}
 	for ev := range a.rooms.Events() {
+		if ev.Kind == "relay-share" {
+			_ = a.acceptRelayShare(ev.Data, true)
+			continue
+		}
 		emit(ev)
 	}
 }
@@ -475,11 +585,8 @@ func (a *App) StartPortServe(mappings []adapter.PortMapping, keyName string) (se
 	keyName = strings.TrimSpace(keyName)
 	opts := adapter.PortServeOpts{}
 	if keyName != "" {
-		if a.roomUsesKey(keyName) {
-			return session.Session{}, fmt.Errorf("That key is already listening in a chat room.")
-		}
-		if a.portUsesKey(keyName) {
-			return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+		if err := a.keyTaken(keyName); err != nil {
+			return session.Session{}, err
 		}
 		raw, err := a.keys.ReadRaw(keyName)
 		if err != nil {
@@ -520,6 +627,30 @@ func (a *App) roomUsesKey(key string) bool {
 		}
 	}
 	return false
+}
+
+func (a *App) remoteUsesKey(key string) bool {
+	if a == nil || key == "" {
+		return false
+	}
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
+	return a.remoteKey == key
+}
+
+// keyTaken reports when a saved key is already listening somewhere else.
+// The same key is one Tailcat identity, so a second listener would share its address.
+func (a *App) keyTaken(key string) error {
+	switch {
+	case a.roomUsesKey(key):
+		return fmt.Errorf("That key is already listening in a chat room.")
+	case a.remoteUsesKey(key):
+		return fmt.Errorf("That key is already used for remote control.")
+	case a.portUsesKey(key):
+		return fmt.Errorf("That key is already listening on a port serve.")
+	default:
+		return nil
+	}
 }
 
 func (a *App) portUsesKey(key string) bool {
@@ -588,6 +719,29 @@ func (a *App) CreateKey(name string, client bool, region string) (string, error)
 // DeleteKey removes a named key from the app key directory.
 func (a *App) DeleteKey(name string) error {
 	return a.keys.Delete(name)
+}
+
+// RenameKey renames a saved app key and updates rooms that still use the old name.
+func (a *App) RenameKey(oldName, newName string) error {
+	if a.keys == nil {
+		return fmt.Errorf("key store unavailable")
+	}
+	if err := a.keys.Rename(oldName, newName); err != nil {
+		return err
+	}
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if a.rooms != nil {
+		a.rooms.RenameKey(oldName, newName)
+	}
+	a.portKeyMu.Lock()
+	for id, name := range a.portKeys {
+		if name == oldName {
+			a.portKeys[id] = newName
+		}
+	}
+	a.portKeyMu.Unlock()
+	return nil
 }
 
 // StopSession stops a running session.
@@ -664,8 +818,13 @@ func (a *App) StartChatRoom(keyName string) (session.Session, error) {
 	if err != nil {
 		return session.Session{}, err
 	}
-	if opts.KeyName != "" && a.portUsesKey(opts.KeyName) {
-		return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+	if opts.KeyName != "" {
+		if a.remoteUsesKey(opts.KeyName) {
+			return session.Session{}, fmt.Errorf("That key is already used for remote control.")
+		}
+		if a.portUsesKey(opts.KeyName) {
+			return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+		}
 	}
 	return a.rooms.Start(opts)
 }
@@ -761,8 +920,13 @@ func (a *App) RestartChatRoom(roomID string, keyName string) (session.Session, e
 	if err != nil {
 		return session.Session{}, err
 	}
-	if opts.KeyName != "" && a.portUsesKey(opts.KeyName) {
-		return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+	if opts.KeyName != "" {
+		if a.remoteUsesKey(opts.KeyName) {
+			return session.Session{}, fmt.Errorf("That key is already used for remote control.")
+		}
+		if a.portUsesKey(opts.KeyName) {
+			return session.Session{}, fmt.Errorf("That key is already listening on a port serve.")
+		}
 	}
 	sess, err := a.rooms.Restart(roomID, opts)
 	if sess.ID != "" {
@@ -819,14 +983,186 @@ func (a *App) StartMiaoShare(files []MiaoFileInput, ttlDays int, forever bool, m
 }
 
 // StartRemoteHost listens so another Tailcat Box can ask to control this screen.
-func (a *App) StartRemoteHost() (remote.View, error) {
+// The key is written down, so quitting the app does not throw it away.
+// A permanent key keeps the same Tailcat address the next time this computer listens.
+func (a *App) StartRemoteHost(permanent bool) (remote.View, error) {
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
+	return a.startRemoteHost(permanent)
+}
+
+// SetRemoteRelay restarts the live share on another relay.
+// The token is "", "region:<code>", or "scan:<id>". Other connections keep their own route.
+func (a *App) SetRemoteRelay(region string) (remote.View, error) {
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
 	if a.remote == nil {
 		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	net, err := a.remoteRelayNet(region)
+	if err != nil {
+		return remote.View{}, err
+	}
+	a.remote.SetNetwork(net)
+	cur := a.remote.Current()
+	if cur.Role != "host" || cur.State == "idle" || cur.State == "ended" {
+		return cur, nil
+	}
+	saved, ok := remote.LoadKey(a.settingsDir())
+	if !ok {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	key, token, forever, resume := saved.Resume()
+	if !resume {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	return a.remote.StartHost(key, token, forever)
+}
+
+// StartRemoteHostKey listens with a saved server key.
+// The same key keeps the same connection code, including after the app is closed.
+func (a *App) StartRemoteHostKey(name string) (remote.View, error) {
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
+	if a.remote == nil || a.keys == nil {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	name = strings.TrimSpace(name)
+	if a.roomUsesKey(name) {
+		return remote.View{}, fmt.Errorf("That key is already listening in a chat room.")
+	}
+	if a.portUsesKey(name) {
+		return remote.View{}, fmt.Errorf("That key is already listening on a port serve.")
+	}
+	raw, err := a.keys.ReadRaw(name)
+	if err != nil {
+		return remote.View{}, err
+	}
+	var meta struct {
+		Client bool `json:"Client"`
+	}
+	_ = json.Unmarshal(raw, &meta)
+	if meta.Client {
+		return remote.View{}, fmt.Errorf("Choose a server key.")
+	}
+	material, err := roomKeyMaterial(raw)
+	if err != nil {
+		return remote.View{}, err
+	}
+	fresh, err := remoteToken()
+	if err != nil {
+		return remote.View{}, err
+	}
+	token, err := a.keys.EnsureRemoteToken(name, fresh)
+	if err != nil {
+		return remote.View{}, err
 	}
 	if a.svc != nil {
 		a.remote.SetNetwork(a.svc.NetworkOpts())
 	}
-	return a.remote.StartHost()
+	view, err := a.remote.StartHost(material, token, true)
+	if err != nil {
+		a.remoteKey = ""
+		return remote.View{}, err
+	}
+	if err := remote.SaveKey(a.settingsDir(), remote.SavedKey{
+		V:            1,
+		Key:          material,
+		Token:        token,
+		Forever:      true,
+		Active:       true,
+		SessionKey:   material,
+		SessionToken: token,
+	}); err != nil {
+		a.remote.End()
+		a.remoteKey = ""
+		return remote.View{}, err
+	}
+	a.remoteKey = name
+	return view, nil
+}
+
+func (a *App) startRemoteHost(permanent bool) (remote.View, error) {
+	if a.remote == nil {
+		return remote.View{}, fmt.Errorf("remote control is not available")
+	}
+	a.remoteKey = ""
+	if a.svc != nil {
+		a.remote.SetNetwork(a.svc.NetworkOpts())
+	}
+	dir := a.settingsDir()
+	saved, _ := remote.LoadKey(dir)
+	newKey, newToken := "", ""
+	if !permanent || saved.Key == "" || saved.Token == "" {
+		var err error
+		newKey, newToken, err = a.newRemoteMaterial()
+		if err != nil {
+			return remote.View{}, err
+		}
+	}
+	key, token, next := saved.NextHost(permanent, newKey, newToken)
+	view, err := a.remote.StartHost(key, token, permanent)
+	if err != nil {
+		return remote.View{}, err
+	}
+	if err := remote.SaveKey(dir, next); err != nil {
+		a.remote.End()
+		return remote.View{}, err
+	}
+	return view, nil
+}
+
+// restoreRemote brings the connection key back after the app is opened again.
+func (a *App) restoreRemote() {
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
+	if a.remote == nil {
+		return
+	}
+	saved, ok := remote.LoadKey(a.settingsDir())
+	if !ok {
+		return
+	}
+	key, token, forever, resume := saved.Resume()
+	if !resume {
+		return
+	}
+	if a.svc != nil {
+		a.remote.SetNetwork(a.svc.NetworkOpts())
+	}
+	_, _ = a.remote.StartHost(key, token, forever)
+}
+
+func (a *App) newRemoteMaterial() (string, string, error) {
+	keyer, ok := a.svcAdapter.(interface{ GeneratePrivateKeyJSON() (string, error) })
+	if !ok {
+		return "", "", fmt.Errorf("remote control is not available")
+	}
+	key, err := keyer.GeneratePrivateKeyJSON()
+	if err != nil || strings.TrimSpace(key) == "" {
+		return "", "", fmt.Errorf("remote control is not available")
+	}
+	token, err := remoteToken()
+	if err != nil {
+		return "", "", err
+	}
+	return key, token, nil
+}
+
+// RemoteStatus is the session still listening after the page is left and opened again.
+func (a *App) RemoteStatus() remote.View {
+	if a.remote == nil {
+		return remote.View{State: "idle"}
+	}
+	return a.remote.Current()
+}
+
+func remoteToken() (string, error) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
 }
 
 // ConnectRemote asks the computer at address for control.
@@ -857,10 +1193,30 @@ func (a *App) DenyRemote() error {
 }
 
 // EndRemote stops the session from either side.
+// Ending a temporary host key forgets it. A permanent key stays for the next time.
 func (a *App) EndRemote() {
-	if a.remote != nil {
-		a.remote.End()
+	a.remoteMu.Lock()
+	defer a.remoteMu.Unlock()
+	if a.remote == nil {
+		return
 	}
+	view := a.remote.Current()
+	a.remote.End()
+	a.remoteKey = ""
+	if view.Role != "host" {
+		return
+	}
+	dir := a.settingsDir()
+	saved, ok := remote.LoadKey(dir)
+	if !ok {
+		return
+	}
+	next, drop := saved.AfterEnd()
+	if drop {
+		_ = remote.DeleteKey(dir)
+		return
+	}
+	_ = remote.SaveKey(dir, next)
 }
 
 // SendRemoteSignal forwards one WebRTC signal to the other computer.
@@ -1049,13 +1405,153 @@ func (a *App) GetNetworkSettings() (store.Settings, error) {
 	return a.keys.LoadSettings()
 }
 
+func (a *App) settingsDir() string {
+	if dir := os.Getenv("TAILCAT_SETTINGS_DIR"); dir != "" {
+		return dir
+	}
+	root, _, err := appConfigDir()
+	if err != nil {
+		return "settings"
+	}
+	return root
+}
+
+// ExportConfig writes the current setup to a file the user chooses.
+// localJSON is the webview preferences (nickname, theme, mappings, trust).
+// An empty path means the save dialog was cancelled.
+func (a *App) ExportConfig(localJSON, sectionsJSON string) (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("save dialog requires a running window")
+	}
+	local, err := migrate.ParseLocal(localJSON)
+	if err != nil {
+		return "", err
+	}
+	keysDir := "keys"
+	if a.keys != nil && a.keys.Dir != "" {
+		keysDir = a.keys.Dir
+	}
+	bundle, err := migrate.Collect(a.settingsDir(), keysDir, local)
+	if err != nil {
+		return "", err
+	}
+	bundle = migrate.Select(bundle, parseExportSections(sectionsJSON))
+	body, err := migrate.Encode(bundle)
+	if err != nil {
+		return "", err
+	}
+	dest, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+		DefaultFilename: "tailcat-box-config.json",
+		Title:           "Export config",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "Tailcat Box config (*.json)",
+			Pattern:     "*.json",
+		}},
+	})
+	if err != nil || strings.TrimSpace(dest) == "" {
+		return "", err
+	}
+	if !strings.HasSuffix(strings.ToLower(dest), ".json") {
+		dest += ".json"
+	}
+	if err := os.WriteFile(dest, body, 0o600); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
+// ImportConfig reads a config file and replaces this computer's matching setup.
+// The returned JSON is the webview preferences for the page to restore.
+// An empty string means the file dialog was cancelled.
+func (a *App) ImportConfig() (string, error) {
+	if a.ctx == nil {
+		return "", fmt.Errorf("file picker requires a running window")
+	}
+	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title: "Import config",
+		Filters: []runtime.FileFilter{{
+			DisplayName: "Tailcat Box config (*.json)",
+			Pattern:     "*.json",
+		}},
+	})
+	if err != nil || strings.TrimSpace(path) == "" {
+		return "", err
+	}
+	return a.importConfigFile(path)
+}
+
+// ImportConfigFile imports a config the user dropped on the page.
+func (a *App) ImportConfigFile(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", nil
+	}
+	if !strings.HasSuffix(strings.ToLower(path), ".json") {
+		return "", migrate.ErrNotConfig
+	}
+	return a.importConfigFile(path)
+}
+
+func (a *App) importConfigFile(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	bundle, err := migrate.Parse(raw)
+	if err != nil {
+		return "", err
+	}
+	keysDir := "keys"
+	if a.keys != nil && a.keys.Dir != "" {
+		keysDir = a.keys.Dir
+	}
+	if err := migrate.Apply(a.settingsDir(), keysDir, bundle); err != nil {
+		return "", err
+	}
+	a.reloadImportedConfig()
+	return migrate.LocalJSON(bundle)
+}
+
+func parseExportSections(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	var sections []string
+	if err := json.Unmarshal([]byte(raw), &sections); err != nil {
+		return nil
+	}
+	return sections
+}
+
+func (a *App) reloadImportedConfig() {
+	if loaded, err := settings.Load(a.settingsDir()); err == nil {
+		a.settings = loaded
+		if n := loaded.ChunkStreams(); n > 0 {
+			miao.SetChunkStreams(n)
+		}
+		if autostart.Supported() {
+			_ = autostart.SetEnabled(loaded.LaunchAtLogin)
+		}
+	}
+	if a.keys != nil {
+		a.applyNet()
+	}
+}
+
 // SetNetworkSettings persists region / DERP map URL and applies them to the adapter.
+// A typed map URL takes over from any scanned relay.
 func (a *App) SetNetworkSettings(region string, derpMapURL string) error {
-	settings := store.Settings{Region: strings.TrimSpace(region), DERPMapURL: strings.TrimSpace(derpMapURL)}
+	settings := a.loadNetSettings()
+	settings.Region = strings.TrimSpace(region)
+	settings.DERPMapURL = strings.TrimSpace(derpMapURL)
+	if settings.DERPMapURL != "" {
+		settings.DERPMode, settings.DERPRegionID = "", 0
+	}
 	if err := a.keys.SaveSettings(settings); err != nil {
 		return err
 	}
-	a.svc.SetNetworkOpts(adapter.NetworkOpts{Region: settings.Region, DERPMapURL: settings.DERPMapURL})
+	a.applyNet()
 	return nil
 }
 

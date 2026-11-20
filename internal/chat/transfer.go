@@ -68,6 +68,30 @@ func (s *Service) Transfers() []Transfer {
 	return out
 }
 
+const maxRelayShare = 512 << 10
+
+// SendRelay pushes a relay-share payload to the open peer. It is not stored as chat.
+func (s *Service) SendRelay(payload []byte) error {
+	if len(payload) == 0 || len(payload) > maxRelayShare {
+		return fmt.Errorf("relay share is empty")
+	}
+	s.mu.Lock()
+	if s.peer == "" || s.room == nil {
+		s.mu.Unlock()
+		return fmt.Errorf("device is not in an open chat")
+	}
+	room := s.room
+	s.mu.Unlock()
+	frame, err := Pack(map[string]any{"type": "relay-share"}, payload)
+	if err != nil {
+		return err
+	}
+	if err := s.dial(s.transferContext(), room, portText, frame); err != nil {
+		return fmt.Errorf("%s", errUnreachable)
+	}
+	return nil
+}
+
 func (s *Service) SendTextBurn(body string, burn bool, ttlSec int) error {
 	if strings.TrimSpace(body) == "" {
 		return nil

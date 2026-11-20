@@ -27,13 +27,11 @@ async function renderApp() {
 describe("phase 1 chat shell", () => {
   it("opens Chat, copies the raw address, and echoes text", async () => {
     const user = userEvent.setup();
-    const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     await renderApp();
 
     const nav = document.querySelectorAll(".nav-btn");
-    expect(Array.from(nav).map((node) => node.textContent)).toEqual(["Mew Share", "Chat", "+ New room", "Tunnel", "Remote", "Settings"]);
-    expect(document.querySelector(".sidebar-footer .nav-btn")?.textContent).toBe("Settings");
+    expect(Array.from(nav).map((node) => node.textContent)).toEqual(["Mew Share", "Remote", "Chat", "+ New room", "Tunnel", "Export config", "Settings"]);
+    expect(Array.from(document.querySelectorAll(".sidebar-footer .nav-btn")).map((node) => node.textContent)).toEqual(["Export config", "Settings"]);
     expect(document.querySelector(".brand-mark")?.tagName).toBe("IMG");
     expect(screen.getByRole("heading", { name: "Tailcat Box" })).toBeTruthy();
 
@@ -42,12 +40,13 @@ describe("phase 1 chat shell", () => {
     await waitFor(() => {
       expect(copy.hasAttribute("disabled")).toBe(false);
     });
-    await user.click(copy);
-    const copied = writeText.mock.calls[0][0] as string;
-    await user.click(screen.getByRole("button", { name: "Show room details" }));
+    const copied = copy.getAttribute("title") ?? "";
     expect(copied.startsWith("tc:fake-room-")).toBe(true);
     expect(copied.includes("#invite=")).toBe(false);
     expect(copied.includes("http")).toBe(false);
+    expect(document.querySelector(".chat-identity-addr")?.textContent).toBe(copied);
+    expect(screen.getByRole("button", { name: "Show QR code" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Show room details" }));
 
     await user.type(screen.getByLabelText("Peer"), "nope");
     await user.click(screen.getByRole("button", { name: "Connect" }));
@@ -112,8 +111,8 @@ describe("phase 1 chat shell", () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     await renderApp();
     const nav = document.querySelectorAll(".nav-btn");
-    expect(Array.from(nav).map((node) => node.textContent)).toEqual(["喵传", "聊天", "+ 新房间", "穿透", "远程控制", "设置"]);
-    expect(document.querySelector(".sidebar-footer .nav-btn")?.textContent).toBe("设置");
+    expect(Array.from(nav).map((node) => node.textContent)).toEqual(["喵传", "远程控制", "聊天", "+ 新房间", "穿透", "导出配置", "设置"]);
+    expect(Array.from(document.querySelectorAll(".sidebar-footer .nav-btn")).map((node) => node.textContent)).toEqual(["导出配置", "设置"]);
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "新建临时房间" }));
     expect(screen.getByRole("button", { name: "添加文件" }).getAttribute("title")).toBe("添加文件");
@@ -131,11 +130,11 @@ describe("phase 1 chat shell", () => {
     }
   });
 
-  it("reaches Keys & DERP inside Settings", async () => {
+  it("reaches Keys & relays inside Settings", async () => {
     const user = userEvent.setup();
     await renderApp();
     await user.click(screen.getByRole("button", { name: "Settings" }));
-    expect(screen.getByRole("heading", { name: "Keys & DERP" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Keys & relays" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Diagnostics" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "诊断" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Ping" })).toBeNull();
@@ -143,6 +142,6 @@ describe("phase 1 chat shell", () => {
     expect(screen.queryByRole("button", { name: "Restart room" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Chat" }));
     expect(screen.queryByRole("heading", { name: "Services" })).toBeNull();
-    expect(document.querySelectorAll(".nav-btn").length).toBe(6);
+    expect(document.querySelectorAll(".nav-btn").length).toBe(7);
   });
 });

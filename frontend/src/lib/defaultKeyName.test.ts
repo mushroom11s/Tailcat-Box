@@ -16,6 +16,13 @@ describe("defaultKeyName", () => {
     expect(name).toMatch(/^Tailcat-20261003-[A-Za-z0-9]{6}$/);
   });
 
+  it("appends the relay city when one was chosen", () => {
+    expect(resolveKeyName("home", "阿姆斯特丹 · ams")).toBe("home-阿姆斯特丹");
+    expect(resolveKeyName("home-阿姆斯特丹", "阿姆斯特丹 · ams")).toBe("home-阿姆斯特丹");
+    expect(resolveKeyName("home", "")).toBe("home");
+    expect(resolveKeyName("home", "Ashburn · iad")).toBe("home-Ashburn");
+  });
+
   it("resolveKeyName keeps a trimmed draft and fills when empty", () => {
     expect(resolveKeyName("  home  ")).toBe("home");
     expect(resolveKeyName("")).toMatch(/^Tailcat-\d{8}-[A-Za-z0-9]{6}$/);

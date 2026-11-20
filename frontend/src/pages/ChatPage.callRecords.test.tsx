@@ -91,7 +91,7 @@ describe("call records in the transcript", () => {
     expect(recordText("c6")).toBe("已取消");
     expect(recordText("c7")).toBe("对方已取消");
     expect(recordText("c8")).toBe("对方未接听");
-    expect(recordText("c9")).toBe("未接听");
+    expect(recordText("c9")).toBe("未接来电");
     expect(recordText("c10")).toBe("通话失败");
     expect(["c1", "c3", "c4", "c6", "c8", "c10"].map(side)).toEqual(["out", "out", "out", "out", "out", "out"]);
     expect(["c2", "c5", "c7", "c9"].map(side)).toEqual(["in", "in", "in", "in"]);
@@ -138,7 +138,7 @@ describe("call records in the transcript", () => {
     const user = userEvent.setup();
     renderRoom("zh-CN");
     const search = screen.getByRole("searchbox");
-    await user.type(search, "未接听");
+    await user.type(search, "未接来电");
     expect(document.querySelector('[data-msgid="c9"]')).toBeTruthy();
     expect(document.querySelector('[data-msgid="c1"]')).toBeNull();
   });

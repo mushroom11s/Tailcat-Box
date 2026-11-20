@@ -1,5 +1,6 @@
 import { FormEvent, KeyboardEvent, useState } from "react";
 import sshQrMark from "../assets/ssh-qr-cat.png?inline";
+import HelpTip from "./HelpTip";
 import QrScanButton from "./QrScanButton";
 import QrShareButton from "./QrShareButton";
 import { useI18n } from "../i18n";
@@ -116,24 +117,27 @@ export default function SSHDesk({
         <div className="ssh-title">
           <span className={`status-dot${dotClass}`} aria-hidden="true" />
           <h3>{t("sshDeskTitle")}</h3>
+          <HelpTip>{t("sshDeskLede")}</HelpTip>
           <span className={`status-pill${desk.Err ? " bad" : desk.AllowAny && desk.Enabled ? " warn" : desk.Enabled ? "" : " quiet"}`}>
             {status}
           </span>
         </div>
-        <label className="burn-switch">
-          <span>{t("sshAllow")}</span>
-          <input
-            className="switch"
-            type="checkbox"
-            role="switch"
-            checked={desk.Enabled}
-            aria-checked={desk.Enabled}
-            disabled={busy}
-            onChange={(e) => onToggle(e.target.checked)}
-          />
-        </label>
+        <div className="label-with-help">
+          <label className="burn-switch">
+            <span>{t("sshAllow")}</span>
+            <input
+              className="switch"
+              type="checkbox"
+              role="switch"
+              checked={desk.Enabled}
+              aria-checked={desk.Enabled}
+              disabled={busy}
+              onChange={(e) => onToggle(e.target.checked)}
+            />
+          </label>
+          <HelpTip>{t("sshAllowHelp")}</HelpTip>
+        </div>
       </div>
-      <p className="ssh-lede">{t("sshDeskLede")}</p>
       {desk.Err ? (
         <p className="err" role="alert">
           {desk.Err}
@@ -160,9 +164,7 @@ export default function SSHDesk({
           </div>
           {liveKey ? <QrShareButton value={liveKey} centerMark={sshQrMark} /> : null}
         </div>
-      ) : (
-        <p className="chat-quiet">{t("sshAllowHelp")}</p>
-      )}
+      ) : null}
       <div className="ssh-any">
         <label className="burn-switch">
           <span>{t("sshAllowAny")}</span>
@@ -205,6 +207,7 @@ export default function SSHDesk({
               autoComplete="off"
             />
             <QrScanButton
+              iconOnly
               onAccept={(value) => {
                 setAddress(value);
                 setFormError("");
@@ -274,14 +277,16 @@ export default function SSHDesk({
           <div className="ssh-shell-bar">
             <div className="ssh-shell-title">
               <span className="status-dot" aria-hidden="true" />
-              <span>{t("sshShell")}</span>
+              <span className="label-with-help">
+                <span>{t("sshShell")}</span>
+                <HelpTip>{t("sshShellHint")}</HelpTip>
+              </span>
               <code title={shell.address}>{shell.address}</code>
             </div>
             <button className="btn btn-ghost btn-small" type="button" onClick={onShellClose}>
               {t("sshShellClose")}
             </button>
           </div>
-          <p className="chat-quiet">{t("sshShellHint")}</p>
           <textarea
             className="ssh-term"
             aria-label={t("sshShell")}

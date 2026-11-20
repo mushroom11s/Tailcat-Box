@@ -1,5 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  chordFromEvent,
+  formatHotkey,
+  holdWindowHotkeys,
+  hotkeyMessageKey,
+  hotkeyProblem,
+  isModifier,
+  loadWindowHotkeys,
+  saveWindowHotkeys,
+  type WindowHotkeyPair,
+} from "../lib/windowHotkey";
 import { useToasts } from "../components/toasts";
+import HelpTip, { HeadingHelp } from "../components/HelpTip";
 import KeysDERPSection from "../components/KeysDERPSection";
 import ReleaseNotes from "../components/ReleaseNotes";
 import iconUrl from "../assets/icon.png";
@@ -39,6 +51,7 @@ type Props = {
   derpMapURL: string;
   onCreate: (name: string, client: boolean, region: string) => void | Promise<void>;
   onDelete: (name: string) => void | Promise<void>;
+  onRename: (oldName: string, newName: string) => void | Promise<void>;
   onSaveNetwork: (region: string, derpMapURL: string) => void | Promise<void>;
   desktopNotifications: boolean;
   onDesktopNotifications: (enabled: boolean) => void;
@@ -154,22 +167,133 @@ function InfoRow({
   label,
   value,
   mono,
+  help,
   children,
 }: {
   label: string;
   value?: string;
   mono?: boolean;
+  help?: ReactNode;
   children?: ReactNode;
 }) {
   return (
     <div className="info-card-row">
-      <span className="info-card-label">{label}</span>
+      <span className={`info-card-label${help ? " label-with-help" : ""}`}>
+        {label}
+        {help ? <HelpTip>{help}</HelpTip> : null}
+      </span>
       {children ? (
         <span className="info-card-value">{children}</span>
       ) : (
         <span className={`info-card-value${mono ? " mono" : ""}`}>{value || "—"}</span>
       )}
     </div>
+  );
+}
+
+function WindowHotkeys() {
+  const { t } = useI18n();
+  const [pair, setPair] = useState<WindowHotkeyPair | null>(null);
+  const [listening, setListening] = useState(false);
+  const [problem, setProblem] = useState("");
+  const settled = useRef(false);
+
+  useEffect(() => {
+    let live = true;
+    void loadWindowHotkeys().then((next) => {
+      if (live) {
+        setPair(next);
+      }
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!listening || !pair) {
+      return;
+    }
+    settled.current = false;
+    void holdWindowHotkeys(true);
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        settled.current = true;
+        setListening(false);
+        setProblem("");
+        void holdWindowHotkeys(false);
+        return;
+      }
+      if (isModifier(event.key)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const chord = chordFromEvent(event);
+      if (!chord) {
+        setProblem("hotkey-conflict");
+        return;
+      }
+      const code = hotkeyProblem(chord, "");
+      if (code) {
+        setProblem(code);
+        return;
+      }
+      const next = { wake: chord, close: chord };
+      void saveWindowHotkeys(next)
+        .then(() => {
+          settled.current = true;
+          setPair(next);
+          setProblem("");
+          setListening(false);
+        })
+        .catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          if (message.includes("hotkey-conflict")) {
+            setProblem("hotkey-conflict");
+          } else if (message.includes("hotkey-invalid")) {
+            setProblem("hotkey-invalid");
+          } else {
+            setProblem("hotkey-taken");
+          }
+        });
+    }
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (!settled.current) {
+        void holdWindowHotkeys(false);
+      }
+    };
+  }, [listening, pair]);
+
+  const shown = pair?.wake || pair?.close || "";
+  return (
+    <section className="glass settings-panel">
+      <HeadingHelp as="h3" className="kind" title={t("windowHotkeyTitle")} help={t("windowHotkeyHelp")} />
+      <div className="setting-row">
+        <div className="setting-label">
+          <span id="settings-hotkey-window">{t("windowHotkeyToggle")}</span>
+        </div>
+        <button
+          type="button"
+          className={`hotkey-chip${listening ? " is-listening" : ""}`}
+          aria-labelledby="settings-hotkey-window"
+          onClick={() => {
+            setProblem("");
+            setListening(true);
+          }}
+        >
+          {listening ? t("windowHotkeyListen") : formatHotkey(shown)}
+        </button>
+      </div>
+      {problem ? (
+        <p className="err hotkey-error" role="alert">
+          {t(hotkeyMessageKey(problem))}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -186,6 +310,7 @@ export default function SettingsPage({
   derpMapURL,
   onCreate,
   onDelete,
+  onRename,
   onSaveNetwork,
   desktopNotifications,
   onDesktopNotifications,
@@ -388,12 +513,10 @@ export default function SettingsPage({
 
   return (
     <section className="page">
-      <h2>{t("settingsTitle")}</h2>
-      <p className="lede">{t("settingsLede")}</p>
+      <HeadingHelp as="h2" title={t("settingsTitle")} help={t("settingsLede")} />
 
       <section className="glass settings-panel">
-        <h3 className="kind">{t("appearance")}</h3>
-        <p className="lede">{t("appearanceLede")}</p>
+        <HeadingHelp as="h3" className="kind" title={t("appearance")} help={t("appearanceLede")} />
         <div className="setting-row">
           <div className="setting-label">
             <GlobeIcon />
@@ -433,7 +556,10 @@ export default function SettingsPage({
         <div className="setting-row">
           <div className="setting-label">
             <BellIcon />
-            <span id="settings-desktop-notify">{t("desktopNotifications")}</span>
+            <span className="label-with-help">
+              <span id="settings-desktop-notify">{t("desktopNotifications")}</span>
+              <HelpTip>{t("desktopNotificationsHelp")}</HelpTip>
+            </span>
           </div>
           <button
             type="button"
@@ -445,15 +571,19 @@ export default function SettingsPage({
             {desktopNotifications ? t("on") : t("off")}
           </button>
         </div>
-        <p className="setting-help">{t("desktopNotificationsHelp")}</p>
       </section>
+
+      <WindowHotkeys />
 
       <section className="glass settings-panel">
         <h3 className="kind">{t("profile")}</h3>
         <div className="setting-row nickname-row">
           <div className="setting-label">
             <BadgeIcon />
-            <label htmlFor="settings-nickname">{t("nickname")}</label>
+            <span className="label-with-help">
+              <label htmlFor="settings-nickname">{t("nickname")}</label>
+              <HelpTip>{t("nicknameHelp")}</HelpTip>
+            </span>
           </div>
           <input
             id="settings-nickname"
@@ -461,12 +591,10 @@ export default function SettingsPage({
             value={nickname}
             autoComplete="off"
             spellCheck={false}
-            aria-describedby="settings-nickname-help"
             onChange={(e) => onNickname(sanitizeNickname(e.target.value))}
             onBlur={(e) => onNickname(displayNickname(e.currentTarget.value))}
           />
         </div>
-        <p id="settings-nickname-help" className="setting-help">{t("nicknameHelp")}</p>
       </section>
 
       <div className="settings-cards">
@@ -487,7 +615,7 @@ export default function SettingsPage({
           <InfoRow label={t("tailcatVersion")} value={client?.TailcatVersion ?? "—"} mono />
           <InfoRow label={t("latestVersion")} value={update?.LatestVersion || "—"} mono />
           <InfoRow label={t("lastUpdateCheck")} value={formatChecked(checkedAt, locale, t("never"))} />
-          <InfoRow label={t("betaUpdates")}>
+          <InfoRow label={t("betaUpdates")} help={t("betaUpdatesHelp")}>
             <button
               type="button"
               className={`chip-toggle${system?.ReceiveBetaUpdates ? " on" : ""}`}
@@ -498,7 +626,6 @@ export default function SettingsPage({
               {system?.ReceiveBetaUpdates ? t("on") : t("off")}
             </button>
           </InfoRow>
-          <p className="info-card-note">{t("betaUpdatesHelp")}</p>
           {statusText ? <p className="update-status">{statusText}</p> : null}
           {update?.Notes ? (
             <div className="update-notes">
@@ -557,7 +684,10 @@ export default function SettingsPage({
 
         <InfoCard title={t("systemInfoTitle")} icon={<MonitorIcon />} tone="danger">
           <InfoRow label={t("osVersion")} value={system?.OSVersion ?? "—"} />
-          <InfoRow label={t("launchAtLogin")}>
+          <InfoRow
+            label={t("launchAtLogin")}
+            help={system && !system.LaunchAtLoginSupported ? t("launchAtLoginNote") : undefined}
+          >
             <button
               type="button"
               className={`chip-toggle${system?.LaunchAtLogin ? " on" : ""}`}
@@ -568,9 +698,6 @@ export default function SettingsPage({
             </button>
           </InfoRow>
           <InfoRow label={t("networkStatus")} value={system ? networkValue : "—"} />
-          {system && !system.LaunchAtLoginSupported ? (
-            <p className="info-card-note">{t("launchAtLoginNote")}</p>
-          ) : null}
         </InfoCard>
       </div>
 
@@ -582,6 +709,7 @@ export default function SettingsPage({
         derpMapURL={derpMapURL}
         onCreate={onCreate}
         onDelete={onDelete}
+        onRename={onRename}
         onSaveNetwork={onSaveNetwork}
       />
     </section>

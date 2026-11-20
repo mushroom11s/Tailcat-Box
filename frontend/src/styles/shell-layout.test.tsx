@@ -424,8 +424,9 @@ describe("shell scroll", () => {
       /\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s,
     );
     expect(cssBlock(css, ".miao-send")).toContain("overflow: visible");
-    expect(cssBlock(css, ".miao-send")).toContain("padding: 0");
+    expect(cssBlock(css, ".miao-send")).toContain("padding: 0 0 24px");
     expect(cssBlock(css, ".miao-receive")).toContain("overflow: visible");
+    expect(cssBlock(css, ".miao-receive")).toContain("padding: 0 0 24px");
     expect(cssBlock(css, ".miao-send")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
     expect(cssBlock(css, ".miao-receive")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
 

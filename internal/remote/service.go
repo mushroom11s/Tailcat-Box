@@ -11,18 +11,24 @@ import (
 	"github.com/mushroom11s/tailcat-box/internal/adapter"
 	"github.com/mushroom11s/tailcat-box/internal/chat"
 	"github.com/mushroom11s/tailcat-box/internal/session"
+	"github.com/mushroom11s/tailcat-box/internal/sysinfo"
 )
 
 const portRemote = 104
 
 // View is the session the UI renders.
 type View struct {
-	Role    string `json:"role"`
-	State   string `json:"state"`
-	Address string `json:"address,omitempty"`
-	Peer    string `json:"peer,omitempty"`
-	Mode    string `json:"mode,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Role     string `json:"role"`
+	State    string `json:"state"`
+	Address  string `json:"address,omitempty"`
+	Peer     string `json:"peer,omitempty"`
+	Mode     string `json:"mode,omitempty"`
+	Error    string `json:"error,omitempty"`
+	PeerPath string `json:"peerPath,omitempty"`
+	PeerOS   string `json:"peerOS,omitempty"`
+	Token    string `json:"token,omitempty"`
+	Code     string `json:"code,omitempty"`
+	Forever  bool   `json:"forever,omitempty"`
 }
 
 // Service is one remote-control session. The host shares a screen. The guest
@@ -37,15 +43,22 @@ type Service struct {
 }
 
 type side struct {
-	role   string
-	state  string
-	addr   string
-	peer   string
-	mode   string
-	err    string
-	room   adapter.Room
-	cancel context.CancelFunc
-	ready  chan string
+	role    string
+	state   string
+	addr    string
+	peer    string
+	mode    string
+	err     string
+	token   string
+	code    string
+	forever bool
+	path    string
+	peerOS  string
+	pathGen int
+	room    adapter.Room
+	ctx     context.Context
+	cancel  context.CancelFunc
+	ready   chan string
 }
 
 func New(ad adapter.ChatAdapter) *Service {
@@ -66,13 +79,21 @@ func (s *Service) SetInjector(in Injector) {
 	s.mu.Unlock()
 }
 
-func (s *Service) StartHost() (View, error) {
+func (s *Service) StartHost(keyJSON, token string, forever bool) (View, error) {
 	s.finish("")
-	room, cancel, err := s.listen()
+	token = strings.TrimSpace(token)
+	if token == "" {
+		var err error
+		token, err = randomToken()
+		if err != nil {
+			return View{}, err
+		}
+	}
+	room, ctx, cancel, err := s.listen(keyJSON)
 	if err != nil {
 		return View{}, err
 	}
-	current := &side{role: "host", state: "listening", room: room, cancel: cancel, ready: make(chan string, 1)}
+	current := &side{role: "host", state: "listening", token: token, forever: forever, room: room, ctx: ctx, cancel: cancel, ready: make(chan string, 1)}
 	s.mu.Lock()
 	s.side = current
 	s.mu.Unlock()
@@ -85,6 +106,7 @@ func (s *Service) StartHost() (View, error) {
 	s.mu.Lock()
 	if s.side == current {
 		current.addr = addr
+		current.code = EncodeCode(addr, current.token)
 	}
 	view := s.viewLocked()
 	s.mu.Unlock()
@@ -92,18 +114,22 @@ func (s *Service) StartHost() (View, error) {
 	return view, nil
 }
 
-func (s *Service) Connect(address, mode string) (View, error) {
-	address = strings.TrimSpace(address)
+func (s *Service) Connect(raw, mode string) (View, error) {
+	address, token, ok := ParseCode(raw)
+	if !ok {
+		address = strings.TrimSpace(raw)
+		token = ""
+	}
 	if !strings.HasPrefix(address, "tc") {
 		return View{}, fmt.Errorf("That is not a Tailcat address.")
 	}
 	mode = normalizeMode(mode)
 	s.finish("")
-	room, cancel, err := s.listen()
+	room, ctx, cancel, err := s.listen("")
 	if err != nil {
 		return View{}, err
 	}
-	current := &side{role: "guest", state: "waiting", peer: address, mode: mode, room: room, cancel: cancel, ready: make(chan string, 1)}
+	current := &side{role: "guest", state: "waiting", peer: address, mode: mode, room: room, ctx: ctx, cancel: cancel, ready: make(chan string, 1)}
 	s.mu.Lock()
 	s.side = current
 	s.mu.Unlock()
@@ -122,7 +148,8 @@ func (s *Service) Connect(address, mode string) (View, error) {
 		s.finish("Could not reach the other computer.")
 		return View{}, fmt.Errorf("Could not reach the other computer.")
 	}
-	if err := s.send(current, map[string]any{"type": "remote-hello", "mode": mode, "from": addr}); err != nil {
+	s.watchPath(current)
+	if err := s.send(current, map[string]any{"type": "remote-hello", "mode": mode, "from": addr, "token": token, "os": sysinfo.OSVersion()}); err != nil {
 		s.finish("Could not reach the other computer.")
 		return View{}, fmt.Errorf("Could not reach the other computer.")
 	}
@@ -141,7 +168,7 @@ func (s *Service) Allow() error {
 	current.state = "live"
 	view := current.view()
 	s.mu.Unlock()
-	if err := s.send(current, map[string]any{"type": "remote-allow"}); err != nil {
+	if err := s.send(current, map[string]any{"type": "remote-allow", "os": sysinfo.OSVersion()}); err != nil {
 		s.finish("Could not reach the other computer.")
 		return fmt.Errorf("Could not reach the other computer.")
 	}
@@ -218,17 +245,21 @@ func (s *Service) SendInput(in Input) error {
 	return s.send(current, payload)
 }
 
-func (s *Service) listen() (adapter.Room, context.CancelFunc, error) {
+func (s *Service) listen(keyJSON string) (adapter.Room, context.Context, context.CancelFunc, error) {
 	if s.ad == nil {
-		return nil, nil, fmt.Errorf("remote control is not available")
+		return nil, nil, nil, fmt.Errorf("remote control is not available")
 	}
 	keyer, ok := s.ad.(interface{ GeneratePrivateKeyJSON() (string, error) })
 	if !ok {
-		return nil, nil, fmt.Errorf("remote control is not available")
+		return nil, nil, nil, fmt.Errorf("remote control is not available")
 	}
-	key, err := keyer.GeneratePrivateKeyJSON()
-	if err != nil || strings.TrimSpace(key) == "" {
-		return nil, nil, fmt.Errorf("remote control is not available")
+	key := strings.TrimSpace(keyJSON)
+	if key == "" {
+		var err error
+		key, err = keyer.GeneratePrivateKeyJSON()
+		if err != nil || strings.TrimSpace(key) == "" {
+			return nil, nil, nil, fmt.Errorf("remote control is not available")
+		}
 	}
 	sess := session.New(session.KindExec)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -243,9 +274,44 @@ func (s *Service) listen() (adapter.Room, context.CancelFunc, error) {
 	})
 	if err != nil {
 		cancel()
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return room, cancel, nil
+	return room, ctx, cancel, nil
+}
+
+func (s *Service) watchPath(current *side) {
+	s.mu.Lock()
+	if s.side != current || current.room == nil || current.peer == "" || current.ctx == nil {
+		s.mu.Unlock()
+		return
+	}
+	current.pathGen++
+	gen := current.pathGen
+	room := current.room
+	peer := current.peer
+	ctx := current.ctx
+	s.mu.Unlock()
+	updates := room.WatchPeerPath(ctx, peer)
+	go func() {
+		for path := range updates {
+			s.notePath(current, gen, path.Kind)
+		}
+	}()
+}
+
+func (s *Service) notePath(current *side, gen int, kind string) {
+	if kind != adapter.PathChecking && kind != adapter.PathDirect && kind != adapter.PathDERP {
+		return
+	}
+	s.mu.Lock()
+	if s.side != current || current.pathGen != gen || current.path == kind {
+		s.mu.Unlock()
+		return
+	}
+	current.path = kind
+	view := current.view()
+	s.mu.Unlock()
+	s.publish(view)
 }
 
 func (s *Service) readLoop(current *side) {
@@ -296,6 +362,21 @@ func (s *Service) onFrame(current *side, frame []byte) {
 		if !strings.HasPrefix(from, "tc") {
 			return
 		}
+		gotToken, _ := meta["token"].(string)
+		s.mu.Lock()
+		expect := ""
+		if s.side == current {
+			expect = current.token
+		}
+		room := current.room
+		s.mu.Unlock()
+		if expect != "" && gotToken != expect {
+			if room != nil {
+				_ = room.SetPeer(from)
+			}
+			_ = s.send(current, map[string]any{"type": "remote-deny"})
+			return
+		}
 		mode := normalizeMode(fmt.Sprint(meta["mode"]))
 		s.mu.Lock()
 		if s.side != current || (current.state != "listening" && current.state != "incoming") {
@@ -305,9 +386,13 @@ func (s *Service) onFrame(current *side, frame []byte) {
 		current.peer = from
 		current.mode = mode
 		current.state = "incoming"
+		if os, ok := meta["os"].(string); ok {
+			current.peerOS = strings.TrimSpace(os)
+		}
 		_ = current.room.SetPeer(from)
 		view := current.view()
 		s.mu.Unlock()
+		s.watchPath(current)
 		s.publish(view)
 	case "remote-allow":
 		if current.role != "guest" {
@@ -319,6 +404,9 @@ func (s *Service) onFrame(current *side, frame []byte) {
 			return
 		}
 		current.state = "live"
+		if os, ok := meta["os"].(string); ok {
+			current.peerOS = strings.TrimSpace(os)
+		}
 		view := current.view()
 		s.mu.Unlock()
 		s.publish(view)
@@ -414,9 +502,19 @@ func (s *Service) send(current *side, meta map[string]any) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	return current.room.SendEnvelope(ctx, portRemote, frame)
+	var last error
+	for attempt := 0; attempt < 6; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 400 * time.Millisecond)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		last = current.room.SendEnvelope(ctx, portRemote, frame)
+		cancel()
+		if last == nil {
+			return nil
+		}
+	}
+	return last
 }
 
 func (s *Service) finish(errText string) {
@@ -444,6 +542,10 @@ func (s *Service) finish(errText string) {
 	s.publish(view)
 }
 
+func (s *Service) Current() View {
+	return s.snapshot()
+}
+
 func (s *Service) snapshot() View {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -458,7 +560,7 @@ func (s *Service) viewLocked() View {
 }
 
 func (c *side) view() View {
-	return View{Role: c.role, State: c.state, Address: c.addr, Peer: c.peer, Mode: c.mode, Error: c.err}
+	return View{Role: c.role, State: c.state, Address: c.addr, Peer: c.peer, Mode: c.mode, Error: c.err, PeerPath: c.path, PeerOS: c.peerOS, Token: c.token, Code: c.code, Forever: c.forever}
 }
 
 func (s *Service) publish(view View) {

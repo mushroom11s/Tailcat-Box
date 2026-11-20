@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import LoadingCat from "../components/LoadingCat";
+import HelpTip, { HeadingHelp } from "../components/HelpTip";
 import QrScanButton from "../components/QrScanButton";
 import { useI18n, type MessageKey } from "../i18n";
 import { useClipboardFieldPaste, type PasteFailure } from "../lib/clipboardPaste";
@@ -106,8 +107,7 @@ export default function LobbyPage({
   return (
     <section className="page chat-lobby">
       <header className="chat-lobby-head">
-        <h2>{t("lobbyTitle")}</h2>
-        <p className="lede">{t("lobbyHelper")}</p>
+        <HeadingHelp as="h2" title={t("lobbyTitle")} help={t("lobbyHelper")} />
       </header>
 
       <div className="glass chat-lobby-panel">
@@ -124,7 +124,10 @@ export default function LobbyPage({
         <h3>{t("lobbyPermanent")}</h3>
         {panelBusy(busy === "permanent", t("lobbyCreating"))}
         <div className="field">
-          <label htmlFor="lobby-key">{t("lobbyKey")}</label>
+          <div className="label-with-help">
+            <label htmlFor="lobby-key">{t("lobbyKey")}</label>
+            <HelpTip>{t("lobbyKeyFilterHelp")}</HelpTip>
+          </div>
           <select id="lobby-key" value={keyName} onChange={(ev) => onKey(ev.target.value)}>
             <option value="">{t("lobbyKeyPlaceholder")}</option>
             {keys.map((key) => (
@@ -133,7 +136,6 @@ export default function LobbyPage({
               </option>
             ))}
           </select>
-          <p className="chat-quiet">{t("lobbyKeyFilterHelp")}</p>
         </div>
         {busy === "permanent" ? null : (
           <div className="row">
@@ -162,7 +164,10 @@ export default function LobbyPage({
       <div className="glass chat-lobby-panel">
         {panelBusy(busy === "connect", t("lobbyConnecting"))}
         <div className="field">
-          <label htmlFor="lobby-peer">{t("lobbyPeer")}</label>
+          <div className="label-with-help">
+            <label htmlFor="lobby-peer">{t("lobbyPeer")}</label>
+            <HelpTip>{t("lobbyConnectHint")}</HelpTip>
+          </div>
           <div className="qr-field">
             <input
               id="lobby-peer"
@@ -174,10 +179,10 @@ export default function LobbyPage({
               onPaste={onPeerPaste}
               onKeyDown={onKeyDown}
               placeholder={t("lobbyPeerPlaceholder")}
-              aria-describedby="lobby-peer-hint"
               autoComplete="off"
             />
             <QrScanButton
+              iconOnly
               disabled={pending}
               accept={acceptPeer}
               invalidKey="chatAddrError"
@@ -194,7 +199,6 @@ export default function LobbyPage({
             </p>
           ) : null}
         </div>
-        <p id="lobby-peer-hint" className="chat-quiet">{t("lobbyConnectHint")}</p>
         {busy === "connect" ? null : (
           <button className="btn btn-ghost" type="button" disabled={pending} onClick={onConnect}>
             {t("chatConnect")}

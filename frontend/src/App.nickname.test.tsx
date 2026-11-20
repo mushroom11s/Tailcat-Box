@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import App from "./App";
@@ -99,6 +99,7 @@ describe("local nickname", () => {
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(screen.getByRole("heading", { name: "Profile" })).toBeTruthy();
     const field = screen.getByLabelText("Nickname");
+    await user.click(within(field.closest(".setting-row") as HTMLElement).getByRole("button", { name: "Help" }));
     expect(
       screen.getByText("Stored only on this device. It is never sent to the other person."),
     ).toBeTruthy();
@@ -150,8 +151,10 @@ describe("local nickname", () => {
     const user = userEvent.setup();
     await renderApp();
     await user.click(screen.getByRole("button", { name: "设置" }));
-    expect(screen.getByRole("heading", { name: "个人" })).toBeTruthy();
-    expect(screen.getByLabelText("昵称")).toBeTruthy();
-    expect(screen.getByText("只保存在这台设备上，不会发给对方。")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "个人资料" })).toBeTruthy();
+    const field = screen.getByLabelText("昵称");
+    expect(screen.queryByText("只保存在这台电脑上，不会发给对方。")).toBeNull();
+    await user.click(within(field.closest(".setting-row") as HTMLElement).getByRole("button", { name: "说明" }));
+    expect(screen.getByText("只保存在这台电脑上，不会发给对方。")).toBeTruthy();
   });
 });

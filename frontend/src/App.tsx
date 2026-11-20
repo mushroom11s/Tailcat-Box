@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { WindowSetBackgroundColour, WindowSetDarkTheme, WindowSetLightTheme, WindowSetSystemDefaultTheme } from "../wailsjs/runtime/runtime";
+import RemoteIncoming from "./components/RemoteIncoming";
+import DerpSuggest from "./components/DerpSuggest";
 import ScreenSharePopout from "./components/ScreenSharePopout";
 import Onboarding from "./components/Onboarding";
 import { ToastProvider, useToasts } from "./components/toasts";
@@ -6,11 +9,12 @@ import ChatPage, { type ChatMessage } from "./pages/ChatPage";
 import LobbyPage from "./pages/LobbyPage";
 import MiaoPage from "./pages/MiaoPage";
 import RemotePage from "./pages/RemotePage";
+import ExportPage from "./pages/ExportPage";
 import SettingsPage from "./pages/SettingsPage";
 import type { SSHShell } from "./components/SSHDesk";
 import TunnelPage from "./pages/TunnelPage";
 import { readMappings, toPortMapping, writeMappings, type PortMappingRecord } from "./lib/portMappings";
-import { defaultKeyName, resolveKeyName } from "./lib/defaultKeyName";
+import { defaultKeyName, keyNameForRegion } from "./lib/defaultKeyName";
 import { filterAvailableKeys, occupiedKeyNames } from "./lib/occupiedKeys";
 import { sameKeys, sameSessions } from "./lib/snapshot";
 import { translate, useI18n, type MessageKey } from "./i18n";
@@ -38,6 +42,7 @@ import {
   connectChatPeer,
   createKey,
   deleteKey,
+  renameKey,
   discardChatMessage,
   getNetworkSettings,
   getUpdateStatus,
@@ -79,17 +84,16 @@ import {
   type UpdateStatus,
 } from "./lib/wails";
 
-type Page = "miao" | "chat" | "tunnel" | "remote" | "settings";
+type Page = "miao" | "chat" | "tunnel" | "remote" | "export" | "settings";
 type Theme = "system" | "light" | "dark";
 
 const THEME_KEY = "tailcat-theme";
 const CHAT_KINDS = new Set(["room-ready", "peer", "message", "transfer", "discard"]);
 const TUNNEL_KINDS = new Set(["port_serve", "forward"]);
 
-const NAV: Array<{ id: Exclude<Page, "settings" | "miao">; labelKey: "navChat" | "navTunnel" | "navRemote" }> = [
+const NAV: Array<{ id: Exclude<Page, "settings" | "miao" | "remote">; labelKey: "navChat" | "navTunnel" }> = [
   { id: "chat", labelKey: "navChat" },
   { id: "tunnel", labelKey: "navTunnel" },
-  { id: "remote", labelKey: "navRemote" },
 ];
 
 function applyTheme(theme: Theme): void {
@@ -98,6 +102,31 @@ function applyTheme(theme: Theme): void {
     root.removeAttribute("data-theme");
   } else {
     root.setAttribute("data-theme", theme);
+  }
+}
+
+function paintWindowChrome(theme: Theme): void {
+  const runtime = (window as unknown as { runtime?: { WindowSetLightTheme?: () => void } }).runtime;
+  if (!runtime?.WindowSetLightTheme) {
+    return;
+  }
+  const dark =
+    theme === "dark" || (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  try {
+    if (theme === "system") {
+      WindowSetSystemDefaultTheme();
+    } else if (dark) {
+      WindowSetDarkTheme();
+    } else {
+      WindowSetLightTheme();
+    }
+    if (dark) {
+      WindowSetBackgroundColour(20, 18, 44, 255);
+    } else {
+      WindowSetBackgroundColour(231, 238, 252, 255);
+    }
+  } catch {
+    // The browser preview has no window runtime.
   }
 }
 
@@ -136,6 +165,7 @@ function AppShell() {
   const [lobbyBusy, setLobbyBusy] = useState<"" | "temp" | "permanent" | "connect">("");
   const lobbyBusyRef = useRef<"" | "temp" | "permanent" | "connect">("");
   const [lobbyKey, setLobbyKey] = useState("");
+  const [remoteKey, setRemoteKey] = useState("");
   const [lobbyKeyDraft, setLobbyKeyDraft] = useState(() => defaultKeyName());
   const [tunnelKeyDraft, setTunnelKeyDraft] = useState(() => defaultKeyName());
 
@@ -547,6 +577,14 @@ function AppShell() {
   useEffect(() => {
     applyTheme(theme);
     localStorage.setItem(THEME_KEY, theme);
+    paintWindowChrome(theme);
+    if (theme !== "system") {
+      return;
+    }
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => paintWindowChrome("system");
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
   }, [theme]);
 
   useEffect(() => {
@@ -583,11 +621,11 @@ function AppShell() {
   }, []);
 
   useEffect(() => {
-    const occupied = occupiedKeyNames({ mappings });
+    const occupied = occupiedKeyNames({ mappings, remoteKey });
     if (lobbyKey && occupied.has(lobbyKey)) {
       setLobbyKey("");
     }
-  }, [mappings, lobbyKey]);
+  }, [mappings, lobbyKey, remoteKey]);
 
   useEffect(() => {
     const node = mainRef.current;
@@ -827,7 +865,7 @@ function AppShell() {
   }
 
   async function saveLobbyKey(): Promise<void> {
-    const name = resolveKeyName(lobbyKeyDraft);
+    const name = keyNameForRegion(lobbyKeyDraft, region, locale);
     setLobbyError("");
     try {
       await createKey(name, false, region);
@@ -841,7 +879,7 @@ function AppShell() {
   }
 
   async function saveTunnelKey(): Promise<void> {
-    const name = resolveKeyName(tunnelKeyDraft);
+    const name = keyNameForRegion(tunnelKeyDraft, region, locale);
     try {
       await createKey(name, false, region);
       setTunnelKeyDraft(defaultKeyName());
@@ -1218,6 +1256,14 @@ function AppShell() {
             <NavGlyph name="miao" />
             <span className="nav-label">{t("navMiao")}</span>
           </button>
+          <button
+            type="button"
+            className={`nav-btn ${page === "remote" ? "active" : ""}`}
+            onClick={() => setPage("remote")}
+          >
+            <NavGlyph name="remote" />
+            <span className="nav-label">{t("navRemote")}</span>
+          </button>
           {NAV.map((item) =>
             item.id !== "chat" ? (
               <button
@@ -1307,6 +1353,14 @@ function AppShell() {
         <div className="sidebar-footer">
           <button
             type="button"
+            className={`nav-btn ${page === "export" ? "active" : ""}`}
+            onClick={() => setPage("export")}
+          >
+            <NavGlyph name="export" />
+            <span className="nav-label">{t("navExport")}</span>
+          </button>
+          <button
+            type="button"
             className={`nav-btn ${page === "settings" ? "active" : ""}`}
             onClick={() => setPage("settings")}
           >
@@ -1316,7 +1370,7 @@ function AppShell() {
           {fallback ? <div className="fallback-chip">{t("fallbackChip")}</div> : null}
         </div>
       </aside>
-      <main ref={mainRef} className="glass main">
+      <main ref={mainRef} className={`glass main${page === "remote" ? " is-remote" : ""}`}>
         {page === "miao" ? (
           <MiaoPage />
         ) : page === "chat" ? (
@@ -1326,7 +1380,7 @@ function AppShell() {
               error={lobbyError}
               keys={filterAvailableKeys(
                 keys.map((key) => ({ name: key.Name, source: key.Source })),
-                occupiedKeyNames({ mappings }),
+                occupiedKeyNames({ mappings, remoteKey }),
               )}
               keyName={lobbyKey}
               keyDraft={lobbyKeyDraft}
@@ -1387,9 +1441,7 @@ function AppShell() {
               notifyNote={notifyDenied ? t("chatNotifyDenied") : ""}
             />
           )
-        ) : page === "remote" ? (
-          <RemotePage />
-        ) : page === "tunnel" ? (
+        ) : page === "remote" ? null : page === "tunnel" ? (
           <TunnelPage
             mappings={mappings}
             sessions={sessions}
@@ -1397,7 +1449,7 @@ function AppShell() {
             busy={tunnelBusy}
             keys={filterAvailableKeys(
               keys.map((key) => ({ name: key.Name, source: key.Source })),
-              occupiedKeyNames({ rooms: Object.values(rooms) }),
+              occupiedKeyNames({ rooms: Object.values(rooms), remoteKey }),
             )}
             keyDraft={tunnelKeyDraft}
             onKeyDraft={setTunnelKeyDraft}
@@ -1433,6 +1485,8 @@ function AppShell() {
             onDelete={(id) => void deleteMapping(id)}
             onAutostart={setMappingAutostart}
           />
+        ) : page === "export" ? (
+          <ExportPage />
         ) : (
           <SettingsPage
             highlightUpdate={updateFocus > 0}
@@ -1447,13 +1501,22 @@ function AppShell() {
             derpMapURL={derpMapURL}
             onCreate={(name, client, keyRegion) => run(() => createKey(name, client, keyRegion))}
             onDelete={(name) => run(() => deleteKey(name))}
+            onRename={(oldName, newName) => run(() => renameKey(oldName, newName))}
             onSaveNetwork={(nextRegion, nextDERP) => run(() => setNetworkSettings(nextRegion, nextDERP))}
             desktopNotifications={desktopNotify}
             onDesktopNotifications={setDesktopNotifications}
             onShowGuide={() => setGuideOpen(true)}
           />
         )}
+        <div className="remote-slot" hidden={page !== "remote"}>
+          <RemotePage
+            occupied={occupiedKeyNames({ rooms: Object.values(rooms), mappings })}
+            onHoldKey={setRemoteKey}
+          />
+        </div>
       </main>
+      <RemoteIncoming />
+      <DerpSuggest />
       {closeAsk ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setCloseAsk("")}>
           <div
@@ -1573,7 +1636,7 @@ function showUpdateBadge(status: UpdateStatus | null): boolean {
   return status.Status !== "error" && status.Status !== "unsupported";
 }
 
-function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "remote" | "settings" }) {
+function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "remote" | "export" | "settings" }) {
   const d =
     name === "miao"
       ? "M7 4.5h10a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2zM12 8v5.5M9.6 11.2 12 13.6l2.4-2.4"
@@ -1583,7 +1646,9 @@ function NavGlyph({ name }: { name: "miao" | "chat" | "tunnel" | "remote" | "set
         ? "M9 8H7a4 4 0 0 0 0 8h2M15 8h2a4 4 0 0 1 0 8h-2M8 12h8"
         : name === "remote"
           ? "M4.5 6h15a1 1 0 0 1 1 1v8.5a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1zM8 19.5h8M12 16.5v3M14 9.2l2.1 2.1L14 13.4"
-          : "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM12 3.5v2.1M12 18.4v2.1M4.8 6.2l1.5 1.5M17.7 16.3l1.5 1.5M3.5 12h2.1M18.4 12h2.1M4.8 17.8l1.5-1.5M17.7 7.7l1.5-1.5";
+          : name === "export"
+            ? "M12 3.5v8M9 8.5 12 11.5 15 8.5M6 13.5h12a1.5 1.5 0 0 1 1.5 1.5v4A1.5 1.5 0 0 1 18 20.5H6A1.5 1.5 0 0 1 4.5 19v-4A1.5 1.5 0 0 1 6 13.5z"
+            : "M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM12 3.5v2.1M12 18.4v2.1M4.8 6.2l1.5 1.5M17.7 16.3l1.5 1.5M3.5 12h2.1M18.4 12h2.1M4.8 17.8l1.5-1.5M17.7 7.7l1.5-1.5";
   return (
     <svg className="nav-glyph" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" d={d} />

@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ClipboardSetText } from "../../wailsjs/runtime/runtime";
+import HelpTip, { HeadingHelp } from "../components/HelpTip";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
 import SSHDesk, { type SSHShell } from "../components/SSHDesk";
@@ -155,8 +156,7 @@ export default function TunnelPage({
   return (
     <section className="page tunnel-page">
       <header className="chat-lobby-head">
-        <h2>{t("tunnelTitle")}</h2>
-        <p className="lede">{t("tunnelLede")}</p>
+        <HeadingHelp as="h2" title={t("tunnelTitle")} help={t("tunnelLede")} />
       </header>
       <SSHDesk
         desk={ssh.desk}
@@ -177,6 +177,7 @@ export default function TunnelPage({
         </div>
       ) : null}
 
+      <div className="tunnel-board">
       <div className="glass tunnel-list nav-rooms" role="list" aria-label={t("tunnelList")}>
         <button type="button" className={`nav-btn nav-child nav-new${creating ? " open" : ""}`} onClick={openCreate}>
           {t("tunnelNew")}
@@ -275,6 +276,7 @@ export default function TunnelPage({
                   autoComplete="off"
                 />
                 <QrScanButton
+                  iconOnly
                   onAccept={(value) => {
                     setPeer(value);
                     setFormError("");
@@ -296,7 +298,10 @@ export default function TunnelPage({
           {mode === "serve" ? (
             <>
               <div className="field">
-                <label htmlFor="tunnel-serve-key">{t("tunnelServeKey")}</label>
+                <div className="label-with-help">
+                  <label htmlFor="tunnel-serve-key">{t("tunnelServeKey")}</label>
+                  <HelpTip>{t("tunnelServeKeyHelp")}</HelpTip>
+                </div>
                 <select
                   id="tunnel-serve-key"
                   value={serveKey}
@@ -309,7 +314,6 @@ export default function TunnelPage({
                     </option>
                   ))}
                 </select>
-                <p className="chat-quiet">{t("tunnelServeKeyHelp")}</p>
               </div>
               <div className="chat-lobby-key-save">
                 <div className="field">
@@ -366,6 +370,7 @@ export default function TunnelPage({
           onAutostart={onAutostart}
         />
       ) : null}
+      </div>
     </section>
   );
 }

@@ -41,6 +41,8 @@ export function localizeChatError(message: string, t: (key: MessageKey) => strin
       return t("tunnelKeyInUseRoom");
     case "That key is already listening on a port serve.":
       return t("tunnelKeyInUsePort");
+    case "That key is already used for remote control.":
+      return t("keyInUseRemote");
     case "There is no room to restart.":
       return t("chatNoRoomRestart");
     case "Could not reach peer. Check the address and that they are online.":

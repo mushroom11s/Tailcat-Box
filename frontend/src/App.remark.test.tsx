@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -118,8 +118,9 @@ describe("peer remarks", () => {
     expect(labels("out")).toEqual(["我"]);
     expect(labels("in")[0]).toBe("对方");
     await user.click(screen.getByRole("button", { name: "展开房间信息" }));
-    expect(screen.getByLabelText("备注")).toBeTruthy();
-    expect(screen.getByText("只存在这台设备上，对应这个地址。对方看不到。这不是你的昵称。")).toBeTruthy();
+    const remark = screen.getByLabelText("备注");
+    await user.click(within(remark.closest(".chat-remark-bar") as HTMLElement).getByRole("button", { name: "说明" }));
+    expect(screen.getByText("只保存在这台电脑上，跟这个地址绑定，对方看不到。它不是你的昵称。")).toBeTruthy();
     await user.type(screen.getByLabelText("备注"), "小满");
     expect(labels("in")[0]).toBe("小满");
     expect(labels("out")).toEqual(["我"]);
@@ -167,6 +168,7 @@ describe("peer remarks", () => {
     await user.click(await screen.findByRole("button", { name: "Show room details" }));
     expect(screen.getByText("Peer connected")).toBeTruthy();
     const field = screen.getByLabelText("Remark");
+    await user.click(within(field.closest(".chat-remark-bar") as HTMLElement).getByRole("button", { name: "Help" }));
     expect(screen.getByText("Only on this device, for this address. The other person never sees it. This is not your nickname.")).toBeTruthy();
     await user.type(field, "Bob");
     fireEvent.blur(field);

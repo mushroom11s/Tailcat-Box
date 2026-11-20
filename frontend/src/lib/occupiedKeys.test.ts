@@ -13,6 +13,8 @@ describe("occupiedKeyNames", () => {
       allowMappingId: "a",
     });
     expect([...occupied].sort()).toEqual(["desk", "home"]);
+    const withRemote = occupiedKeyNames({ remoteKey: " desk " });
+    expect([...withRemote]).toEqual(["desk"]);
   });
 });
 

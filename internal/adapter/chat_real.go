@@ -75,7 +75,7 @@ func (r *Real) StartRoom(ctx context.Context, opts RoomOpts) (Room, error) {
 	}
 	srv.OnTCP = func(port uint16) func(net.Conn) {
 		switch port {
-		case 1, 100, 101, 102, 103:
+		case 1, 100, 101, 102, 103, 104:
 		default:
 			return nil
 		}

@@ -84,6 +84,25 @@ func (m *Manager) Order() []string {
 	return out
 }
 
+// RenameKey keeps open rooms pointing at a key after it is renamed.
+func (m *Manager) RenameKey(oldName, newName string) {
+	if m == nil {
+		return
+	}
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if oldName == "" || newName == "" || oldName == newName {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, slot := range m.rooms {
+		if slot != nil && slot.keyName == oldName {
+			slot.keyName = newName
+		}
+	}
+}
+
 func (m *Manager) KeyName(id string) (string, bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -308,6 +327,36 @@ func (m *Manager) Connect(id, addr string) error {
 		return err
 	}
 	return svc.Connect(addr)
+}
+
+// IDByPeer returns the open room connected to addr.
+func (m *Manager) IDByPeer(addr string) string {
+	if m == nil {
+		return ""
+	}
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, slot := range m.rooms {
+		if slot == nil || slot.svc == nil {
+			continue
+		}
+		if strings.TrimSpace(slot.svc.Peer()) == addr {
+			return id
+		}
+	}
+	return ""
+}
+
+func (m *Manager) SendRelay(id string, payload []byte) error {
+	svc, err := m.service(id)
+	if err != nil {
+		return err
+	}
+	return svc.SendRelay(payload)
 }
 
 func (m *Manager) SendText(id, body string, burn bool, ttlSec int) error {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
@@ -52,16 +52,19 @@ afterEach(() => {
 });
 
 describe("chat peer paste", () => {
-  it("shows that an address or a QR code can be pasted", () => {
+  it("shows that an address or a QR code can be pasted", async () => {
+    const user = userEvent.setup();
     render(<PeerRoom locale="zh-CN" />);
     const peer = screen.getByLabelText("对方") as HTMLInputElement;
     expect(peer.placeholder).toBe("粘贴地址或二维码");
-    expect(screen.getByText("把对方的 Tailcat 地址或二维码图片粘贴到这里。")).toBeTruthy();
+    await user.click(within(peer.closest(".chat-peer-bar") as HTMLElement).getByRole("button", { name: "说明" }));
+    expect(screen.getByText("粘贴对方的 Tailcat 地址或二维码图片。")).toBeTruthy();
 
     cleanup();
     render(<PeerRoom locale="en" />);
     const english = screen.getByLabelText("Peer") as HTMLInputElement;
     expect(english.placeholder).toBe("Paste an address or a QR code");
+    await user.click(within(english.closest(".chat-peer-bar") as HTMLElement).getByRole("button", { name: "Help" }));
     expect(screen.getByText("Paste a Tailcat address, or paste a QR code image.")).toBeTruthy();
   });
 
@@ -96,7 +99,7 @@ describe("chat peer paste", () => {
     pasteOn(peer, (data) => {
       data.items.add(image);
     });
-    expect((await screen.findByRole("alert")).textContent).toBe("这张图片里没有二维码。");
+    expect((await screen.findByRole("alert")).textContent).toBe("图片里没有找到二维码。");
     expect(peer.value).toBe("tc:peer-9");
   });
 

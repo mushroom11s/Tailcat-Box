@@ -79,7 +79,8 @@ describe("room identity bar", () => {
 
     view.rerender(identityRoom());
     expect(screen.queryByLabelText("Peer")).toBeNull();
-    expect(screen.getByText("tc…abcd")).toBeTruthy();
+    expect(document.querySelector(".chat-identity-compact .chat-identity-addr")?.textContent).toBe("tc:fake-room-abcd");
+    expect(screen.queryByText("tc…abcd")).toBeNull();
     expect(screen.getByText("Not connected")).toBeTruthy();
     expect(document.querySelector(".chat-identity-peer")?.classList.contains("is-quiet")).toBe(true);
     expect(screen.getByText("Listening")).toBeTruthy();
@@ -96,7 +97,7 @@ describe("room identity bar", () => {
     expect(screen.queryByLabelText("Peer")).toBeNull();
     expect(screen.queryByText("Peer connected")).toBeNull();
     expect(document.querySelector(".chat-identity-peer")?.textContent).toBe("Bob");
-    expect(screen.getByText("tc…abcd")).toBeTruthy();
+    expect(document.querySelector(".chat-identity-compact .chat-identity-addr")?.getAttribute("title")).toBe("tc:fake-room-abcd");
 
     await user.click(screen.getByRole("button", { name: "Show room details" }));
     expect(screen.getByLabelText("Peer")).toBeTruthy();
@@ -118,7 +119,7 @@ describe("room identity bar", () => {
     expect(screen.queryByLabelText("Peer")).toBeNull();
     expect(screen.getByText("Not connected")).toBeTruthy();
 
-    await user.click(screen.getByText("tc…abcd"));
+    await user.click(screen.getByText("Listening"));
     expect(screen.getByLabelText("Peer")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Hide room details" })).toBeTruthy();
   });
@@ -334,8 +335,10 @@ describe("burn preview and file download affordances", () => {
   it("sends a burned message with a 3 second ttl", async () => {
     const user = userEvent.setup();
     const { onSend } = renderChat({ messages: [] });
+    expect(screen.getByText("Burn").getAttribute("title")).toBe("Shown for 3 seconds, then it disappears");
     await user.click(screen.getByRole("switch", { name: "Burn" }));
-    expect(screen.getByText("Shown for 3 seconds, then it disappears.")).toBeTruthy();
+    expect(screen.getByText("Burn").getAttribute("title")).toBe("Shown for 3 seconds, then it disappears");
+    expect(screen.queryByText("Shown for 3 seconds, then it disappears")).toBeNull();
     await user.type(screen.getByLabelText("Message"), "gone");
     await user.click(screen.getByRole("button", { name: "Send" }));
     expect(onSend).toHaveBeenCalledWith("gone", true, 3);

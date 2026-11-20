@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -46,6 +47,8 @@ type fileRecord struct {
 	ReceiveBetaUpdates bool          `json:"ReceiveBetaUpdates,omitempty"`
 	LastUpdateCheck    string        `json:"LastUpdateCheck,omitempty"`
 	ChunkStreams       int           `json:"ChunkStreams,omitempty"`
+	WindowWake         string        `json:"WindowWake,omitempty"`
+	WindowClose        string        `json:"WindowClose,omitempty"`
 	Update             *updateRecord `json:"Update,omitempty"`
 }
 
@@ -57,6 +60,8 @@ type Store struct {
 	ReceiveBetaUpdates bool
 	LastUpdateCheck    time.Time
 	chunkStreams       int
+	windowWake         string
+	windowClose        string
 	update             UpdateState
 }
 
@@ -76,6 +81,8 @@ func Load(dir string) (*Store, error) {
 	}
 	s.LaunchAtLogin = rec.LaunchAtLogin
 	s.ReceiveBetaUpdates = rec.ReceiveBetaUpdates
+	s.windowWake = strings.TrimSpace(rec.WindowWake)
+	s.windowClose = strings.TrimSpace(rec.WindowClose)
 	s.chunkStreams = clampChunkStreams(rec.ChunkStreams)
 	if rec.LastUpdateCheck != "" {
 		parsed, err := time.Parse(time.RFC3339, rec.LastUpdateCheck)
@@ -182,6 +189,22 @@ func (s *Store) ChunkStreams() int {
 	return s.chunkStreams
 }
 
+// WindowHotkeys returns the saved wake and close chords. Empty means the default.
+func (s *Store) WindowHotkeys() (wake, close string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.windowWake, s.windowClose
+}
+
+// SetWindowHotkeys stores the chords used to show and hide the window.
+func (s *Store) SetWindowHotkeys(wake, close string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.windowWake = strings.TrimSpace(wake)
+	s.windowClose = strings.TrimSpace(close)
+	return s.saveLocked()
+}
+
 // SetChunkStreams persists host pull concurrency (clamped to 1-16).
 func (s *Store) SetChunkStreams(n int) error {
 	s.mu.Lock()
@@ -204,6 +227,8 @@ func (s *Store) saveLocked() error {
 		LaunchAtLogin:      s.LaunchAtLogin,
 		ReceiveBetaUpdates: s.ReceiveBetaUpdates,
 		ChunkStreams:       s.chunkStreams,
+		WindowWake:         s.windowWake,
+		WindowClose:        s.windowClose,
 	}
 	if !s.LastUpdateCheck.IsZero() {
 		rec.LastUpdateCheck = s.LastUpdateCheck.UTC().Format(time.RFC3339)

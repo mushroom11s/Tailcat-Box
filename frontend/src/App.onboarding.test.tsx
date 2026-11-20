@@ -77,7 +77,7 @@ describe("first-run onboarding", () => {
     localStorage.setItem(ONBOARDING_SEEN_KEY, "0");
     const user = userEvent.setup();
     const view = renderApp();
-    expect((await screen.findByRole("dialog")).textContent).toContain("把我的地址发给对方");
+    expect((await screen.findByRole("dialog")).textContent).toContain("把地址发给对方");
     await user.click(screen.getByRole("button", { name: "不再显示" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(localStorage.getItem(ONBOARDING_SEEN_KEY)).toBe("1");
@@ -85,8 +85,8 @@ describe("first-run onboarding", () => {
     renderApp();
     expect(screen.queryByRole("dialog")).toBeNull();
     await user.click(screen.getByRole("button", { name: "设置" }));
-    await user.click(screen.getByRole("button", { name: "使用引导" }));
-    expect(screen.getByRole("dialog", { name: "把我的地址发给对方" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "新手引导" }));
+    expect(screen.getByRole("dialog", { name: "把地址发给对方" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "下一步" }));
     await user.click(screen.getByRole("button", { name: "下一步" }));
     expect(screen.getByRole("dialog").textContent).toContain("取件码");

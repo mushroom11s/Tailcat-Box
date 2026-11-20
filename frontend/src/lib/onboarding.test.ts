@@ -11,7 +11,7 @@ describe("first-run onboarding flag", () => {
     expect(shouldAutoShowOnboarding("test")).toBe(true);
     writeOnboardingSeen();
     expect(shouldAutoShowOnboarding("production")).toBe(false);
-    expect(translate("zh-CN", "onboardingOpen")).toBe("使用引导");
+    expect(translate("zh-CN", "onboardingOpen")).toBe("新手引导");
     expect(translate("en", "onboardingDismiss")).toBe("Don't show again");
     expect(translate("zh-CN", "onboardingStep1Body")).not.toMatch(/DERP/i);
     expect(translate("en", "onboardingStep3Body")).not.toMatch(/DERP/i);

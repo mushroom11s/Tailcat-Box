@@ -29,7 +29,7 @@ export function sameKeys(a: KeyInfo[], b: KeyInfo[]): boolean {
   for (let i = 0; i < a.length; i++) {
     const x = a[i];
     const y = b[i];
-    if (x.Name !== y.Name || x.Path !== y.Path || x.Client !== y.Client || x.Address !== y.Address || x.Source !== y.Source) {
+    if (x.Name !== y.Name || x.Path !== y.Path || x.Client !== y.Client || x.Address !== y.Address || x.Source !== y.Source || x.Region !== y.Region) {
       return false;
     }
   }

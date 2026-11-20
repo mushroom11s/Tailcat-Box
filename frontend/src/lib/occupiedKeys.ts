@@ -12,6 +12,8 @@ export function occupiedKeyNames(input: {
   mappings?: Iterable<OccupiedKeySource | null | undefined>;
   /** When editing a serve mapping, keep its own key selectable. */
   allowMappingId?: string;
+  /** Saved key currently hosting remote control. */
+  remoteKey?: string;
 }): Set<string> {
   const out = new Set<string>();
   if (input.rooms) {
@@ -35,6 +37,10 @@ export function occupiedKeyNames(input: {
         out.add(name);
       }
     }
+  }
+  const remote = input.remoteKey?.trim();
+  if (remote) {
+    out.add(remote);
   }
   return out;
 }

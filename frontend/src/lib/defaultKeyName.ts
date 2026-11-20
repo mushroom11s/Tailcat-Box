@@ -1,3 +1,6 @@
+import { regionOptions } from "./miao";
+import type { Locale } from "../i18n/locale";
+
 /** Default display name for a newly created Tailcat key: Tailcat-YYYYMMDD-xxxxxx */
 const ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
@@ -32,8 +35,36 @@ export function defaultKeyName(now: Date = new Date(), suffix?: string): string 
   return `Tailcat-${formatKeyDate(now)}-${tail}`;
 }
 
-/** Use draft if non-empty after trim; otherwise a fresh defaultKeyName(). */
-export function resolveKeyName(draft: string): string {
-  const trimmed = draft.trim();
-  return trimmed || defaultKeyName();
+/** The city name in a relay label, safe to append to a key file name. */
+export function relaySlug(label: string): string {
+  const text = label.trim();
+  if (!text) {
+    return "";
+  }
+  const name = text.split("·")[0]?.trim() ?? "";
+  return name.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "").slice(0, 32);
+}
+
+/** Use draft if non-empty after trim; otherwise a fresh defaultKeyName(). A chosen relay is appended. */
+export function resolveKeyName(draft: string, relayLabel = ""): string {
+  const base = draft.trim() || defaultKeyName();
+  const extra = relaySlug(relayLabel);
+  if (!extra) {
+    return base;
+  }
+  const suffix = `-${extra}`;
+  if (base.endsWith(suffix)) {
+    return base;
+  }
+  return `${base}${suffix}`;
+}
+
+/** Name a key from the official region code chosen in settings or the lobby. */
+export function keyNameForRegion(draft: string, regionCode: string, locale: Locale): string {
+  const code = regionCode.trim();
+  if (!code) {
+    return resolveKeyName(draft);
+  }
+  const label = regionOptions(locale).find((item) => item.code === code)?.label ?? code;
+  return resolveKeyName(draft, label);
 }

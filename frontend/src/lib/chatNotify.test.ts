@@ -67,6 +67,6 @@ describe("notification copy", () => {
     expect(translate("en", "chatNotifyDenied")).toBe(
       "System notifications are off, so new messages stay in the chat.",
     );
-    expect(translate("zh-CN", "chatNotifyDenied")).toBe("系统通知没开，新消息只留在聊天里。");
+    expect(translate("zh-CN", "chatNotifyDenied")).toBe("系统通知已关闭，新消息只会显示在聊天里。");
   });
 });

@@ -49,7 +49,7 @@ func TestAllowThenInjectAndTrustIsNotImplied(t *testing.T) {
 	hostEvents := collect(t, host)
 	guestEvents := collect(t, guest)
 
-	hostView, err := host.StartHost()
+	hostView, err := host.StartHost("", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestAllowThenInjectAndTrustIsNotImplied(t *testing.T) {
 		t.Fatalf("host=%+v", hostView)
 	}
 
-	guestView, err := guest.Connect(hostView.Address, "assist")
+	guestView, err := guest.Connect(hostView.Code, "assist")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,16 +115,33 @@ func TestAllowThenInjectAndTrustIsNotImplied(t *testing.T) {
 	}
 }
 
+func TestRemotePathReachesDirect(t *testing.T) {
+	fake := adapter.NewFake()
+	host := New(fake)
+	guest := New(fake)
+	events := collect(t, host)
+	hostView, err := host.StartHost("", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := guest.Connect(hostView.Code, "desk"); err != nil {
+		t.Fatal(err)
+	}
+	if got := waitPath(t, events, "direct"); got.PeerPath != "direct" {
+		t.Fatalf("path=%+v", got)
+	}
+}
+
 func TestDenyDoesNotOpenTheScreen(t *testing.T) {
 	fake := adapter.NewFake()
 	host := New(fake)
 	guest := New(fake)
 	guestEvents := collect(t, guest)
-	hostView, err := host.StartHost()
+	hostView, err := host.StartHost("", "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := guest.Connect(hostView.Address, "desk"); err != nil {
+	if _, err := guest.Connect(hostView.Code, "desk"); err != nil {
 		t.Fatal(err)
 	}
 	hostEvents := collect(t, host)
@@ -153,6 +170,22 @@ func collect(t *testing.T, svc *Service) <-chan View {
 		}
 	}()
 	return out
+}
+
+func waitPath(t *testing.T, events <-chan View, path string) View {
+	t.Helper()
+	deadline := time.After(3 * time.Second)
+	for {
+		select {
+		case view := <-events:
+			if view.PeerPath == path {
+				return view
+			}
+		case <-deadline:
+			t.Fatalf("timed out waiting for path %s", path)
+		}
+	}
+	return View{}
 }
 
 func waitState(t *testing.T, events <-chan View, state string) View {

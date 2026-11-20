@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import HelpTip, { HeadingHelp } from "../components/HelpTip";
 import LoadingCat from "../components/LoadingCat";
 import QrCopyButton from "../components/QrCopyButton";
 import QrScanButton from "../components/QrScanButton";
@@ -336,7 +337,7 @@ function ShareCard({
         <ul className="miao-files">
           {files.map((file) => (
             <li key={`${file.name}:${file.size}`}>
-              <span>{file.name}</span>
+              <span title={file.name}>{file.name}</span>
               <span className="miao-size">{formatBytes(file.size)}</span>
             </li>
           ))}
@@ -479,7 +480,7 @@ function ReceiveCard({
         <ul className="miao-files">
           {files.map((file) => (
             <li key={`${file.name}:${file.size}`}>
-              <span>{file.name}</span>
+              <span title={file.name}>{file.name}</span>
               <span className="miao-size">{formatBytes(file.size)}</span>
             </li>
           ))}
@@ -1069,8 +1070,16 @@ export default function MiaoPage() {
   return (
     <section className="page miao-page">
       <header className="chat-lobby-head">
-        <h2>{t("miaoTitle")}</h2>
-        <p className="lede">{t("miaoLede")}</p>
+        <HeadingHelp
+          as="h2"
+          title={t("miaoTitle")}
+          help={
+            <>
+              <p>{t("miaoLede")}</p>
+              <p>{t("miaoDropHint")}</p>
+            </>
+          }
+        />
       </header>
       {online ? null : (
         <p className="err" role="alert">
@@ -1109,7 +1118,10 @@ export default function MiaoPage() {
           <section className="glass chat-lobby-panel">
             <div className="setting-row">
               <div className="setting-label">
-                <label htmlFor="miao-chunk-streams">{t("miaoChunkStreams")}</label>
+                <div className="label-with-help">
+                  <label htmlFor="miao-chunk-streams">{t("miaoChunkStreams")}</label>
+                  <HelpTip>{t("miaoChunkStreamsHelp")}</HelpTip>
+                </div>
               </div>
               <select
                 id="miao-chunk-streams"
@@ -1118,7 +1130,6 @@ export default function MiaoPage() {
                 onChange={(ev) => {
                   void onChunkStreamsChange(ev.target.value);
                 }}
-                aria-describedby="miao-chunk-streams-help"
               >
                 {Array.from({ length: 16 }, (_, i) => i + 1).map((n) => (
                   <option key={n} value={n}>
@@ -1127,9 +1138,6 @@ export default function MiaoPage() {
                 ))}
               </select>
             </div>
-            <p id="miao-chunk-streams-help" className="setting-help">
-              {t("miaoChunkStreamsHelp")}
-            </p>
           </section>
           <div className="glass chat-lobby-panel">
           <div className="miao-limits">
@@ -1206,10 +1214,7 @@ export default function MiaoPage() {
             {busy === "pack" ? (
               <LoadingCat size="lg" layout="block" label={t("miaoPacking")} />
             ) : (
-              <span>
-                <strong>{t("miaoDrop")}</strong>
-                <span className="chat-quiet">{t("miaoDropHint")}</span>
-              </span>
+              <strong>{t("miaoDrop")}</strong>
             )}
           </button>
           <input
@@ -1239,19 +1244,23 @@ export default function MiaoPage() {
       ) : (
         <div className="miao-receive">
           <div className="glass miao-join">
-            <p className="lede">{t("miaoJoinHelp")}</p>
             <div className="field">
-              <label htmlFor="miao-join-code">{t("miaoToken")}</label>
+              <div className="label-with-help">
+                <label htmlFor="miao-join-code">{t("miaoToken")}</label>
+                <HelpTip>{t("miaoJoinHelp")}</HelpTip>
+              </div>
               <div className="qr-field">
                 <textarea
                   id="miao-join-code"
-                  rows={3}
+                  rows={2}
+                  spellCheck={false}
                   value={code}
                   placeholder={t("miaoJoinPlaceholder")}
                   onChange={(ev) => setCode(ev.target.value)}
                   onPaste={onCodePasteEvent}
                 />
                 <QrScanButton
+                  iconOnly
                   accept={acceptMiaoCode}
                   invalidKey="miaoBadCode"
                   normalizePastedText={extractShareCode}

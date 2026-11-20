@@ -331,12 +331,12 @@ describe("lobby room start loading", () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     const user = userEvent.setup();
     await renderApp();
-    await user.type(screen.getByLabelText("对方地址（可选）"), "tc:fake-echo");
+    await user.type(screen.getByLabelText("对方地址（选填）"), "tc:fake-echo");
     await user.click(button("连接"));
 
     expect(screen.queryByRole("button", { name: "连接" })).toBeNull();
     expect(screen.queryByRole("button", { name: "正在连接…" })).toBeNull();
-    const connectCat = panelCat(connectPanel("对方地址（可选）"), "正在连接…");
+    const connectCat = panelCat(connectPanel("对方地址（选填）"), "正在连接…");
     expect(connectCat.querySelector("img")?.getAttribute("src")).toContain("loading-cat");
     expect(button("新建临时房间").disabled).toBe(true);
     expect(button("重启房间").disabled).toBe(true);

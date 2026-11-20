@@ -17,6 +17,8 @@ type KeyInfo struct {
 	Client  bool
 	Address string
 	Source  string // "app" or "cli"
+	// Region is the region chosen when the key was created. Empty means auto.
+	Region string
 }
 
 type CreateOpts struct {
@@ -127,6 +129,51 @@ func (s *Store) ReadRaw(name string) ([]byte, error) {
 	return nil, err
 }
 
+// Rename changes an app key's name and file. CLI keys are left alone.
+func (s *Store) Rename(oldName, newName string) error {
+	oldName = strings.TrimSpace(oldName)
+	newName = strings.TrimSpace(newName)
+	if err := validateName(oldName); err != nil {
+		return err
+	}
+	if err := validateName(newName); err != nil {
+		return err
+	}
+	if oldName == newName {
+		return nil
+	}
+	oldPath := filepath.Join(s.Dir, oldName+keySuffix)
+	newPath := filepath.Join(s.Dir, newName+keySuffix)
+	if _, err := os.Stat(newPath); err == nil {
+		return fmt.Errorf("key %q already exists", newName)
+	}
+	body, err := os.ReadFile(oldPath)
+	if err != nil {
+		return err
+	}
+	var rec map[string]json.RawMessage
+	if err := json.Unmarshal(body, &rec); err != nil {
+		return err
+	}
+	named, err := json.Marshal(newName)
+	if err != nil {
+		return err
+	}
+	rec["Name"] = named
+	out, err := json.MarshalIndent(rec, "", "\t")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(newPath, append(out, '\n'), 0o600); err != nil {
+		return err
+	}
+	if err := os.Remove(oldPath); err != nil {
+		_ = os.Remove(newPath)
+		return err
+	}
+	return nil
+}
+
 func (s *Store) Delete(name string) error {
 	if err := validateName(name); err != nil {
 		return err
@@ -168,6 +215,7 @@ func (s *Store) listDir(dir, source string) ([]KeyInfo, error) {
 			}
 			info.Client = rec.Client
 			info.Address = rec.Address
+			info.Region = rec.Region
 		}
 		out = append(out, info)
 	}
@@ -185,6 +233,46 @@ func validateName(name string) error {
 		return fmt.Errorf("invalid key name %q", name)
 	}
 	return nil
+}
+
+// EnsureRemoteToken returns the long-term remote token stored on an app key.
+// The first call writes fresh and keeps every other field.
+func (s *Store) EnsureRemoteToken(name, fresh string) (string, error) {
+	if err := validateName(name); err != nil {
+		return "", err
+	}
+	path := filepath.Join(s.Dir, name+keySuffix)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var rec map[string]json.RawMessage
+	if err := json.Unmarshal(body, &rec); err != nil {
+		return "", err
+	}
+	if raw, ok := rec["RemoteToken"]; ok {
+		var existing string
+		if json.Unmarshal(raw, &existing) == nil && strings.TrimSpace(existing) != "" {
+			return strings.TrimSpace(existing), nil
+		}
+	}
+	fresh = strings.TrimSpace(fresh)
+	if fresh == "" {
+		return "", fmt.Errorf("remote token is required")
+	}
+	tokenJSON, err := json.Marshal(fresh)
+	if err != nil {
+		return "", err
+	}
+	rec["RemoteToken"] = tokenJSON
+	out, err := json.MarshalIndent(rec, "", "\t")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, append(out, '\n'), 0o600); err != nil {
+		return "", err
+	}
+	return fresh, nil
 }
 
 // SetPrivateKey replaces the saved Tailcat private key JSON of an app key,

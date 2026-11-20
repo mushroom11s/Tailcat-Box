@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
-import { ClipboardSetText, OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
+import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import CallStatus from "../components/CallStatus";
+import HelpTip from "../components/HelpTip";
 import QrScanButton from "../components/QrScanButton";
 import QrShareButton from "../components/QrShareButton";
 import ScreenSharePopout from "../components/ScreenSharePopout";
@@ -9,7 +10,8 @@ import iconUrl from "../assets/icon.png";
 import roomQrMark from "../assets/room-qr-cat.png?inline";
 import { useI18n, type MessageKey } from "../i18n";
 import { useClipboardFieldPaste, type PasteFailure } from "../lib/clipboardPaste";
-import { extractShareableAddress } from "../lib/qr";
+import { copyQrImage } from "../lib/copyQrImage";
+import { encodeQrDataURL, extractShareableAddress } from "../lib/qr";
 import { highlightParts, matchesQuery } from "../lib/chatSearch";
 import { localizeChatError, systemText } from "../lib/chatText";
 import { purgeDiscardIds } from "../lib/chatPurge";
@@ -121,16 +123,59 @@ function peerPasteKey(reason: PasteFailure): MessageKey {
   return "chatAddrError";
 }
 
-async function copyText(text: string): Promise<void> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
+function RoomTools({ address, compact }: { address: string; compact?: boolean }) {
+  const { t } = useI18n();
+  const text = address.trim();
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let live = true;
+    if (!text) {
+      setSrc("");
+      return () => {
+        live = false;
+      };
     }
-  } catch {
-    // fall through
+    void encodeQrDataURL(text, { errorCorrectionLevel: "H", centerMark: roomQrMark })
+      .then((url) => {
+        if (live) {
+          setSrc(url);
+        }
+      })
+      .catch(() => {
+        if (live) {
+          setSrc("");
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [text]);
+  if (!text) {
+    return null;
   }
-  await ClipboardSetText(text);
+  return (
+    <>
+      <code className={compact ? "chat-identity-addr" : "chat-address"} title={text}>
+        {text}
+      </code>
+      <button
+        className="btn btn-ghost"
+        type="button"
+        aria-label={t("copy")}
+        title={text}
+        disabled={!src}
+        onClick={(event) => {
+          event.stopPropagation();
+          if (src) {
+            void copyQrImage(src).catch(() => undefined);
+          }
+        }}
+      >
+        {t("copy")}
+      </button>
+      <QrShareButton value={text} centerMark={roomQrMark} />
+    </>
+  );
 }
 
 function stamp(iso: string): string {
@@ -1293,19 +1338,7 @@ export default function ChatPage({
                 {t("chatRetry")}
               </button>
             ) : null}
-            <span className="chat-identity-addr" title={address}>{abbreviateAddress(address)}</span>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              disabled={!address}
-              onClick={(ev) => {
-                ev.stopPropagation();
-                void copyText(address);
-              }}
-            >
-              {t("copy")}
-            </button>
-            <QrShareButton value={address} disabled={!address} centerMark={roomQrMark} />
+            <RoomTools address={address} compact />
             <span
               className={`chat-identity-peer${remarkFor(remarks, peer) || peer.trim() ? "" : " is-quiet"}`}
               title={peer || t("chatNotConnected")}
@@ -1342,17 +1375,16 @@ export default function ChatPage({
         {detailsOpen ? (
         <div className="chat-room-bar">
           <span className={`status-dot${roomError ? " bad" : ""}`} aria-hidden="true" />
-          <span className="chat-kicker">{t("chatRoomLabel")}</span>
+          <span className="chat-kicker label-with-help">
+            <span>{t("chatRoomLabel")}</span>
+            <HelpTip>{t("chatCopyHelper")}</HelpTip>
+          </span>
           {roomError ? (
             <span className="status-pill bad">{t("chatRoomFailed")}</span>
           ) : (
             <span className="status-pill">{t("chatListening")}</span>
           )}
-          {address ? <p className="chat-address">{address}</p> : null}
-          <button className="btn btn-ghost" type="button" disabled={!address} onClick={() => copyText(address)}>
-            {t("copy")}
-          </button>
-          <QrShareButton value={address} disabled={!address} centerMark={roomQrMark} />
+          <RoomTools address={address} />
           {roomError ? (
             <button className="btn" type="button" onClick={() => onRetry()}>
               {t("chatRetry")}
@@ -1371,11 +1403,16 @@ export default function ChatPage({
           ) : null}
         </div>
         ) : null}
-        {detailsOpen ? <p className="chat-quiet chat-help">{t("chatCopyHelper")}</p> : null}
         {detailsOpen ? (
         <>
         <div className="chat-peer-bar">
-          <label htmlFor="chat-peer"><LockIcon />{t("chatPeerLabel")}</label>
+          <div className="label-with-help">
+            <label htmlFor="chat-peer">
+              <LockIcon />
+              {t("chatPeerLabel")}
+            </label>
+            <HelpTip>{t("chatPeerHelper")}</HelpTip>
+          </div>
           <input
             id="chat-peer"
             ref={peerRef}
@@ -1386,7 +1423,7 @@ export default function ChatPage({
             }}
             onPaste={onPeerPaste}
             placeholder={t("chatPeerPlaceholder")}
-            aria-describedby="chat-peer-help"
+            aria-describedby={peer ? "chat-peer-help" : undefined}
             autoComplete="off"
           />
           <QrScanButton
@@ -1405,20 +1442,22 @@ export default function ChatPage({
             </button>
           ) : null}
         </div>
-        <p id="chat-peer-help" className="chat-quiet chat-help">
-          {peer ? <span>{t("chatPeerConnected")}</span> : null}
-          {peer ? " · " : null}
-          {t("chatPeerHelper")}
-        </p>
+        {peer ? (
+          <p id="chat-peer-help" className="chat-quiet chat-help">
+            {t("chatPeerConnected")}
+          </p>
+        ) : null}
         <div className="chat-peer-bar chat-remark-bar">
-          <label htmlFor="chat-remark">{t("chatRemark")}</label>
+          <div className="label-with-help">
+            <label htmlFor="chat-remark">{t("chatRemark")}</label>
+            <HelpTip>{t("chatRemarkHelp")}</HelpTip>
+          </div>
           <input
             id="chat-remark"
             value={remarkAddr ? (remarks[remarkAddr] ?? "") : ""}
             disabled={!remarkAddr}
             autoComplete="off"
             spellCheck={false}
-            aria-describedby="chat-remark-help"
             onChange={(e) => {
               if (remarkAddr) {
                 onRemark?.(remarkAddr, e.target.value, false);
@@ -1431,7 +1470,6 @@ export default function ChatPage({
             }}
           />
         </div>
-        <p id="chat-remark-help" className="chat-quiet chat-help">{t("chatRemarkHelp")}</p>
         </>
         ) : null}
         {inline ? <p className="err" role="alert">{inline}</p> : null}
@@ -1632,7 +1670,7 @@ export default function ChatPage({
           </IconButton>
           <label className="burn-switch" htmlFor="chat-burn">
             <FlameIcon />
-            <span>{t("chatBurnLabel")}</span>
+            <span title={t("chatBurnHint")}>{t("chatBurnLabel")}</span>
             <input
               id="chat-burn"
               className="switch"
@@ -1643,7 +1681,6 @@ export default function ChatPage({
               onChange={(e) => setBurnOn(e.target.checked)}
             />
           </label>
-          {burnOn ? <span className="chat-burn-hint">{t("chatBurnHint")}</span> : null}
           <button className="btn composer-send" type="button" disabled={sending} onClick={() => void send()}>
             {t("send")}
           </button>
