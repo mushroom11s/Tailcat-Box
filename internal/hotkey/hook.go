@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// Shared RegisterHotKey ids. Defined here so Linux and macOS can compile
+// hook.pump; Windows is the only platform that actually registers them.
+const (
+	idWake  = 0xB001
+	idClose = 0xB002
+)
+
 // Hook listens for the wake and close chords on a locked OS thread.
 type Hook struct {
 	onWake   func()
