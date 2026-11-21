@@ -9,9 +9,6 @@ import (
 )
 
 const (
-	idWake  = 0xB001
-	idClose = 0xB002
-
 	modAlt      = 0x0001
 	modControl  = 0x0002
 	modShift    = 0x0004
