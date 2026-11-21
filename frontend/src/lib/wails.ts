@@ -4,6 +4,7 @@ import {
   CreateKey as bindCreateKey,
   DecodeChatVoice as bindDecodeChatVoice,
   DeleteKey as bindDeleteKey,
+  RenameKey as bindRenameKey,
   CancelMiaoReceive as bindCancelMiaoReceive,
   DiscardMiaoReceive as bindDiscardMiaoReceive,
   EndMiaoShare as bindEndMiaoShare,
@@ -106,6 +107,7 @@ export type KeyInfo = {
   Client: boolean;
   Address: string;
   Source: string;
+  Region: string;
 };
 
 export type NetworkSettings = {
@@ -210,6 +212,7 @@ function asKey(k: store.KeyInfo): KeyInfo {
     Client: Boolean(k.Client),
     Address: k.Address ?? "",
     Source: k.Source ?? "",
+    Region: k.Region ?? "",
   };
 }
 
@@ -530,6 +533,7 @@ async function fakeCreateKey(name: string, client: boolean, region: string): Pro
     Client: client,
     Address: address,
     Source: "app",
+    Region: region,
   });
   browserKeyJSON.set(
     name,
@@ -937,6 +941,26 @@ export async function createKey(name: string, client: boolean, region: string): 
     return bindCreateKey(name, client, region);
   }
   return fakeCreateKey(name, client, region);
+}
+
+export async function renameKey(oldName: string, newName: string): Promise<void> {
+  if (hasWailsBindings()) {
+    await bindRenameKey(oldName, newName);
+    return;
+  }
+  const key = fake.keys.find((item) => item.Name === oldName);
+  if (!key || key.Source === "cli") {
+    throw new Error("key not found");
+  }
+  const next = newName.trim();
+  if (!next || next.includes("/") || next.includes("..")) {
+    throw new Error("invalid key name");
+  }
+  if (fake.keys.some((item) => item.Name === next)) {
+    throw new Error("key already exists");
+  }
+  key.Name = next;
+  key.Path = next + ".private.json";
 }
 
 export async function deleteKey(name: string): Promise<void> {

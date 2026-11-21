@@ -211,7 +211,7 @@ describe("in-app update", () => {
     emitTrayNavigate("settings");
     expect(await screen.findByRole("button", { name: "检查更新" })).toBeTruthy();
     expect(await screen.findByRole("button", { name: "下载更新" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "查看这个版本" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "查看版本详情" })).toBeTruthy();
   });
 
   it("keeps download progress after leaving Settings and returning", async () => {

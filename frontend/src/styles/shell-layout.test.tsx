@@ -212,7 +212,7 @@ describe("shell scroll", () => {
       expect(screen.getByRole("heading", { name: "喵传" })).toBeTruthy();
       expect(document.querySelector(".chat-lobby")).toBeNull();
 
-      for (const name of ["喵传", "聊天", "穿透", "设置"]) {
+      for (const name of ["喵传", "聊天", "穿透", "远程控制", "设置"]) {
         const button = screen.getByRole("button", { name });
         const glyph = button.querySelector(".nav-glyph") as HTMLElement;
         const label = button.querySelector(".nav-label") as HTMLElement;
@@ -424,8 +424,9 @@ describe("shell scroll", () => {
       /\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s,
     );
     expect(cssBlock(css, ".miao-send")).toContain("overflow: visible");
-    expect(cssBlock(css, ".miao-send")).toContain("padding: 0");
+    expect(cssBlock(css, ".miao-send")).toContain("padding: 0 0 24px");
     expect(cssBlock(css, ".miao-receive")).toContain("overflow: visible");
+    expect(cssBlock(css, ".miao-receive")).toContain("padding: 0 0 24px");
     expect(cssBlock(css, ".miao-send")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
     expect(cssBlock(css, ".miao-receive")).not.toMatch(/padding:\s*10px\s+12px\s+24px/);
 

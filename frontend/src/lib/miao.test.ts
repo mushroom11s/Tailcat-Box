@@ -298,12 +298,12 @@ describe("miao share helpers", () => {
     expect(relayAttributionText("zh-CN", "custom", "nyc")).toBe("自建中继 · nyc");
     expect(relayAttributionText("zh-CN", "custom", "Tokyo")).toBe("自建中继 · 东京");
     expect(relayAttributionText("zh-CN", "custom", "")).toBe("自建中继");
-    expect(pathPrivacyText("zh-CN", "derp", "public")).toBe("经官方中继转发，内容端到端加密");
+    expect(pathPrivacyText("zh-CN", "derp", "public")).toBe("经官方中继转发，端到端加密");
     expect(pathPrivacyText("en", "derp", "public")).toBe("Forwarded via the official relay. Contents are end-to-end encrypted.");
-    expect(pathPrivacyText("zh-CN", "derp", undefined)).toBe("经官方中继转发，内容端到端加密");
-    expect(pathPrivacyText("zh-CN", "derp", "custom")).toBe("经自建中继转发，内容端到端加密");
+    expect(pathPrivacyText("zh-CN", "derp", undefined)).toBe("经官方中继转发，端到端加密");
+    expect(pathPrivacyText("zh-CN", "derp", "custom")).toBe("经自建中继转发，端到端加密");
     expect(pathPrivacyText("en", "derp", "custom")).toBe("Forwarded via a self-hosted relay. Contents are end-to-end encrypted.");
-    expect(pathPrivacyText("zh-CN", "direct")).toBe("直连传输，内容端到端加密");
+    expect(pathPrivacyText("zh-CN", "direct")).toBe("直连传输，端到端加密");
     expect(pathPrivacyText("en", "direct")).toBe("Direct. Contents are end-to-end encrypted.");
     expect(pathPrivacyText("zh-CN", "checking")).toBe("");
     expect(pathAsideText("zh-CN", "derp", "public", "tok")).toBe("Tailcat 官方中继 · 东京 · 端到端加密");

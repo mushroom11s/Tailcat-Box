@@ -325,6 +325,11 @@ func (s *Service) onInbound(sessionID string, ev adapter.ChatEvent) {
 		s.onVoice(sessionID, meta, payload)
 	case "rtc-offer", "rtc-answer", "rtc-hangup":
 		s.emitControl(sessionID, ev.Data)
+	case "relay-share":
+		if len(payload) == 0 || len(payload) > maxRelayShare {
+			return
+		}
+		s.emit(adapter.Event{SessionID: sessionID, Kind: "relay-share", Data: string(payload)})
 	default:
 		return
 	}

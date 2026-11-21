@@ -319,3 +319,23 @@ func (r *memRoom) SendEnvelope(ctx context.Context, port uint16, frame []byte) e
 	r.mem.mu.Unlock()
 	return nil
 }
+
+func TestRelayShareStaysOutOfTheTranscript(t *testing.T) {
+	svc := New(adapter.NewFake())
+	frame, err := Pack(map[string]any{"type": "relay-share"}, []byte(`{"v":1,"kind":"tailcat-box-relays"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.onInbound("room", adapter.ChatEvent{Port: portText, Data: frame})
+	if msgs := svc.Messages(); len(msgs) != 0 {
+		t.Fatalf("messages = %+v", msgs)
+	}
+	select {
+	case ev := <-svc.Events():
+		if ev.Kind != "relay-share" || !strings.Contains(ev.Data, "tailcat-box-relays") {
+			t.Fatalf("event = %+v", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no relay-share event")
+	}
+}

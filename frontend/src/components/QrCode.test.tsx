@@ -43,39 +43,26 @@ describe("qr share and scan", () => {
 
     expect(screen.getByRole("button", { name: "Scan QR" })).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Create temporary room" }));
-    const show = await screen.findByRole("button", { name: "Show QR code" });
+    const copyAddress = await screen.findByRole("button", { name: "Copy" });
     await waitFor(() => {
-      expect(show.hasAttribute("disabled")).toBe(false);
+      expect(copyAddress.hasAttribute("disabled")).toBe(false);
     });
-    await user.click(show);
-    const dialog = await screen.findByRole("dialog", { name: "QR code" });
-    const payload = dialog.querySelector(".qr-payload")?.textContent ?? "";
+    const payload = copyAddress.getAttribute("title") ?? "";
     expect(payload.startsWith("tc:fake-room-")).toBe(true);
     expect(payload.includes("http")).toBe(false);
     expect(payload.includes("#invite")).toBe(false);
-    await waitFor(() => {
-      expect(within(dialog).getByRole("img", { name: payload }).getAttribute("src")?.startsWith("data:image/png")).toBe(true);
-    });
-    const copyImage = within(dialog).getByRole("button", { name: "Copy" });
-    expect(copyImage.classList.contains("qr-copy")).toBe(true);
-    expect(copyImage.querySelector("svg")).toBeTruthy();
-    expect(copyImage.closest(".qr-shot")?.querySelector("img")).toBeTruthy();
-    await user.click(within(dialog).getByRole("button", { name: "Copy address" }));
-    expect(writeText).toHaveBeenCalledWith(payload);
+    expect(screen.getByRole("button", { name: "Show QR code" })).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
 
     const write = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { value: { writeText, write }, configurable: true });
-    await user.click(copyImage);
+    await user.click(copyAddress);
     await waitFor(() => {
       expect(write).toHaveBeenCalledTimes(1);
     });
     const copied = write.mock.calls[0][0] as ClipboardItem[];
     expect(await copied[0].getType("image/png")).toBeInstanceOf(Blob);
-    expect(within(dialog).getByRole("status").textContent).toBe("QR code copied.");
-    expect(document.querySelector(".toast-ok")).toBeNull();
-    expect(writeText).toHaveBeenCalledTimes(1);
-    await user.click(within(dialog).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writeText).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole("button", { name: "Show room details" }));
     vi.mocked(decodeQrFromFile).mockResolvedValueOnce("  tc:from-qr  ");
@@ -89,6 +76,7 @@ describe("qr share and scan", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.queryByRole("button", { name: "Show peer QR code" })).toBeNull();
     expect(screen.getByRole("button", { name: "Show QR code" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Copy" }).getAttribute("title")).toBe(payload);
   });
 
   it("reports a missing camera, a missing code, and an invalid code", async () => {

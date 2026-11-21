@@ -17,6 +17,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -47,9 +48,11 @@ func main() {
 	// Must run before wails.Run sets the WKWebView UI delegate.
 	screenwin.Install()
 	err := wails.Run(&options.App{
-		Title:  windowTitle,
-		Width:  1152,
-		Height: 720,
+		Title:     windowTitle,
+		Width:     1152,
+		Height:    720,
+		MinWidth:  1024,
+		MinHeight: 680,
 		// Closing hides the window when a tray icon can bring it back. A Linux
 		// desktop without a tray host quits instead.
 		HideWindowOnClose: tray.Available(),
@@ -59,6 +62,25 @@ func main() {
 		// Mac is ignored on Windows and Linux. Leave Fullscreen unset so the
 		// window opens windowed; the green button and View menu enter fullscreen.
 		Mac: macWindowChrome(),
+		// The caption uses the same colours as the page background, and
+		// Windows 11 keeps the rounded window corners.
+		Windows: &windows.Options{
+			Theme: windows.SystemDefault,
+			CustomTheme: &windows.ThemeSettings{
+				LightModeTitleBar:          windows.RGB(231, 238, 252),
+				LightModeTitleBarInactive:  windows.RGB(231, 238, 252),
+				LightModeTitleText:         windows.RGB(28, 24, 48),
+				LightModeTitleTextInactive: windows.RGB(28, 24, 48),
+				LightModeBorder:            windows.RGB(210, 216, 236),
+				LightModeBorderInactive:    windows.RGB(210, 216, 236),
+				DarkModeTitleBar:           windows.RGB(20, 18, 44),
+				DarkModeTitleBarInactive:   windows.RGB(20, 18, 44),
+				DarkModeTitleText:          windows.RGB(244, 242, 251),
+				DarkModeTitleTextInactive:  windows.RGB(244, 242, 251),
+				DarkModeBorder:             windows.RGB(44, 40, 72),
+				DarkModeBorderInactive:     windows.RGB(44, 40, 72),
+			},
+		},
 		Linux: &linux.Options{
 			Icon:        appIcon,
 			ProgramName: "tailcat-box",
@@ -68,7 +90,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: &options.RGBA{R: 231, G: 238, B: 252, A: 255},
 		DragAndDrop: &options.DragAndDrop{
 			EnableFileDrop:     true,
 			DisableWebViewDrop: true,

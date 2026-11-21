@@ -35,6 +35,6 @@ describe("scan QR image", () => {
     await user.click(screen.getByRole("button", { name: "扫码" }));
     const dialog = await screen.findByRole("dialog", { name: "扫描二维码" });
     await user.upload(dialog.querySelector('input[type="file"]') as HTMLInputElement, await solidPng("blank.png"));
-    expect((await screen.findByRole("alert")).textContent).toBe("这张图片里没有二维码。");
+    expect((await screen.findByRole("alert")).textContent).toBe("图片里没有找到二维码。");
   });
 });

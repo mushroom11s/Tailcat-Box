@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import App from "./App";
@@ -27,6 +27,8 @@ describe("no-auth SSH desk", () => {
 
     const allow = screen.getByRole("switch", { name: "Allow SSH" });
     expect((allow as HTMLInputElement).checked).toBe(false);
+    const desk = screen.getByRole("region", { name: "SSH" });
+    await user.click(within(desk).getAllByRole("button", { name: "Help" })[0]!);
     expect(screen.getByText(/not an OS password or SSH key/)).toBeTruthy();
     expect(screen.queryByText("tc:fake-noauth-ssh-desk-desk")).toBeNull();
 

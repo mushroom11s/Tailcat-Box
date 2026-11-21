@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { HeadingHelp } from "../components/HelpTip";
 import SessionCard from "../components/SessionCard";
 import { useI18n } from "../i18n";
 import { selectDirectory, selectFiles, type FileEntry, type Session } from "../lib/wails";
@@ -98,8 +99,7 @@ export default function FilesPage({
 
   return (
     <section className="page">
-      <h2>{t("filesTitle")}</h2>
-      <p className="lede">{t("filesLede")}</p>
+      <HeadingHelp as="h2" title={t("filesTitle")} help={t("filesLede")} />
       <div className="tabs" role="tablist" aria-label={t("filesMode")}>
         {(["recv", "send", "serve", "ls"] as Tab[]).map((value) => (
           <button

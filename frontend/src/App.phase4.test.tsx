@@ -199,7 +199,7 @@ describe("phase 4 live media dock", () => {
       },
     });
     const panel = screen.getByRole("complementary", { name: "通话" });
-    expect(panel.textContent).toContain("从这里发起语音通话、视频通话或屏幕共享。");
+    expect(panel.textContent).toContain("在这里发起语音、视频通话或屏幕共享。");
     expect(panel.contains(screen.getByRole("button", { name: "语音" }))).toBe(true);
     expect(panel.contains(screen.getByRole("button", { name: "视频" }))).toBe(true);
     expect(panel.contains(screen.getByRole("button", { name: "共享屏幕" }))).toBe(true);
@@ -239,9 +239,11 @@ describe("phase 4 live media dock", () => {
     expect(await screen.findByRole("button", { name: "Voice" })).toBeTruthy();
     const names = Array.from(document.querySelectorAll(".nav-btn")).map((node) => node.textContent ?? "");
     expect(names[0]).toBe("Mew Share");
-    expect(names[1]).toBe("Chat");
-    expect(names[2]).toBe("+ New room");
-    expect(names.at(-2)).toBe("Tunnel");
+    expect(names[1]).toBe("Remote");
+    expect(names[2]).toBe("Chat");
+    expect(names[3]).toBe("+ New room");
+    expect(names.at(-3)).toBe("Tunnel");
+    expect(names.at(-2)).toBe("Export config");
     expect(names.at(-1)).toBe("Settings");
     expect(screen.queryByRole("heading", { name: "Services" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Start SSH serve" })).toBeNull();

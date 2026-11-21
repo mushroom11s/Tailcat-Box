@@ -96,7 +96,7 @@ describe("Mew Share page", () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     renderPage();
     expect(screen.getByRole("heading", { name: "喵传" })).toBeTruthy();
-    expect(screen.getByRole("tab", { name: "共享" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "分享" })).toBeTruthy();
     expect(screen.getByRole("tab", { name: "下载" })).toBeTruthy();
     expect(screen.queryByRole("tab", { name: "发送" })).toBeNull();
     expect(screen.queryByRole("tab", { name: "接收" })).toBeNull();
@@ -124,13 +124,13 @@ describe("Mew Share page", () => {
         ]),
     });
     renderPage();
-    expect(screen.getByRole("tab", { name: "共享" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "分享" }).getAttribute("aria-selected")).toBe("true");
     expect(await screen.findByRole("heading", { name: "进行中的分享" })).toBeTruthy();
     expect(screen.getByRole("article", { name: "笔记.txt" })).toBeTruthy();
     expect(screen.getByText("笔记.txt")).toBeTruthy();
     expect(sharePayload()).toBe("mw1.restored-code");
     expect(document.querySelector(".miao-send .tunnel-code-copy")).toBeTruthy();
-    expect(screen.getByText("还可下载 2")).toBeTruthy();
+    expect(screen.getByText("剩余次数 2")).toBeTruthy();
   });
 
   it("explains when a shared file could not be restored", async () => {
@@ -143,7 +143,7 @@ describe("Mew Share page", () => {
       MiaoRestoreNotes: () => Promise.resolve(["A shared file is missing, so that share was not restored."]),
     });
     renderPage();
-    expect((await screen.findByRole("alert")).textContent).toBe("有一份共享的文件已经不在了，所以没有恢复。");
+    expect((await screen.findByRole("alert")).textContent).toBe("一份分享中的文件找不到了，该分享未能恢复。");
     expect(screen.getByRole("heading", { name: "喵传" })).toBeTruthy();
   });
 
@@ -152,6 +152,8 @@ describe("Mew Share page", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Mew Share" })).toBeTruthy();
     expect(screen.getByText("Drop files here, or click to choose.")).toBeTruthy();
+    const head = document.querySelector(".chat-lobby-head") as HTMLElement;
+    await user.click(within(head).getByRole("button", { name: "Help" }));
     expect(screen.getByText(/must not be moved/)).toBeTruthy();
 
     const input = screen.getByLabelText("Choose files") as HTMLInputElement;
@@ -394,7 +396,7 @@ describe("Mew Share page", () => {
     observer.observe(document.body, { subtree: true, childList: true, characterData: true });
     try {
       await user.click(screen.getByRole("tab", { name: "下载" }));
-      const join = screen.getByRole("textbox", { name: "分享口令" });
+      const join = screen.getByRole("textbox", { name: "取件码" });
       await user.click(join);
       await user.paste(code);
       await user.click(screen.getByRole("button", { name: "下载" }));
@@ -403,11 +405,11 @@ describe("Mew Share page", () => {
         snap();
         expect(seen.has("直连")).toBe(true);
       });
-      expect(seen.has("探测中")).toBe(true);
+      expect(seen.has("检测中")).toBe(true);
       expect(seen.has("中继")).toBe(true);
       expect(seenDetails.has("Tailcat 官方中继 · 东京 · 端到端加密")).toBe(true);
-      expect([...seenTips].some((tip) => tip.includes("经官方中继转发，内容端到端加密"))).toBe(true);
-      expect([...seenTips].some((tip) => tip.includes("当前到对方的路径"))).toBe(true);
+      expect([...seenTips].some((tip) => tip.includes("经官方中继转发，端到端加密"))).toBe(true);
+      expect([...seenTips].some((tip) => tip.includes("到对方的线路"))).toBe(true);
       expect([...seen].some((label) => label.includes("DERP") || label.includes("端到端"))).toBe(false);
       expect([...seenDetails].some((label) => label.includes("公网中继") || label.includes("DERP") || label.includes("猫砂盆"))).toBe(false);
     } finally {
@@ -543,7 +545,7 @@ describe("Mew Share page", () => {
     expect(ledeRule).toContain("max-width: none");
     expect(cssBlock(css, ".chat-lobby-head .lede")).toContain("max-width: 62ch");
 
-    // Page fills .main on resize; chat-lobby keeps its own 640px form cap.
+    // Page fills .main on resize. The new-room lobby fills that pane too.
     const miaoPageRule = cssBlock(css, ".miao-page");
     expect(miaoPageRule).toContain("flex: 1");
     expect(miaoPageRule).not.toMatch(/max-width:\s*640px/);
@@ -551,12 +553,12 @@ describe("Mew Share page", () => {
 
     const sendRule = cssBlock(css, ".miao-send");
     expect(sendRule).toContain("overflow: visible");
-    expect(sendRule).toContain("padding: 0");
+    expect(sendRule).toContain("padding: 0 0 24px");
     expect(sendRule).not.toContain("overflow-y: auto");
     expect(sendRule).not.toContain("scrollbar-width: none");
     const receiveRule = cssBlock(css, ".miao-receive");
     expect(receiveRule).toContain("overflow: visible");
-    expect(receiveRule).toContain("padding: 0");
+    expect(receiveRule).toContain("padding: 0 0 24px");
     expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{[^}]*overflow-x:\s*clip;/s);
     expect(css).not.toMatch(/\.main:has\(\.miao-page\)\s*\{\s*padding-left:\s*32px;/);
     expect(css).toMatch(/\.main:has\(\.miao-page\)\s*\{[^}]*padding:\s*16px 18px 14px;/s);
@@ -662,8 +664,13 @@ describe("Mew Share page", () => {
     }
     renderPage();
     await user.click(screen.getByRole("tab", { name: "Download" }));
-    expect(screen.getByText("Paste a share code or a QR image, or scan the code.")).toBeTruthy();
     const join = screen.getByRole("textbox", { name: "Share code" }) as HTMLTextAreaElement;
+    const joinField = join.closest(".field");
+    if (!(joinField instanceof HTMLElement)) {
+      throw new Error("missing join field");
+    }
+    await user.click(within(joinField).getByRole("button", { name: "Help" }));
+    expect(screen.getByText("Paste a share code or a QR image, or scan the code.")).toBeTruthy();
     await user.click(join);
 
     await user.paste(`  ${code}\n`);
@@ -716,7 +723,7 @@ describe("Mew Share page", () => {
     });
     renderPage();
     await user.click(screen.getByRole("tab", { name: "下载" }));
-    const join = screen.getByRole("textbox", { name: "分享口令" });
+    const join = screen.getByRole("textbox", { name: "取件码" });
     await user.click(join);
     pasteOn(join, () => undefined);
     expect((await screen.findByRole("alert")).textContent).toBe("剪贴板是空的。");
@@ -724,7 +731,7 @@ describe("Mew Share page", () => {
     pasteOn(join, (data) => {
       data.setData("text/html", "<b>hi</b>");
     });
-    expect((await screen.findByRole("alert")).textContent).toBe("剪贴板里既没有图片，也没有分享口令。");
+    expect((await screen.findByRole("alert")).textContent).toBe("剪贴板里没有图片或取件码。");
   });
 
   it("accepts a share code pasted from the scan dialog", async () => {

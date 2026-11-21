@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LocaleProvider } from "../i18n";
@@ -103,9 +103,14 @@ describe("lobby peer paste", () => {
     const onConnect = vi.fn();
     const user = userEvent.setup();
     render(<PeerField locale="zh-CN" onConnect={onConnect} />);
-    const peer = screen.getByLabelText("对方地址（可选）") as HTMLInputElement;
+    const peer = screen.getByLabelText("对方地址（选填）") as HTMLInputElement;
     expect(peer.placeholder).toBe("粘贴地址或二维码");
-    expect(screen.getByText("可以直接把二维码粘贴到上面。连接会新建一个临时房间。")).toBeTruthy();
+    const peerField = peer.closest(".field");
+    if (!(peerField instanceof HTMLElement)) {
+      throw new Error("missing peer field");
+    }
+    await user.click(within(peerField).getByRole("button", { name: "说明" }));
+    expect(screen.getByText("支持直接粘贴二维码。连接时会新开一个临时房间。")).toBeTruthy();
     await user.click(peer);
 
     await user.paste("  tc:room\n");
@@ -135,7 +140,7 @@ describe("lobby peer paste", () => {
     pasteOn(peer, (data) => {
       data.items.add(image);
     });
-    expect((await screen.findByRole("alert")).textContent).toBe("这张图片里没有二维码。");
+    expect((await screen.findByRole("alert")).textContent).toBe("图片里没有找到二维码。");
     expect(peer.value).toBe("tc:peer-9");
   });
 
@@ -146,7 +151,7 @@ describe("lobby peer paste", () => {
       readText: async () => "",
     });
     render(<PeerField locale="zh-CN" />);
-    const peer = screen.getByLabelText("对方地址（可选）");
+    const peer = screen.getByLabelText("对方地址（选填）");
     await user.click(peer);
     pasteOn(peer, () => undefined);
     expect((await screen.findByRole("alert")).textContent).toBe("剪贴板是空的。");
@@ -154,7 +159,7 @@ describe("lobby peer paste", () => {
     pasteOn(peer, (data) => {
       data.setData("text/html", "<b>hi</b>");
     });
-    expect((await screen.findByRole("alert")).textContent).toBe("剪贴板里既没有图片，也没有 Tailcat 地址。");
+    expect((await screen.findByRole("alert")).textContent).toBe("剪贴板里没有图片或 Tailcat 地址。");
   });
 
   it("accepts a Tailcat address pasted from the scan dialog", async () => {
@@ -172,15 +177,15 @@ describe("lobby peer paste", () => {
     await user.click(screen.getByRole("button", { name: "扫码" }));
     await user.keyboard("{Control>}v{/Control}");
     await waitFor(() => {
-      expect((screen.getByLabelText("对方地址（可选）") as HTMLInputElement).value).toBe("tc:from-dialog");
+      expect((screen.getByLabelText("对方地址（选填）") as HTMLInputElement).value).toBe("tc:from-dialog");
     });
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    await user.clear(screen.getByLabelText("对方地址（可选）"));
+    await user.clear(screen.getByLabelText("对方地址（选填）"));
     await user.click(screen.getByRole("button", { name: "扫码" }));
     await user.keyboard("{Meta>}v{/Meta}");
     await waitFor(() => {
-      expect((screen.getByLabelText("对方地址（可选）") as HTMLInputElement).value).toBe("tc:from-dialog");
+      expect((screen.getByLabelText("对方地址（选填）") as HTMLInputElement).value).toBe("tc:from-dialog");
     });
   });
 });

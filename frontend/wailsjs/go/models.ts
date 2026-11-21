@@ -58,6 +58,105 @@ export namespace adapter {
 
 }
 
+export namespace derpscan {
+	
+	export class Candidate {
+	    regionId: number;
+	    name: string;
+	    host: string;
+	    port: number;
+	    latencyMs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Candidate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.regionId = source["regionId"];
+	        this.name = source["name"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.latencyMs = source["latencyMs"];
+	    }
+	}
+	export class KeySlot {
+	    engine: string;
+	    index: number;
+	    hint: string;
+	    quota?: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KeySlot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.engine = source["engine"];
+	        this.index = source["index"];
+	        this.hint = source["hint"];
+	        this.quota = source["quota"];
+	        this.error = source["error"];
+	    }
+	}
+	export class Status {
+	    country: string;
+	    mode: string;
+	    active?: Candidate;
+	    candidates: Candidate[];
+	    officialMs: number;
+	    scannedAt: string;
+	    scanning: boolean;
+	    hasKey: boolean;
+	    engines: string[];
+	    keys: KeySlot[];
+	    engineErrors?: Record<string, string>;
+	    auto: boolean;
+	    error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.country = source["country"];
+	        this.mode = source["mode"];
+	        this.active = this.convertValues(source["active"], Candidate);
+	        this.candidates = this.convertValues(source["candidates"], Candidate);
+	        this.officialMs = source["officialMs"];
+	        this.scannedAt = source["scannedAt"];
+	        this.scanning = source["scanning"];
+	        this.hasKey = source["hasKey"];
+	        this.engines = source["engines"];
+	        this.keys = this.convertValues(source["keys"], KeySlot);
+	        this.engineErrors = source["engineErrors"];
+	        this.auto = source["auto"];
+	        this.error = source["error"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace main {
 	
 	export class ClientInfo {
@@ -213,6 +312,20 @@ export namespace main {
 	        this.Platform = source["Platform"];
 	    }
 	}
+	export class WindowHotkeys {
+	    Wake: string;
+	    Close: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new WindowHotkeys(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Wake = source["Wake"];
+	        this.Close = source["Close"];
+	    }
+	}
 
 }
 
@@ -232,6 +345,24 @@ export namespace miao {
 	        this.name = source["name"];
 	        this.size = source["size"];
 	        this.sha256 = source["sha256"];
+	    }
+	}
+	export class PeerProgress {
+	    addr: string;
+	    status: string;
+	    bytesDone: number;
+	    bytesTotal: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PeerProgress(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.addr = source["addr"];
+	        this.status = source["status"];
+	        this.bytesDone = source["bytesDone"];
+	        this.bytesTotal = source["bytesTotal"];
 	    }
 	}
 	export class SavedFile {
@@ -362,6 +493,7 @@ export namespace miao {
 	    relayName?: string;
 	    bytesDone?: number;
 	    bytesTotal?: number;
+	    peers?: PeerProgress[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Snapshot(source);
@@ -391,6 +523,7 @@ export namespace miao {
 	        this.relayName = source["relayName"];
 	        this.bytesDone = source["bytesDone"];
 	        this.bytesTotal = source["bytesTotal"];
+	        this.peers = this.convertValues(source["peers"], PeerProgress);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -410,6 +543,67 @@ export namespace miao {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace remote {
+	
+	export class Input {
+	    kind: string;
+	    x?: number;
+	    y?: number;
+	    button?: string;
+	    dy?: number;
+	    code?: string;
+	    down?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Input(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.x = source["x"];
+	        this.y = source["y"];
+	        this.button = source["button"];
+	        this.dy = source["dy"];
+	        this.code = source["code"];
+	        this.down = source["down"];
+	    }
+	}
+	export class View {
+	    role: string;
+	    state: string;
+	    address?: string;
+	    peer?: string;
+	    mode?: string;
+	    error?: string;
+	    peerPath?: string;
+	    peerOS?: string;
+	    token?: string;
+	    code?: string;
+	    forever?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new View(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.state = source["state"];
+	        this.address = source["address"];
+	        this.peer = source["peer"];
+	        this.mode = source["mode"];
+	        this.error = source["error"];
+	        this.peerPath = source["peerPath"];
+	        this.peerOS = source["peerOS"];
+	        this.token = source["token"];
+	        this.code = source["code"];
+	        this.forever = source["forever"];
+	    }
 	}
 
 }
@@ -472,6 +666,7 @@ export namespace store {
 	    Client: boolean;
 	    Address: string;
 	    Source: string;
+	    Region: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new KeyInfo(source);
@@ -484,11 +679,20 @@ export namespace store {
 	        this.Client = source["Client"];
 	        this.Address = source["Address"];
 	        this.Source = source["Source"];
+	        this.Region = source["Region"];
 	    }
 	}
 	export class Settings {
 	    region: string;
 	    derpMapUrl: string;
+	    derpMode?: string;
+	    derpRegionId?: number;
+	    derpKeys?: Record<string, Array<string>>;
+	    fofaKey?: string;
+	    zoomeyeKey?: string;
+	    hunterKey?: string;
+	    quakeKey?: string;
+	    derpAutoOff?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Settings(source);
@@ -498,6 +702,14 @@ export namespace store {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.region = source["region"];
 	        this.derpMapUrl = source["derpMapUrl"];
+	        this.derpMode = source["derpMode"];
+	        this.derpRegionId = source["derpRegionId"];
+	        this.derpKeys = source["derpKeys"];
+	        this.fofaKey = source["fofaKey"];
+	        this.zoomeyeKey = source["zoomeyeKey"];
+	        this.hunterKey = source["hunterKey"];
+	        this.quakeKey = source["quakeKey"];
+	        this.derpAutoOff = source["derpAutoOff"];
 	    }
 	}
 

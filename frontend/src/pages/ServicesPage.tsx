@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { HeadingHelp } from "../components/HelpTip";
 import SessionCard from "../components/SessionCard";
 import { useI18n } from "../i18n";
 import type { Session } from "../lib/wails";
@@ -50,8 +51,7 @@ export default function ServicesPage({
 
   return (
     <section className="page">
-      <h2>{t("servicesTitle")}</h2>
-      <p className="lede">{t("servicesLede")}</p>
+      <HeadingHelp as="h2" title={t("servicesTitle")} help={t("servicesLede")} />
 
       <h3 className="kind">{t("pipe")}</h3>
       <div className="row">
@@ -66,10 +66,9 @@ export default function ServicesPage({
         ))}
       </div>
 
-      <h3 className="kind" style={{ marginTop: 24 }}>
-        {t("ports")}
-      </h3>
-      <p className="lede">{t("portsLede")}</p>
+      <div style={{ marginTop: 24 }}>
+        <HeadingHelp as="h3" className="kind" title={t("ports")} help={t("portsLede")} />
+      </div>
       <form onSubmit={submitPorts}>
         <div className="field">
           <label htmlFor="ports">{t("portMappings")}</label>
@@ -95,10 +94,9 @@ export default function ServicesPage({
         ))}
       </div>
 
-      <h3 className="kind" style={{ marginTop: 24 }}>
-        {t("files")}
-      </h3>
-      <p className="lede">{t("servicesFilesLede")}</p>
+      <div style={{ marginTop: 24 }}>
+        <HeadingHelp as="h3" className="kind" title={t("files")} help={t("servicesFilesLede")} />
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -128,10 +126,9 @@ export default function ServicesPage({
         ))}
       </div>
 
-      <h3 className="kind" style={{ marginTop: 24 }}>
-        {t("ssh")}
-      </h3>
-      <p className="lede">{t("sshLede")}</p>
+      <div style={{ marginTop: 24 }}>
+        <HeadingHelp as="h3" className="kind" title={t("ssh")} help={t("sshLede")} />
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -170,10 +167,9 @@ export default function ServicesPage({
         ))}
       </div>
 
-      <h3 className="kind" style={{ marginTop: 24 }}>
-        {t("exitNode")}
-      </h3>
-      <p className="lede">{t("exitNodeLede")}</p>
+      <div style={{ marginTop: 24 }}>
+        <HeadingHelp as="h3" className="kind" title={t("exitNode")} help={t("exitNodeLede")} />
+      </div>
       <div className="row">
         <button className="btn" type="button" disabled={busy} onClick={onStartExitNode}>
           {t("startExitNode")}
@@ -186,10 +182,9 @@ export default function ServicesPage({
         ))}
       </div>
 
-      <h3 className="kind" style={{ marginTop: 24 }}>
-        {t("exec")}
-      </h3>
-      <p className="lede">{t("execLede")}</p>
+      <div style={{ marginTop: 24 }}>
+        <HeadingHelp as="h3" className="kind" title={t("exec")} help={t("execLede")} />
+      </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();

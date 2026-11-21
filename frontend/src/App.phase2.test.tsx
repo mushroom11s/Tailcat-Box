@@ -50,7 +50,7 @@ describe("phase 2 files and burn", () => {
 
     const file = new File([Uint8Array.from([1, 2, 3, 4])], "pic.png", { type: "image/png" });
     fireEvent.drop(window, { dataTransfer: { files: [file], types: ["Files"] } });
-    expect(await screen.findByText("Full transfer — this peer cannot resume.")).toBeTruthy();
+    expect(await screen.findByText("This peer can't resume, so the whole file is sent again.")).toBeTruthy();
     expect(await screen.findByRole("img", { name: "pic.png" })).toBeTruthy();
   });
 

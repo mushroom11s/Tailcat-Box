@@ -113,7 +113,7 @@ describe("toast stack", () => {
     fireEvent.click(screen.getByRole("button", { name: "push note" }));
     const status = screen.getByRole("status");
     expect(status.classList.contains("toast-ok")).toBe(true);
-    expect(status.querySelector(".toast-label")?.textContent).toBe("Copied");
+    expect(status.querySelector(".toast-label")?.textContent).toBe("Done");
     expect(status.querySelector(".toast-message")?.textContent).toBe("Saved.");
     expect(status.querySelector(".toast-badge")?.textContent?.trim()).toBe("✓");
     act(() => {

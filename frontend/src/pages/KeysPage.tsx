@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { ClipboardSetText } from "../../wailsjs/runtime/runtime";
+import { HeadingHelp } from "../components/HelpTip";
+import RegionSelect from "../components/RegionSelect";
 import { useI18n } from "../i18n";
 import { defaultKeyName, resolveKeyName } from "../lib/defaultKeyName";
 import type { KeyInfo } from "../lib/wails";
@@ -81,11 +83,9 @@ export default function KeysPage({
 
   return (
     <section className="page">
-      <h2>{t("keysTitle")}</h2>
-      <p className="lede">{t("keysLede")}</p>
+      <HeadingHelp as="h2" title={t("keysTitle")} help={t("keysLede")} />
 
-      <h3 className="kind">{t("derpRegion")}</h3>
-      <p className="lede">{t("derpLede")}</p>
+      <HeadingHelp as="h3" className="kind" title={t("derpRegion")} help={t("derpLede")} />
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -94,13 +94,7 @@ export default function KeysPage({
       >
         <div className="field">
           <label htmlFor="net-region">{t("regionLabel")}</label>
-          <input
-            id="net-region"
-            value={netRegion}
-            onChange={(e) => setNetRegion(e.target.value)}
-            placeholder="auto, nyc, 1"
-            autoComplete="off"
-          />
+          <RegionSelect id="net-region" value={netRegion} onChange={setNetRegion} />
         </div>
         <div className="field">
           <label htmlFor="net-derp">{t("derpMapURL")}</label>
@@ -126,14 +120,7 @@ export default function KeysPage({
         </div>
         <div className="field">
           <label htmlFor="key-region">{t("regionHint")}</label>
-          <input
-            id="key-region"
-            value={keyRegion}
-            onChange={(e) => setKeyRegion(e.target.value)}
-            placeholder="auto, nyc, 1"
-            autoComplete="off"
-            disabled={client}
-          />
+          <RegionSelect id="key-region" value={client ? "" : keyRegion} onChange={setKeyRegion} disabled={client} />
         </div>
         <label className="check">
           <input type="checkbox" checked={client} onChange={(e) => setClient(e.target.checked)} />

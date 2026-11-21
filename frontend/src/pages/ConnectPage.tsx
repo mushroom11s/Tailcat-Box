@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { HeadingHelp } from "../components/HelpTip";
 import SessionCard from "../components/SessionCard";
 import { useI18n } from "../i18n";
 import type { Session } from "../lib/wails";
@@ -70,8 +71,7 @@ export default function ConnectPage({
 
   return (
     <section className="page">
-      <h2>{t("connectTitle")}</h2>
-      <p className="lede">{t("connectLede")}</p>
+      <HeadingHelp as="h2" title={t("connectTitle")} help={t("connectLede")} />
       <div className="tabs" role="tablist" aria-label={t("connectMode")}>
         {(["pipe", "forward", "browse", "ssh", "socks"] as Tab[]).map((value) => (
           <button

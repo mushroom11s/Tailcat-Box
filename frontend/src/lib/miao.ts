@@ -179,6 +179,44 @@ const RELAY_NAMES: Record<string, Record<Locale, string>> = {
   dubai: { en: "Dubai", "zh-CN": "迪拜" },
 };
 
+const REGION_CODES = [
+  "ams",
+  "blr",
+  "den",
+  "dfw",
+  "dxb",
+  "fra",
+  "hel",
+  "hkg",
+  "hnl",
+  "iad",
+  "jnb",
+  "lax",
+  "lhr",
+  "mad",
+  "mia",
+  "nue",
+  "nyc",
+  "ord",
+  "par",
+  "sao",
+  "sea",
+  "sfo",
+  "sin",
+  "syd",
+  "tok",
+  "tor",
+  "waw",
+] as const;
+
+/** Official relay regions for the settings dropdown, labelled in the UI language. */
+export function regionOptions(locale: Locale): { code: string; label: string }[] {
+  return REGION_CODES.map((code) => ({
+    code,
+    label: `${RELAY_NAMES[code][locale]} · ${code}`,
+  })).sort((a, b) => a.label.localeCompare(b.label, locale === "zh-CN" ? "zh" : "en"));
+}
+
 function isOpaqueRelayLabel(value: string): boolean {
   if (/^\d+$/.test(value)) {
     return true;
