@@ -19,3 +19,6 @@ func WindowShown(string) bool {
 func NoteShown(on bool) {
 	shown.Store(on)
 }
+
+// RaiseWindow is a no-op where the prompt stays in the page.
+func RaiseWindow(string) {}

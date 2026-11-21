@@ -37,7 +37,6 @@ export default function QrShareButton({ value, disabled = false, centerMark }: P
   const [open, setOpen] = useState(false);
   const [src, setSrc] = useState("");
   const [failed, setFailed] = useState(false);
-  const [copyNote, setCopyNote] = useState("");
   const [copyError, setCopyError] = useState("");
   const ticket = useRef(0);
 
@@ -49,7 +48,6 @@ export default function QrShareButton({ value, disabled = false, centerMark }: P
     setOpen(true);
     setSrc("");
     setFailed(false);
-    setCopyNote("");
     setCopyError("");
     try {
       const url = await encodeQrDataURL(text, centerMark ? { centerMark } : undefined);
@@ -67,11 +65,9 @@ export default function QrShareButton({ value, disabled = false, centerMark }: P
     if (!src) {
       return;
     }
-    setCopyNote("");
     setCopyError("");
     try {
-      await copyQrImage(src);
-      setCopyNote(t("qrCopied"));
+      await copyQrImage(src, text);
     } catch {
       setCopyError(t("qrCopyFailed"));
       push(t("qrCopyFailed"));
@@ -104,7 +100,6 @@ export default function QrShareButton({ value, disabled = false, centerMark }: P
             <QrCopyButton disabled={!src} onClick={() => void copyImage()} />
           </div>
           <code className="qr-payload">{text}</code>
-          {copyNote ? <p className="chat-quiet" role="status">{copyNote}</p> : null}
           {copyError ? <p className="err" role="alert">{copyError}</p> : null}
           <div className="row">
             <button className="btn btn-ghost" type="button" onClick={() => void copyText(text)}>

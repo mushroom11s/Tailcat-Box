@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { OnFileDrop, OnFileDropOff } from "../../wailsjs/runtime/runtime";
 import CallStatus from "../components/CallStatus";
 import HelpTip from "../components/HelpTip";
@@ -24,6 +24,55 @@ import { displayNickname } from "../lib/nickname";
 import { labelPeerAddress, remarkAddress, remarkFor, type RemarkMap } from "../lib/remark";
 import { abbreviateAddress } from "../lib/roomLabel";
 import { hasWailsBindings, selectFiles } from "../lib/wails";
+
+function clipboardFiles(data: DataTransfer | null): File[] {
+  if (!data) {
+    return [];
+  }
+  const found: File[] = [];
+  if (data.items && data.items.length > 0) {
+    for (const item of Array.from(data.items)) {
+      if (item.kind !== "file") {
+        continue;
+      }
+      const file = item.getAsFile();
+      if (file) {
+        found.push(file);
+      }
+    }
+  }
+  if (found.length === 0 && data.files && data.files.length > 0) {
+    found.push(...Array.from(data.files));
+  }
+  return found;
+}
+
+function clipboardPaths(data: DataTransfer | null): string[] {
+  const raw = data?.getData("text/uri-list") ?? "";
+  if (!raw.trim()) {
+    return [];
+  }
+  const paths: string[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const text = line.trim();
+    if (!text || text.startsWith("#") || !text.toLowerCase().startsWith("file:")) {
+      continue;
+    }
+    try {
+      const url = new URL(text);
+      let path = decodeURIComponent(url.pathname);
+      if (/^\/[A-Za-z]:/.test(path)) {
+        path = path.slice(1);
+      }
+      if (path) {
+        paths.push(path);
+      }
+    } catch {
+      // A malformed file URI is not a file to send.
+    }
+  }
+  return paths;
+}
 
 export type ChatMessage = {
   id: string;
@@ -167,7 +216,7 @@ function RoomTools({ address, compact }: { address: string; compact?: boolean })
         onClick={(event) => {
           event.stopPropagation();
           if (src) {
-            void copyQrImage(src).catch(() => undefined);
+            void copyQrImage(src, text).catch(() => undefined);
           }
         }}
       >
@@ -1102,6 +1151,28 @@ export default function ChatPage({
     void beginRecording("button");
   }
 
+  function onComposerPaste(event: ClipboardEvent<HTMLTextAreaElement>): void {
+    const files = clipboardFiles(event.clipboardData);
+    const paths = files.length === 0 ? clipboardPaths(event.clipboardData) : [];
+    if (files.length === 0 && paths.length === 0) {
+      return;
+    }
+    event.preventDefault();
+    void (async () => {
+      try {
+        for (const file of files) {
+          await sendBrowserFile(file);
+        }
+        for (const path of paths) {
+          await sendPath(path);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setInline(localizeChatError(message, t) || message);
+      }
+    })();
+  }
+
   async function attach(): Promise<void> {
     setNotice("");
     if (hasWailsBindings()) {
@@ -1652,6 +1723,7 @@ export default function ChatPage({
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onComposerKey}
           onKeyUp={onComposerKeyUp}
+          onPaste={onComposerPaste}
         />
         <div className="row composer-actions">
           <IconButton label={t("chatAttach")} onClick={() => void attach()}>

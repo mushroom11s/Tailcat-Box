@@ -383,16 +383,27 @@ export default function RemotePage({
   function openDevice(value: string): void {
     setError("");
     setAddress(value);
+    queueMicrotask(() => {
+      const field = document.getElementById("remote-address");
+      field?.scrollIntoView?.({ block: "center" });
+      if (field instanceof HTMLTextAreaElement) {
+        field.focus();
+      }
+    });
   }
 
   function keep(nextAddress: string): void {
-    const clean = shareableAddress(nextAddress);
+    const target = extractRemoteTarget(nextAddress);
+    const parsed = target ? parseRemoteCode(target) : null;
+    const clean = shareableAddress(parsed?.addr || target);
     if (!clean) {
       setError(t("remoteBadAddress"));
       return;
     }
     setError("");
-    setAddress(clean);
+    if (!parsed) {
+      setAddress(clean);
+    }
     setMine((prev) => {
       const next = rememberDevice(prev, clean);
       writeDeviceBook("mine", next);
@@ -924,8 +935,8 @@ export default function RemotePage({
                 <QrCopyButton
                   onClick={() => {
                     setQrNote("");
-                    void copyQrImage(qrSrc)
-                      .then(() => setQrNote(t("qrCopied")))
+                    void copyQrImage(qrSrc, view.code)
+                      .then(() => setQrNote(""))
                       .catch(() => setQrNote(t("qrCopyFailed")));
                   }}
                 />

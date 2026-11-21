@@ -521,6 +521,28 @@ describe("stick to bottom", () => {
     }
   });
 
+  it("sends a picture pasted into the composer and still types text", async () => {
+    const onSendBrowserFile = vi.fn().mockResolvedValue("");
+    const user = userEvent.setup();
+    renderChat({ onSendBrowserFile });
+    const box = document.getElementById("chat-composer") as HTMLTextAreaElement;
+    const file = new File(["png"], "shot.png", { type: "image/png" });
+    fireEvent.paste(box, {
+      clipboardData: {
+        items: [{ kind: "file", getAsFile: () => file }],
+        files: [file],
+        getData: () => "",
+      },
+    });
+    await waitFor(() => expect(onSendBrowserFile).toHaveBeenCalledTimes(1));
+    expect(onSendBrowserFile.mock.calls[0]?.[0]).toBe(file);
+    expect(box.value).toBe("");
+
+    await user.click(box);
+    await user.paste("hello");
+    expect(box.value).toBe("hello");
+  });
+
   it("does not steal the scroll position when reading older history", async () => {
     const view = renderChat({ messages: thread });
     const log = document.querySelector(".chat-log") as HTMLElement;
