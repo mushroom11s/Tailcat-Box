@@ -5,6 +5,12 @@ package remote
 /*
 #cgo LDFLAGS: -framework CoreGraphics -framework CoreFoundation
 #include <CoreGraphics/CoreGraphics.h>
+
+// cgo cannot call the variadic CGEventCreateScrollWheelEvent directly
+// ("unexpected type: ..."). This helper keeps the call in C.
+static CGEventRef createScrollWheel(int32_t dy) {
+	return CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitLine, 1, dy);
+}
 */
 import "C"
 import "sync"
@@ -69,7 +75,7 @@ func (d *darwinInjector) Button(button string, down bool) error {
 }
 
 func (darwinInjector) Wheel(dy int) error {
-	ev := C.CGEventCreateScrollWheelEvent(0, C.kCGScrollEventUnitLine, 1, C.int32_t(-dy))
+	ev := C.createScrollWheel(C.int32_t(-dy))
 	if ev == 0 {
 		return ErrInput
 	}
