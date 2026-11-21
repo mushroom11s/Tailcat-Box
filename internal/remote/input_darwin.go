@@ -89,11 +89,7 @@ func (darwinInjector) Key(code string, down bool) error {
 	if !ok {
 		return nil
 	}
-	var flag C.bool
-	if down {
-		flag = 1
-	}
-	ev := C.CGEventCreateKeyboardEvent(0, C.CGKeyCode(keys.mac), flag)
+	ev := C.CGEventCreateKeyboardEvent(0, C.CGKeyCode(keys.mac), C.bool(down))
 	if ev == 0 {
 		return ErrInput
 	}
