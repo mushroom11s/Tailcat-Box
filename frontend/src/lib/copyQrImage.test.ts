@@ -17,13 +17,14 @@ describe("copyQrImage", () => {
     const OriginalItem = globalThis.ClipboardItem;
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { write } });
     try {
-      await copyQrImage(PNG);
+      await copyQrImage(PNG, "rc1.example");
       expect(write).toHaveBeenCalledTimes(1);
       const items = write.mock.calls[0][0] as ClipboardItem[];
       expect(items).toHaveLength(1);
       const blob = await items[0].getType("image/png");
       expect(blob.type).toBe("image/png");
       expect(new Uint8Array(await blob.arrayBuffer()).byteLength).toBeGreaterThan(8);
+      expect(await (await items[0].getType("text/plain")).text()).toBe("rc1.example");
     } finally {
       Object.defineProperty(navigator, "clipboard", { configurable: true, value: original });
       if (OriginalItem) {

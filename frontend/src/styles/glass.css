@@ -1779,6 +1779,10 @@ select.glass-select:disabled {
   z-index: 40;
 }
 
+.modal-backdrop.remote-ask {
+  z-index: 4000;
+}
+
 .modal {
   width: min(520px, 100%);
   padding: 22px 24px;
@@ -5016,9 +5020,9 @@ div.label-with-help:has(> .check) {
 }
 
 .remote-life button[aria-checked="true"] {
-  background: color-mix(in srgb, var(--accent) 16%, white);
+  background: color-mix(in srgb, var(--accent) 24%, var(--glass-bg-strong));
   color: var(--text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .remote-life-now {

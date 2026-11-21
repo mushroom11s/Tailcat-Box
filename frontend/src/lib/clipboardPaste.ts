@@ -79,10 +79,18 @@ export async function resolveClipboardPaste(
   decodeFile: (file: File) => Promise<string | null> = decodeQrFromFile,
 ): Promise<PasteResolution> {
   const file = clipboardImageFile(data);
-  if (file) {
-    return valueFromImage(file, extract, decodeFile);
-  }
   const text = clipboardPlainText(data);
+  if (file) {
+    const fromImage = await valueFromImage(file, extract, decodeFile);
+    if (fromImage.ok) {
+      return fromImage;
+    }
+    const alongside = text.trim() ? extract(text) : "";
+    if (alongside) {
+      return { ok: true, value: alongside };
+    }
+    return fromImage;
+  }
   if (text.trim()) {
     const value = extract(text);
     return value ? { ok: true, value } : { ok: false, reason: "invalid" };

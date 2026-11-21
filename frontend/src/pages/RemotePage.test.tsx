@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocaleProvider } from "../i18n";
+import { encodeRemoteCode } from "../lib/remoteDesk";
 import { forgetDevice, listShareDevices, rememberDevice, renameDevice, writeDeviceBook } from "../lib/remoteDevices";
 import RemotePage from "./RemotePage";
 
@@ -112,6 +113,20 @@ describe("remote control", () => {
     expect((toggle as HTMLInputElement).checked).toBe(false);
   });
 
+  it("saves the address inside a pasted connection code", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("tailcat-locale", "zh-CN");
+    renderPage();
+    const field = screen.getByRole("textbox", { name: /设备地址/ });
+    const code = encodeRemoteCode("tc:studio", "tok");
+    await user.click(field);
+    await user.paste(code);
+    await user.click(screen.getByRole("button", { name: "保存至我的设备" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(within(screen.getByRole("region", { name: "我的设备" })).getByText("tc:studio")).toBeTruthy();
+    expect((field as HTMLTextAreaElement).value).toContain("rc1.");
+  });
+
   it("hides end once the guest session is over", async () => {
     const user = userEvent.setup();
     localStorage.setItem("tailcat-locale", "zh-CN");
@@ -157,7 +172,7 @@ describe("remote control", () => {
     expect(listShareDevices()).toEqual([{ address: "tc:mine", label: "书房" }]);
   });
 
-  it("pages connection history after six records", () => {
+  it("pages connection history after six records", async () => {
     localStorage.setItem("tailcat-locale", "zh-CN");
     localStorage.setItem(
       "tailcat-remote-history",
@@ -176,5 +191,8 @@ describe("remote control", () => {
     expect(within(history).getByText("第 1/2 页 · 共 7 条")).toBeTruthy();
     expect(within(history).getByText("tc:h6")).toBeTruthy();
     expect(within(history).queryByText("tc:h0")).toBeNull();
+    const user = userEvent.setup();
+    await user.click(within(history).getByRole("button", { name: /tc:h6/ }));
+    expect((screen.getByRole("textbox", { name: /设备地址/ }) as HTMLTextAreaElement).value).toBe("tc:h6");
   });
 });

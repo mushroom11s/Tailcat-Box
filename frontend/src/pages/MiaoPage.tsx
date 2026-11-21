@@ -296,7 +296,6 @@ function ShareCard({
   const { push } = useToasts();
   const [qrSrc, setQrSrc] = useState("");
   const [qrFailed, setQrFailed] = useState(false);
-  const [copyNote, setCopyNote] = useState("");
   const [copyError, setCopyError] = useState("");
   const left = downloadsLeft(share.maxDownloads, share.downloads);
   const ttl = remainingTTL(share.expiresAt, share.forever, now);
@@ -405,20 +404,14 @@ function ShareCard({
           {qrSrc ? (
             <QrCopyButton
               onClick={() => {
-                setCopyNote("");
                 setCopyError("");
-                void copyQrImage(qrSrc)
-                  .then(() => {
-                    setCopyNote(t("qrCopied"));
-                  })
-                  .catch(() => {
-                    setCopyError(t("qrCopyFailed"));
-                    push(t("qrCopyFailed"));
-                  });
+                void copyQrImage(qrSrc, share.payload).catch(() => {
+                  setCopyError(t("qrCopyFailed"));
+                  push(t("qrCopyFailed"));
+                });
               }}
             />
           ) : null}
-          {copyNote ? <p className="chat-quiet" role="status">{copyNote}</p> : null}
           {copyError ? <p className="err" role="alert">{copyError}</p> : null}
         </div>
       </div>

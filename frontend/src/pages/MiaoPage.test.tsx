@@ -203,7 +203,7 @@ describe("Mew Share page", () => {
     const blob = await copied[0].getType("image/png");
     expect(blob.type).toBe("image/png");
     expect(blob.size).toBeGreaterThan(8);
-    expect(screen.getAllByText("QR code copied.")).toHaveLength(1);
+    expect(screen.queryByText("QR code copied.")).toBeNull();
     expect(document.querySelector(".toast-ok")).toBeNull();
     const copyCode = screen.getByRole("button", { name: "Copy code" });
     expect(copyCode.classList.contains("tunnel-code-copy")).toBe(true);

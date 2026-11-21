@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useI18n } from "../i18n";
 import { focusAppWindow } from "../lib/osNotify";
 import { openRemoteAskWindow, type RemoteAskWindow } from "../lib/remoteAskWindow";
@@ -71,8 +72,9 @@ export default function RemoteIncoming() {
     }
     prompted.current = peer;
     focusAppWindow();
+    const title = t("remoteAskTitle");
     const opened = openRemoteAskWindow({
-      title: t("remoteAskTitle"),
+      title,
       body: t("remoteIncoming").replaceAll("{peer}", peer),
       allowLabel: t("remoteAllow"),
       denyLabel: t("remoteDeny"),
@@ -93,13 +95,15 @@ export default function RemoteIncoming() {
     }
     popup.current = opened;
     setFallback(false);
+    raisePrompt(title);
+    window.setTimeout(() => raisePrompt(title), 200);
   }, [ask?.peer, t]);
 
-  if (!fallback || !ask?.peer) {
+  if (!fallback || !ask?.peer || typeof document === "undefined") {
     return null;
   }
-  return (
-    <div className="modal-backdrop" role="presentation">
+  return createPortal(
+    <div className="modal-backdrop remote-ask" role="presentation">
       <div className="glass modal modal-compact" role="dialog" aria-modal="true" aria-labelledby="remote-ask-title">
         <h3 id="remote-ask-title">{t("remoteAskTitle")}</h3>
         <p>{t("remoteIncoming").replaceAll("{peer}", ask.peer)}</p>
@@ -112,6 +116,16 @@ export default function RemoteIncoming() {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
+}
+
+function raisePrompt(title: string): void {
+  const app = (window as { go?: { main?: { App?: { RaisePrompt?: (title: string) => void } } } }).go?.main?.App;
+  try {
+    app?.RaisePrompt?.(title);
+  } catch {
+    // The browser preview has no native window.
+  }
 }

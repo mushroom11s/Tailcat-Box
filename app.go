@@ -443,6 +443,11 @@ func (a *App) toggleWindow() {
 	a.wakeWindow()
 }
 
+// RaisePrompt brings a connection-request window above this app.
+func (a *App) RaisePrompt(title string) {
+	hotkey.RaiseWindow(title)
+}
+
 func (a *App) showWindow() {
 	if a.ctx == nil {
 		return

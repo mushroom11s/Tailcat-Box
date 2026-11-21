@@ -78,15 +78,29 @@ export function pngBlobFromImageSrc(src: string): Promise<Blob> {
  * Write a PNG of `src` to the clipboard.
  * The ClipboardItem is built before the first await so WebKit still sees the click.
  */
-export async function copyQrImage(src: string): Promise<void> {
+export async function copyQrImage(src: string, text = ""): Promise<void> {
   const clip = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
   if (!clip || typeof clip.write !== "function" || typeof ClipboardItem === "undefined") {
     throw new Error("clipboard-image-unsupported");
   }
+  const plain = text.trim();
   const png = pngBlobFromImageSrc(src);
+  if (plain) {
+    try {
+      await clip.write([
+        new ClipboardItem({
+          "image/png": png,
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Some webviews only accept an image item. The first PNG promise was already handed over.
+    }
+  }
   await clip.write([
     new ClipboardItem({
-      "image/png": png,
+      "image/png": plain ? pngBlobFromImageSrc(src) : png,
     }),
   ]);
 }
