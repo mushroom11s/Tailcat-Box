@@ -6,6 +6,7 @@ import QrShareButton from "../components/QrShareButton";
 import SSHDesk, { type SSHShell } from "../components/SSHDesk";
 import LoadingCat from "../components/LoadingCat";
 import { statusMessageKey, useI18n } from "../i18n";
+import { formatAccessLine } from "../lib/accessLog";
 import { draftMapping, mappingPrimary, type PortMappingRecord } from "../lib/portMappings";
 import { shareableAddress } from "../lib/qr";
 import type { Session, SSHDeskState } from "../lib/wails";
@@ -45,6 +46,7 @@ type Props = {
   onStop: (id: string) => void;
   onDelete: (id: string) => void;
   onAutostart: (id: string, enabled: boolean) => void;
+  onAccessLog: (id: string, enabled: boolean) => void;
 };
 
 async function copyText(text: string): Promise<void> {
@@ -78,6 +80,7 @@ export default function TunnelPage({
   onStop,
   onDelete,
   onAutostart,
+  onAccessLog,
 }: Props) {
   const { t } = useI18n();
   const [creating, setCreating] = useState(false);
@@ -89,6 +92,7 @@ export default function TunnelPage({
   const [openBrowser, setOpenBrowser] = useState(false);
   const [serveKey, setServeKey] = useState("");
   const [serveAutostart, setServeAutostart] = useState(false);
+  const [serveAccessLog, setServeAccessLog] = useState(false);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -113,6 +117,7 @@ export default function TunnelPage({
     setOpenBrowser(false);
     setServeKey("");
     setServeAutostart(false);
+    setServeAccessLog(false);
     setFormError("");
   }
 
@@ -134,6 +139,7 @@ export default function TunnelPage({
         openBrowser,
         keyName: mode === "serve" ? serveKey : "",
         autostart: mode === "serve" ? serveAutostart : false,
+        accessLog: mode === "serve" ? serveAccessLog : false,
       });
       onAdd(record);
       setCreating(false);
@@ -145,6 +151,8 @@ export default function TunnelPage({
         setFormError(t("tunnelPeerRequired"));
       } else if (message === "one-mapping") {
         setFormError(t("tunnelOneMapping"));
+      } else if (message === "socket-serve-only") {
+        setFormError(t("tunnelSocketServeOnly"));
       } else {
         setFormError(message);
       }
@@ -286,12 +294,15 @@ export default function TunnelPage({
             </div>
           ) : null}
           <div className="field">
-            <label htmlFor="tunnel-mapping-spec">{mode === "serve" ? t("portMappings") : t("mappings")}</label>
+            <div className="label-with-help">
+              <label htmlFor="tunnel-mapping-spec">{mode === "serve" ? t("portMappings") : t("mappings")}</label>
+              <HelpTip>{t("tunnelSpecHelp")}</HelpTip>
+            </div>
             <input
               id="tunnel-mapping-spec"
               value={mode === "serve" ? serveSpec : forwardSpec}
               onChange={(ev) => (mode === "serve" ? setServeSpec(ev.target.value) : setForwardSpec(ev.target.value))}
-              placeholder={mode === "serve" ? "8080" : "8080 or 18080:8080"}
+              placeholder={mode === "serve" ? "8080 or 5555:printer.lan:5555" : "8080 or 18080:8080"}
               autoComplete="off"
             />
           </div>
@@ -338,6 +349,18 @@ export default function TunnelPage({
                 />
                 {t("tunnelServeAutostart")}
               </label>
+              <div className="label-with-help">
+                <label className="check" htmlFor="tunnel-serve-access-log">
+                  <input
+                    id="tunnel-serve-access-log"
+                    type="checkbox"
+                    checked={serveAccessLog}
+                    onChange={(ev) => setServeAccessLog(ev.target.checked)}
+                  />
+                  {t("tunnelAccessLog")}
+                </label>
+                <HelpTip>{t("tunnelAccessLogHelp")}</HelpTip>
+              </div>
             </>
           ) : null}
           {mode === "forward" ? (
@@ -368,6 +391,7 @@ export default function TunnelPage({
           session={sessionFor(current.id, links, sessions)}
           onCopy={(text) => void copyText(text)}
           onAutostart={onAutostart}
+          onAccessLog={onAccessLog}
         />
       ) : null}
       </div>
@@ -380,11 +404,13 @@ function MappingDetail({
   session,
   onCopy,
   onAutostart,
+  onAccessLog,
 }: {
   mapping: PortMappingRecord;
   session: Session | undefined;
   onCopy: (text: string) => void;
   onAutostart: (id: string, enabled: boolean) => void;
+  onAccessLog: (id: string, enabled: boolean) => void;
 }) {
   const { t } = useI18n();
   const primary = mappingPrimary(mapping, t("tunnelEphemeral"));
@@ -414,6 +440,26 @@ function MappingDetail({
           />
           {t("tunnelServeAutostart")}
         </label>
+      ) : null}
+      {mapping.mode === "serve" ? (
+        <div className="label-with-help">
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={mapping.accessLog}
+              onChange={(ev) => onAccessLog(mapping.id, ev.target.checked)}
+            />
+            {t("tunnelAccessLog")}
+          </label>
+          <HelpTip>{t("tunnelAccessLogHelp")}</HelpTip>
+        </div>
+      ) : null}
+      {mapping.mode === "serve" && mapping.accessLog ? (
+        <pre className="tunnel-log" aria-label={t("tunnelAccessLog")}>
+          {session?.Log && session.Log.length > 0
+            ? session.Log.map((line) => formatAccessLine(line, t)).join("\n")
+            : t("tunnelAccessEmpty")}
+        </pre>
       ) : null}
       {peerText ? <KeyLine value={peerText} copyLabel={t("tunnelCopyAddress")} onCopy={onCopy} /> : null}
       {session?.Address ? (

@@ -14,8 +14,23 @@ export function sameSessions(a: Session[], b: Session[]): boolean {
       x.Address !== y.Address ||
       x.Err !== y.Err ||
       x.Progress !== y.Progress ||
-      x.Dangerous !== y.Dangerous
+      x.Dangerous !== y.Dangerous ||
+      !sameLog(x.Log, y.Log)
     ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function sameLog(a?: string[], b?: string[]): boolean {
+  const left = a ?? [];
+  const right = b ?? [];
+  if (left.length !== right.length) {
+    return false;
+  }
+  for (let i = 0; i < left.length; i++) {
+    if (left[i] !== right[i]) {
       return false;
     }
   }

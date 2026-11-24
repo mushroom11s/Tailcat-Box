@@ -161,6 +161,8 @@ describe("port mapping persistence", () => {
         openBrowser: false,
         keyName: "home",
         autostart: false,
+        socket: "",
+        accessLog: false,
       },
     ]);
   });

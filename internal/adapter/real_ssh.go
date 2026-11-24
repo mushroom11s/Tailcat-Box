@@ -226,12 +226,11 @@ func applySSHAllowlist(srv *tailcat.Server, opts SSHServeOpts) error {
 	if err != nil {
 		return err
 	}
-	if len(keys) == 0 {
-		// A non-empty list with a zero key makes the allow map non-nil,
-		// which denies every real client. An empty list would allow everyone.
-		srv.AllowedClients = []key.NodePublic{{}}
-		return nil
+	// An empty KeySet allows nobody. A nil AllowClient would allow everyone.
+	var allow tailcat.KeySet
+	for _, k := range keys {
+		allow.Add(k)
 	}
-	srv.AllowedClients = keys
+	srv.AllowClient = allow.Contains
 	return nil
 }

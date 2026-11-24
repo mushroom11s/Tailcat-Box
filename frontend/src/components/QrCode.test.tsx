@@ -165,6 +165,8 @@ describe("qr share and scan", () => {
               openBrowser: false,
               keyName: "",
               autostart: false,
+              socket: "",
+              accessLog: false,
             },
             {
               id: "fwd",
@@ -176,6 +178,8 @@ describe("qr share and scan", () => {
               openBrowser: false,
               keyName: "",
               autostart: false,
+              socket: "",
+              accessLog: false,
             },
           ]}
           sessions={[
@@ -214,6 +218,7 @@ describe("qr share and scan", () => {
           onStop={vi.fn()}
           onDelete={vi.fn()}
           onAutostart={vi.fn()}
+          onAccessLog={vi.fn()}
         />
       </LocaleProvider>,
     );

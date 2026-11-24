@@ -1041,6 +1041,22 @@ textarea {
   font-size: 13px;
 }
 
+.tunnel-log {
+  width: 100%;
+  box-sizing: border-box;
+  max-height: 9.5em;
+  overflow: auto;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--inset-bg);
+  color: var(--text, inherit);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .lede {
   margin: 0 0 16px;
   color: var(--muted);
