@@ -280,6 +280,16 @@ func (s *Service) List() []session.Session {
 	return out
 }
 
+func appendLog(prev []string, line string, limit int) []string {
+	next := make([]string, len(prev)+1)
+	copy(next, prev)
+	next[len(prev)] = line
+	if limit > 0 && len(next) > limit {
+		next = append([]string(nil), next[len(next)-limit:]...)
+	}
+	return next
+}
+
 func (s *Service) Events() <-chan adapter.Event {
 	return s.events
 }
@@ -311,6 +321,10 @@ func (s *Service) applyEvent(ev adapter.Event) {
 	case adapter.EventData:
 		if ev.Data != "" {
 			sess.Progress = ev.Data
+		}
+	case adapter.EventLog:
+		if ev.Data != "" {
+			sess.Log = appendLog(sess.Log, ev.Data, 100)
 		}
 	case adapter.EventError:
 		sess.Err = ev.Err

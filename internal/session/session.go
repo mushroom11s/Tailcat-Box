@@ -46,6 +46,8 @@ type Session struct {
 	Err       string
 	Progress  string
 	Dangerous bool
+	// Log is the recent access-log lines for a port serve, newest last.
+	Log []string
 }
 
 func New(kind Kind) *Session {

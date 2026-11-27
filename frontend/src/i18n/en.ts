@@ -72,7 +72,7 @@ export const en = {
 
   tunnelTitle: "Tunnel",
   tunnelLede:
-    "Saved port mappings you can start and stop anytime. Serve a local TCP port on a Tailcat address, or forward a peer port onto this machine.",
+    "Saved port mappings you can start and stop anytime. Serve a local port, a host on this network, or a Unix socket on a Tailcat address, or forward a peer port onto this machine.",
   tunnelNew: "+ New mapping",
   tunnelEmpty: "No saved mappings yet.",
   tunnelList: "Saved mappings",
@@ -93,6 +93,21 @@ export const en = {
   tunnelKeyInUsePort: "That key is already listening on a port serve.",
   keyInUseRemote: "That key is already used for remote control.",
   tunnelServeAutostart: "Start automatically when the app launches",
+  tunnelSpecHelp:
+    "8080 serves that port on this machine. 8080:80 serves 8080 and connects to local port 80. 5555:printer.lan:5555 reaches a host on this network. 8022:/tmp/app.sock, or /tmp/app.sock alone, proxies a local Unix socket.",
+  tunnelSocketServeOnly: "A Unix socket can only be served, not forwarded.",
+  tunnelAccessLog: "Access log",
+  tunnelAccessLogHelp:
+    "Record who is allowed in and when each TCP connection opens and closes. Applies the next time this mapping starts.",
+  tunnelAccessEmpty: "No connections yet.",
+  accessAllow: "Allowed {peer}",
+  accessRefuse: "Refused {peer}",
+  accessRefusePort: "Refused TCP {port}",
+  accessOpen: "{proto} {port} opened · {peer} · {via}",
+  accessClose: "{proto} {port} closed · {peer} · {duration}",
+  accessPeerUnknown: "unknown peer",
+  accessViaUnknown: "unknown path",
+  accessDurationUnknown: "unknown duration",
   openInBrowser: "Open in browser",
 
   settingsTitle: "Settings",
@@ -211,7 +226,7 @@ export const en = {
   files: "Files",
   startPipeServe: "Start ephemeral pipe serve",
   emptyPipes: "No pipe serve sessions yet.",
-  portsLede: "Comma-separated ports or mappings such as 8080,8443 or 5555:127.0.0.1:3306.",
+  portsLede: "Ports or mappings such as 8080, 8080:80, 5555:printer.lan:5555, or 8022:/tmp/app.sock.",
   portMappings: "Port mappings",
   startPortServe: "Start port serve",
   emptyPorts: "No port serve sessions yet.",

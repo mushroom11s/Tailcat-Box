@@ -12,6 +12,7 @@ const (
 	EventData   EventKind = "data"  // payload bytes as string for Plan 1 text pipe
 	EventError  EventKind = "error"
 	EventClosed EventKind = "closed"
+	EventLog    EventKind = "log" // access-log JSON for a port serve
 )
 
 type Event struct {
@@ -32,6 +33,14 @@ type PortMapping struct {
 	LocalPort  uint16
 	RemoteHost string
 	RemotePort uint16
+	// Socket, when set, proxies to a local Unix-domain socket instead of
+	// a TCP host:port. LocalPort 0 with Socket set accepts every port
+	// that is not otherwise mapped.
+	Socket string
+	// AccessLog asks a port serve to record allow/refuse and TCP open/close.
+	// It is a serve option carried on the mapping so the existing Wails
+	// method does not grow another argument. Forward ignores it.
+	AccessLog bool
 }
 
 func (m PortMapping) destHost() string {
@@ -118,6 +127,8 @@ type FileEntry struct {
 // SSH desk identity) so the advertised address stays stable across restarts.
 type PortServeOpts struct {
 	IdentityJSON string
+	// AccessLog records who is allowed in and when each TCP connection opens and closes.
+	AccessLog bool
 	// Region overrides the global region for this serve (the saved key's own region).
 	Region string
 	// OnPinned receives IdentityJSON with the DERP region it served on embedded,

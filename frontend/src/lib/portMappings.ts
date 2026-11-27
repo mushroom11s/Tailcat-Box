@@ -10,12 +10,16 @@ export type PortMappingRecord = {
   localPort: number;
   remoteHost: string;
   remotePort: number;
+  /** Unix-domain socket path for a serve target. Empty for TCP. */
+  socket: string;
   peer: string;
   openBrowser: boolean;
   /** Saved key for serve mode; empty means ephemeral address each start. */
   keyName: string;
   /** Serve only: start this mapping when the app launches. */
   autostart: boolean;
+  /** Serve only: record allow/refuse and TCP open/close on the next start. */
+  accessLog: boolean;
 };
 
 export function newMappingId(): string {
@@ -32,6 +36,7 @@ export function draftMapping(input: {
   openBrowser: boolean;
   keyName?: string;
   autostart?: boolean;
+  accessLog?: boolean;
 }): PortMappingRecord {
   if (input.mode === "forward" && !input.peer.trim()) {
     throw new Error("peer-required");
@@ -50,6 +55,7 @@ export function draftMapping(input: {
     openBrowser: input.openBrowser,
     keyName: input.keyName,
     autostart: input.autostart,
+    accessLog: input.accessLog,
   });
 }
 
@@ -61,6 +67,7 @@ export function mappingRecord(input: {
   openBrowser?: boolean;
   keyName?: string;
   autostart?: boolean;
+  accessLog?: boolean;
 }): PortMappingRecord {
   return {
     id: input.id ?? newMappingId(),
@@ -68,14 +75,22 @@ export function mappingRecord(input: {
     localPort: input.mapping.LocalPort,
     remoteHost: input.mapping.RemoteHost,
     remotePort: input.mapping.RemotePort,
+    socket: input.mode === "serve" ? (input.mapping.Socket ?? "").trim() : "",
     peer: input.mode === "forward" ? (input.peer ?? "").trim() : "",
     openBrowser: input.mode === "forward" && Boolean(input.openBrowser),
     keyName: input.mode === "serve" ? (input.keyName ?? "").trim() : "",
     autostart: input.mode === "serve" && Boolean(input.autostart),
+    accessLog: input.mode === "serve" && Boolean(input.accessLog),
   };
 }
 
 export function mappingPrimary(record: PortMappingRecord, ephemeral = "browser"): string {
+  if (record.socket) {
+    if (record.localPort === 0) {
+      return record.socket;
+    }
+    return `${record.localPort} → ${record.socket}`;
+  }
   if (record.mode === "serve") {
     if (record.remoteHost && record.remotePort) {
       return `${record.localPort} → ${record.remoteHost}:${record.remotePort}`;
@@ -91,11 +106,18 @@ export function mappingPrimary(record: PortMappingRecord, ephemeral = "browser")
 }
 
 export function toPortMapping(record: PortMappingRecord): PortMapping {
-  return {
+  const mapping: PortMapping = {
     LocalPort: record.localPort,
     RemoteHost: record.remoteHost,
     RemotePort: record.remotePort,
   };
+  if (record.socket) {
+    mapping.Socket = record.socket;
+  }
+  if (record.accessLog) {
+    mapping.AccessLog = true;
+  }
+  return mapping;
 }
 
 function isPort(value: unknown): value is number {
@@ -125,10 +147,17 @@ function isRecord(value: unknown): value is PortMappingRecord {
   if (item.autostart !== undefined && typeof item.autostart !== "boolean") {
     return false;
   }
-  if (item.mode === "serve") {
-    return item.localPort > 0;
+  if (item.socket !== undefined && typeof item.socket !== "string") {
+    return false;
   }
-  return item.peer.trim() !== "" && item.remotePort > 0;
+  if (item.accessLog !== undefined && typeof item.accessLog !== "boolean") {
+    return false;
+  }
+  const socket = typeof item.socket === "string" ? item.socket.trim() : "";
+  if (item.mode === "serve") {
+    return item.localPort > 0 || socket !== "";
+  }
+  return item.peer.trim() !== "" && item.remotePort > 0 && socket === "";
 }
 
 export function readMappings(): PortMappingRecord[] {
@@ -147,10 +176,12 @@ export function readMappings(): PortMappingRecord[] {
       localPort: item.localPort,
       remoteHost: item.remoteHost,
       remotePort: item.remotePort,
+      socket: item.mode === "serve" && typeof item.socket === "string" ? item.socket.trim() : "",
       peer: item.mode === "forward" ? item.peer.trim() : "",
       openBrowser: item.mode === "forward" && item.openBrowser,
       keyName: item.mode === "serve" && typeof item.keyName === "string" ? item.keyName.trim() : "",
       autostart: item.mode === "serve" && Boolean(item.autostart),
+      accessLog: item.mode === "serve" && Boolean(item.accessLog),
     }));
   } catch {
     return [];

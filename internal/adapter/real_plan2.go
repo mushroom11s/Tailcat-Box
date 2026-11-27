@@ -16,8 +16,8 @@ import (
 )
 
 func (r *Real) StartPortServe(ctx context.Context, sessionID string, mappings []PortMapping, opts PortServeOpts) (<-chan Event, error) {
-	if len(mappings) == 0 {
-		return nil, fmt.Errorf("at least one port mapping is required")
+	if _, _, err := prepareServeMappings(mappings); err != nil {
+		return nil, err
 	}
 	if strings.TrimSpace(opts.IdentityJSON) != "" {
 		if _, err := unmarshalTailcatKey(opts.IdentityJSON); err != nil {
@@ -78,13 +78,10 @@ func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun
 		finish(Event{SessionID: sessionID, Kind: EventClosed})
 	}()
 
-	byPort := map[uint16]PortMapping{}
-	for _, m := range mappings {
-		if m.LocalPort == 0 {
-			send(Event{SessionID: sessionID, Kind: EventError, Err: "port serve requires a non-zero local port"})
-			return
-		}
-		byPort[m.LocalPort] = m
+	byPort, catchAll, err := prepareServeMappings(mappings)
+	if err != nil {
+		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
+		return
 	}
 
 	srv := &tailcat.Server{
@@ -92,12 +89,14 @@ func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun
 		OnTCP: func(port uint16) func(net.Conn) {
 			m, ok := byPort[port]
 			if !ok {
-				return nil
+				if catchAll == nil {
+					return nil
+				}
+				m = *catchAll
 			}
-			host, dest := m.destHost(), m.destPort()
-			target := net.JoinHostPort(host, strconv.Itoa(int(dest)))
+			network, addr := m.dialSpec()
 			return func(c net.Conn) {
-				local, err := net.Dial("tcp", target)
+				local, err := net.Dial(network, addr)
 				if err != nil {
 					send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})
 					_ = c.Close()
@@ -106,6 +105,9 @@ func (r *Real) runPortServe(ctx context.Context, sessionID string, run *serveRun
 				tailcat.ProxyConns(c, local)
 			}
 		},
+	}
+	if opts.AccessLog {
+		attachAccessLog(srv, sessionID, send)
 	}
 	if err := applyRoomKey(srv, opts.IdentityJSON); err != nil {
 		send(Event{SessionID: sessionID, Kind: EventError, Err: err.Error()})

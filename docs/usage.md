@@ -81,9 +81,12 @@ Click a record to start the same kind of call again.
 
 The Tunnel page stores port mappings that you can start and stop at any time.
 
-- **Port serve** publishes TCP ports on a Tailcat address. The same address can be given to several people, and they can all connect at the same time; each connection is forwarded independently. Enter comma-separated ports or mappings:
+- **Port serve** publishes TCP ports on a Tailcat address. The same address can be given to several people, and they can all connect at the same time; each connection is forwarded independently. Each saved row is one mapping:
   - `8080` exposes port 8080 on this machine.
-  - `8080:192.168.1.10:80` exposes port 80 on another host in your LAN as port 8080. The machine running Tailcat Box must be able to reach that host, and the host's firewall must allow the connection.
+  - `8080:80` exposes local port 80 as port 8080.
+  - `8080:192.168.1.10:80` or `5555:printer.lan:5555` exposes a port on another host. Names are resolved with the system resolver. The machine running Tailcat Box must be able to reach that host, and the host's firewall must allow the connection.
+  - `8022:/tmp/app.sock` or `8022:unix:/tmp/app.sock` proxies that port to a local Unix socket. `/tmp/app.sock` alone accepts every other port. The socket must already exist.
+- **Access log** on a port serve records who was allowed or refused, and when each TCP connection opens and closes. The choice applies the next time that mapping starts.
 - **Local forward** listens on a local port and forwards connections to a port on a peer's Tailcat address. You can also open a peer's web port directly in the browser.
 - **Stable addresses** — Pick a saved key instead of **Ephemeral** to keep the same `tc…` address across restarts. The address also encodes the DERP region, so Tailcat Box stores the region a key last served on and reuses it while it still matches your region setting, even if the network is not ready at boot. Pinning a region (see [Configuration](#configuration)) keeps the address predictable.
 - A key can be used by only one listener at a time (a chat room or a port serve). Do not run the same saved key on two machines simultaneously.
@@ -91,7 +94,7 @@ The Tunnel page stores port mappings that you can start and stop at any time.
 
 ### SSH
 
-SSH is off until you enable **Allow SSH**. It is Tailcat's built-in shell, not the operating system's `sshd`. Access is limited to an allowlist made up of saved devices and peers of open chat rooms; it does not use OS passwords or SSH keys. **Allow any peer** is a separate option and shows a warning. Sessions can be opened in the in-app terminal or the system terminal.
+SSH is off until you enable **Allow SSH**. It is Tailcat's built-in shell, not the operating system's `sshd`. Access is limited to an allowlist made up of saved devices and peers of open chat rooms; it does not use OS passwords or SSH keys. **Allow any peer** is a separate option and shows a warning. Sessions can be opened in the in-app terminal or the system terminal. The shell accepts SSH local port forwards to loopback addresses on this machine (`ssh -L` and `ssh -D`), which Visual Studio Code Remote-SSH needs. Forwards to hostnames, including `localhost`, and remote forwards (`ssh -R`) stay off.
 
 ### Tray and background operation
 
@@ -183,7 +186,7 @@ sudo dnf install webkit2gtk4.1 gtk3 gstreamer1-plugins-good gstreamer1-plugins-b
 
 | Tool | Version |
 | --- | --- |
-| Go | 1.27.1 or later (required by Tailcat v0.7.0; `GOTOOLCHAIN=auto` can fetch it) |
+| Go | 1.27.4 or later (required by Tailcat v0.8.0; `GOTOOLCHAIN=auto` can fetch it) |
 | Node.js and npm | Node.js 20.19+ or 22.12+ (required by Vite 7; CI uses Node.js 22) |
 | Wails CLI | v2.16.0: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0` |
 | Platform toolchain | macOS: Xcode Command Line Tools. Windows: WebView2. Linux: `libgtk-3-dev`, `libwebkit2gtk-4.1-dev` |

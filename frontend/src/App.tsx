@@ -1004,6 +1004,14 @@ function AppShell() {
     setMappings(next);
   }
 
+  function setMappingAccessLog(id: string, enabled: boolean): void {
+    const next = mappingsRef.current.map((item) =>
+      item.id === id && item.mode === "serve" ? { ...item, accessLog: enabled } : item,
+    );
+    mappingsRef.current = next;
+    setMappings(next);
+  }
+
   async function startMappingCore(id: string): Promise<void> {
     const mapping = mappingsRef.current.find((item) => item.id === id);
     if (!mapping) {
@@ -1484,6 +1492,7 @@ function AppShell() {
             onStop={(id) => void stopMapping(id)}
             onDelete={(id) => void deleteMapping(id)}
             onAutostart={setMappingAutostart}
+            onAccessLog={setMappingAccessLog}
           />
         ) : page === "export" ? (
           <ExportPage />

@@ -588,7 +588,7 @@ func (a *App) DialPipe(addr string, payload string) (session.Session, error) {
 // Empty keyName is ephemeral (new address each start).
 func (a *App) StartPortServe(mappings []adapter.PortMapping, keyName string) (session.Session, error) {
 	keyName = strings.TrimSpace(keyName)
-	opts := adapter.PortServeOpts{}
+	opts := adapter.PortServeOpts{AccessLog: serveAccessLog(mappings)}
 	if keyName != "" {
 		if err := a.keyTaken(keyName); err != nil {
 			return session.Session{}, err
@@ -620,6 +620,15 @@ func (a *App) StartPortServe(mappings []adapter.PortMapping, keyName string) (se
 		a.portKeyMu.Unlock()
 	}
 	return sess, nil
+}
+
+func serveAccessLog(mappings []adapter.PortMapping) bool {
+	for _, m := range mappings {
+		if m.AccessLog {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) roomUsesKey(key string) bool {

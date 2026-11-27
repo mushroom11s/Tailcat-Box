@@ -85,6 +85,7 @@ export type Session = {
 	Err: string;
 	Progress: string;
 	Dangerous: boolean;
+	Log?: string[];
 };
 
 export type TailcatEvent = {
@@ -99,6 +100,8 @@ export type PortMapping = {
   LocalPort: number;
   RemoteHost: string;
   RemotePort: number;
+  Socket?: string;
+  AccessLog?: boolean;
 };
 
 export type KeyInfo = {
@@ -202,6 +205,7 @@ function asSession(s: session.Session): Session {
     Err: s.Err ?? "",
     Progress: s.Progress ?? "",
     Dangerous: Boolean(s.Dangerous),
+    Log: Array.isArray(s.Log) ? s.Log : [],
   };
 }
 
@@ -221,6 +225,8 @@ function toMapping(m: PortMapping): adapter.PortMapping {
     LocalPort: m.LocalPort,
     RemoteHost: m.RemoteHost,
     RemotePort: m.RemotePort,
+    Socket: m.Socket ?? "",
+    AccessLog: Boolean(m.AccessLog),
   });
 }
 
@@ -1454,7 +1460,7 @@ function fakeClientInfo(): ClientInfo {
   return {
     StartedAt: fake.startedAt,
     AppVersion: "0.1.0-dev",
-    TailcatVersion: "v0.7.0",
+    TailcatVersion: "v0.8.0",
     LastUpdateCheck: fake.lastUpdateCheck,
   };
 }

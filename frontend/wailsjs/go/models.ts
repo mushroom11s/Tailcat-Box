@@ -43,6 +43,8 @@ export namespace adapter {
 	    LocalPort: number;
 	    RemoteHost: string;
 	    RemotePort: number;
+	    Socket: string;
+	    AccessLog: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PortMapping(source);
@@ -53,6 +55,8 @@ export namespace adapter {
 	        this.LocalPort = source["LocalPort"];
 	        this.RemoteHost = source["RemoteHost"];
 	        this.RemotePort = source["RemotePort"];
+	        this.Socket = source["Socket"];
+	        this.AccessLog = source["AccessLog"];
 	    }
 	}
 
@@ -620,6 +624,7 @@ export namespace session {
 	    Err: string;
 	    Progress: string;
 	    Dangerous: boolean;
+	    Log: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new Session(source);
@@ -635,6 +640,7 @@ export namespace session {
 	        this.Err = source["Err"];
 	        this.Progress = source["Progress"];
 	        this.Dangerous = source["Dangerous"];
+	        this.Log = source["Log"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
